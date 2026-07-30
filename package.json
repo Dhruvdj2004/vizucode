@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "server:build": "esbuild server/index.ts --bundle --packages=external --platform=node --format=esm --outfile=server/dist/server.mjs --log-level=warning",
     "server": "npm run server:build && node --env-file-if-exists=.env server/dist/server.mjs",
-    "db:seed": "esbuild server/seed.ts --bundle --packages=external --platform=node --format=esm --outfile=server/dist/seed.mjs --log-level=warning && node --env-file-if-exists=.env server/dist/seed.mjs"
+    "db:seed": "esbuild server/seed.ts --bundle --packages=external --platform=node --format=esm --outfile=server/dist/seed.mjs --log-level=warning && node --env-file-if-exists=.env server/dist/seed.mjs",
+    "api:build": "esbuild server/app.ts --bundle --packages=external --platform=node --format=esm --outfile=server/dist/app.mjs --log-level=warning",
+    "vercel-build": "npm run api:build && npm run build"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
