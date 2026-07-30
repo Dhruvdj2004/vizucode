@@ -98,7 +98,7 @@ paymentRouter.post('/verify', wrap(async (req, res) => {
 
   orderOwners.delete(razorpay_order_id); // one-time use, prevents replay
 
-  const result = await markUserPro(req.user!.id);
+  const result = await markUserPro(req.user!.id, req.user!.sid);
   if (!result) {
     res.status(404).json({ error: 'Account not found.' });
     return;

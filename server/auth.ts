@@ -7,6 +7,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from './db';
+import { sessionStore, deviceLabel, MAX_DEVICES } from './sessions';
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'vizucode-dev-secret-change-me';
 if (!process.env.JWT_SECRET) {
@@ -128,38 +129,47 @@ function firstIssue(err: z.ZodError): string {
 // ---------- JWT middleware ----------
 
 export interface AuthedRequest extends Request {
-  user?: { id: number; email: string; firstName: string; isPro: boolean };
+  user?: { id: number; email: string; firstName: string; isPro: boolean; sid: string };
 }
 
-/** Rejects the request unless it carries a valid `Authorization: Bearer <token>`. */
-export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
+/**
+ * Rejects the request unless it carries a valid `Authorization: Bearer <token>`
+ * whose session hasn't been signed out elsewhere (see server/sessions.ts —
+ * this is what makes the max-2-device limit actually enforceable, not just
+ * advisory: a revoked session's token stops working immediately, not just
+ * at its 7-day expiry).
+ */
+export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined;
   if (!token) {
     res.status(401).json({ error: 'Sign in to continue.' });
     return;
   }
+  let payload: { sub: string; email: string; firstName: string; isPro: boolean; sid: string };
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as {
-      sub: string;
-      email: string;
-      firstName: string;
-      isPro: boolean;
-    };
-    req.user = {
-      id: Number(payload.sub),
-      email: payload.email,
-      firstName: payload.firstName,
-      isPro: !!payload.isPro,
-    };
-    next();
+    payload = jwt.verify(token, JWT_SECRET) as typeof payload;
   } catch {
     res.status(401).json({ error: 'Session expired — sign in again.' });
+    return;
   }
+  const userId = Number(payload.sub);
+  try {
+    if (!(await sessionStore.exists(userId, payload.sid))) {
+      res.status(401).json({ error: 'You were signed out on this device.' });
+      return;
+    }
+  } catch (e) {
+    console.error('[auth] session lookup failed:', e);
+    res.status(500).json({ error: 'Internal error.' });
+    return;
+  }
+  req.user = { id: userId, email: payload.email, firstName: payload.firstName, isPro: !!payload.isPro, sid: payload.sid };
+  next();
 }
 
-function signToken(user: User): string {
-  return jwt.sign({ email: user.email, firstName: user.firstName, isPro: user.isPro }, JWT_SECRET, {
+function signToken(user: User, sessionId: string): string {
+  return jwt.sign({ email: user.email, firstName: user.firstName, isPro: user.isPro, sid: sessionId }, JWT_SECRET, {
     subject: String(user.id),
     expiresIn: TOKEN_TTL,
   });
@@ -172,10 +182,13 @@ function publicUser(user: User) {
 export type PublicUser = ReturnType<typeof publicUser>;
 
 /** Flips a user to isPro and issues a fresh token carrying it — used after payment verification. */
-export async function markUserPro(id: number): Promise<{ token: string; user: PublicUser } | undefined> {
+export async function markUserPro(
+  id: number,
+  sessionId: string
+): Promise<{ token: string; user: PublicUser } | undefined> {
   const user = await store.markPro(id);
   if (!user) return undefined;
-  return { token: signToken(user), user: publicUser(user) };
+  return { token: signToken(user, sessionId), user: publicUser(user) };
 }
 
 // ---------- routes ----------
@@ -184,9 +197,9 @@ export const authRouter = Router();
 
 /** Express 4 doesn't route async rejections to the error handler on its own. */
 const wrap =
-  (fn: (req: Request, res: Response) => Promise<void>) =>
+  (fn: (req: AuthedRequest, res: Response) => Promise<void>) =>
   (req: Request, res: Response, next: NextFunction) => {
-    fn(req, res).catch(next);
+    fn(req as AuthedRequest, res).catch(next);
   };
 
 /** POST /api/auth/register — body: { email, password, firstName } */
@@ -203,10 +216,11 @@ authRouter.post('/register', wrap(async (req, res) => {
     res.status(409).json({ error: 'An account with this email already exists.' });
     return;
   }
-  res.status(201).json({ token: signToken(user), user: publicUser(user) });
+  const session = await sessionStore.create(user.id, deviceLabel(req.headers['user-agent']));
+  res.status(201).json({ token: signToken(user, session.id), user: publicUser(user) });
 }));
 
-/** POST /api/auth/login — body: { email, password } */
+/** POST /api/auth/login — body: { email, password }. 409s with the device list if already at MAX_DEVICES. */
 authRouter.post('/login', wrap(async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -222,7 +236,52 @@ authRouter.post('/login', wrap(async (req, res) => {
     res.status(401).json({ error: 'Incorrect email or password.' });
     return;
   }
-  res.json({ token: signToken(user), user: publicUser(user) });
+  const sessions = await sessionStore.list(user.id);
+  if (sessions.length >= MAX_DEVICES) {
+    res.status(409).json({
+      error: `You're already signed in on ${MAX_DEVICES} devices — sign out of one to continue.`,
+      sessions,
+    });
+    return;
+  }
+  const session = await sessionStore.create(user.id, deviceLabel(req.headers['user-agent']));
+  res.json({ token: signToken(user, session.id), user: publicUser(user) });
+}));
+
+const forceLoginSchema = z.object({
+  email: emailSchema,
+  password: z.string({ error: 'Password is required.' }).min(1, 'Password is required.').max(72),
+  revokeSessionId: z.string({ error: 'Missing session to sign out.' }).min(1),
+});
+
+/**
+ * POST /api/auth/login/force — body: { email, password, revokeSessionId }.
+ * Re-verifies the password (the caller has no session token yet, since the
+ * plain /login above rejected them for being at the device limit), signs
+ * the named device out, and logs the caller in on this one.
+ */
+authRouter.post('/login/force', wrap(async (req, res) => {
+  const parsed = forceLoginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: firstIssue(parsed.error) });
+    return;
+  }
+  const { email, password, revokeSessionId } = parsed.data;
+  const user = await store.findByEmail(email);
+  const ok = user && (await bcrypt.compare(password, user.passwordHash));
+  if (!ok) {
+    res.status(401).json({ error: 'Incorrect email or password.' });
+    return;
+  }
+  await sessionStore.revoke(user.id, revokeSessionId);
+  const session = await sessionStore.create(user.id, deviceLabel(req.headers['user-agent']));
+  res.json({ token: signToken(user, session.id), user: publicUser(user) });
+}));
+
+/** POST /api/auth/logout — requires a valid token; revokes this device's session server-side. */
+authRouter.post('/logout', requireAuth, wrap(async (req, res) => {
+  await sessionStore.revoke(req.user!.id, req.user!.sid);
+  res.json({ ok: true });
 }));
 
 /** GET /api/auth/me — requires a valid token; returns the signed-in user. */

@@ -170,36 +170,21 @@ export default function HomePage() {
         const questions = rows.filter((q) => q.category === cat);
         const catSolved = questions.filter((q) => solved.has(q.slug)).length;
         const locked = isCategoryLocked(cat, session?.user);
-        const isOpen = !locked && !!open[cat];
+        const isOpen = !!open[cat];
         return (
-          <section key={cat} className={`panel cat ${locked ? 'locked' : ''}`}>
+          <section key={cat} className="panel cat">
             <button
               className="cat-head"
-              onClick={() => {
-                if (locked) {
-                  navigate('/upgrade');
-                  return;
-                }
-                setOpen((o) => ({ ...o, [cat]: !o[cat] }));
-              }}
+              onClick={() => setOpen((o) => ({ ...o, [cat]: !o[cat] }))}
               aria-expanded={isOpen}
             >
               <span className={`chev ${isOpen ? 'open' : ''}`}>▶</span>
-              {locked && (
-                <span className="lock-icon" aria-hidden>
-                  🔒
-                </span>
-              )}
               {cat}
               <span className="count">
-                {locked
-                  ? 'Locked — upgrade to unlock'
-                  : session
-                    ? `${catSolved} / ${questions.length} solved`
-                    : `${questions.length} questions`}
+                {session ? `${catSolved} / ${questions.length} solved` : `${questions.length} questions`}
               </span>
               <span className="cat-progress" aria-hidden>
-                <div style={{ width: `${session && !locked ? (catSolved / questions.length) * 100 : 0}%` }} />
+                <div style={{ width: `${session ? (catSolved / questions.length) * 100 : 0}%` }} />
               </span>
             </button>
             {isOpen &&
@@ -234,9 +219,17 @@ export default function HomePage() {
                       <LeetCodeIcon />
                     </a>
                     {q.hasVisualizer ? (
-                      <Link to={`/visualize/${q.slug}`}>
-                        <button className="btn primary">Visualize</button>
-                      </Link>
+                      locked ? (
+                        <Link to="/upgrade">
+                          <button className="btn primary locked" title="Upgrade to unlock">
+                            🔒 Visualize
+                          </button>
+                        </Link>
+                      ) : (
+                        <Link to={`/visualize/${q.slug}`}>
+                          <button className="btn primary">Visualize</button>
+                        </Link>
+                      )
                     ) : (
                       <span className="soon">coming soon</span>
                     )}

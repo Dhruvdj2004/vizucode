@@ -53,9 +53,22 @@ create table if not exists user_progress (
 
 create index if not exists idx_progress_user on user_progress (user_id);
 
+-- Device-session tracking (auth module): caps concurrent logins per account
+-- at MAX_DEVICES (server/sessions.ts). id is a client-generated UUID string,
+-- not a DB-generated one — keeps this portable across Postgres versions.
+create table if not exists user_sessions (
+  id         text primary key,
+  user_id    integer not null references users(id) on delete cascade,
+  label      text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_sessions_user on user_sessions (user_id);
+
 -- The backend connects as the table owner and is unaffected; this keeps
 -- Supabase's auto-generated public REST API from exposing the tables.
 alter table questions enable row level security;
 alter table problem_content enable row level security;
 alter table users enable row level security;
 alter table user_progress enable row level security;
+alter table user_sessions enable row level security;

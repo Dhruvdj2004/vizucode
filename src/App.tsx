@@ -41,8 +41,7 @@ export default function App() {
               <button
                 className="btn"
                 onClick={() => {
-                  logout();
-                  navigate('/');
+                  logout().then(() => navigate('/'));
                 }}
               >
                 Sign out

@@ -14,6 +14,22 @@ export interface Session {
   user: AuthUser;
 }
 
+export interface DeviceSession {
+  id: string;
+  label: string;
+  createdAt: string;
+}
+
+/** Thrown by login() when the account is already signed in on MAX_DEVICES devices. */
+export class DeviceLimitError extends Error {
+  sessions: DeviceSession[];
+  constructor(message: string, sessions: DeviceSession[]) {
+    super(message);
+    this.name = 'DeviceLimitError';
+    this.sessions = sessions;
+  }
+}
+
 const STORAGE_KEY = 'vizucode-session';
 const listeners = new Set<() => void>();
 
@@ -64,11 +80,50 @@ export function register(email: string, password: string, firstName: string): Pr
   return postAuth('/api/auth/register', { email, password, firstName });
 }
 
-export function login(email: string, password: string): Promise<Session> {
-  return postAuth('/api/auth/login', { email, password });
+/** Throws DeviceLimitError (carrying the signed-in device list) instead of a plain Error at the device cap. */
+export async function login(email: string, password: string): Promise<Session> {
+  let res: globalThis.Response;
+  try {
+    res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    throw new Error('Cannot reach the server — is `npm run server` running?');
+  }
+  const data = (await res.json().catch(() => ({}))) as Partial<Session> & {
+    error?: string;
+    sessions?: DeviceSession[];
+  };
+  if (res.status === 409 && data.sessions) {
+    throw new DeviceLimitError(data.error ?? 'Too many devices are signed in.', data.sessions);
+  }
+  if (!res.ok || !data.token || !data.user) {
+    throw new Error(data.error ?? 'Something went wrong — try again.');
+  }
+  const session = { token: data.token, user: data.user };
+  setSession(session);
+  return session;
 }
 
-export function logout() {
+/** Signs a named device out server-side, then logs the caller in on this one. */
+export function forceLogin(email: string, password: string, revokeSessionId: string): Promise<Session> {
+  return postAuth('/api/auth/login/force', { email, password, revokeSessionId });
+}
+
+export async function logout(): Promise<void> {
+  const session = getSession();
+  if (session) {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+    } catch {
+      // best effort — the local session is cleared below regardless
+    }
+  }
   setSession(null);
 }
 
