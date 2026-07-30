@@ -480,3 +480,38 @@ h1, h2, h3 { letter-spacing: -0.01em; margin: 0; }
 .feature-list li { display: flex; align-items: flex-start; gap: 0.55rem; font-size: 0.9rem; color: var(--ink-soft); }
 .feature-check { color: var(--accent-2); font-weight: 800; flex-shrink: 0; }
 .upgrade-note { text-align: center; margin-top: 0.6rem; }
+
+/* ============ Phones ============ */
+@media (max-width: 640px) {
+  .container { padding: 1.5rem 1rem 3rem; }
+
+  /* Header: brand + actions stop fighting for one row and stack instead. */
+  .site-header { flex-direction: column; align-items: flex-start; gap: 0.6rem; margin-bottom: 1.5rem; }
+  .site-brand { flex-wrap: wrap; row-gap: 0.2rem; }
+  .header-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; row-gap: 0.5rem; }
+  .auth-greeting { flex-basis: 100%; text-align: right; }
+
+  .page-title { font-size: 1.5rem; }
+  .progress-card { padding: 1rem; gap: 1.25rem; }
+
+  /* Category header: drop the fixed-width bar, it never fit anyway — the
+     solved count next to it already carries the same information. */
+  .cat-head { padding: 0.85rem 1rem; gap: 0.6rem; font-size: 0.92rem; }
+  .cat-head .count { font-size: 0.7rem; }
+  .cat-progress { display: none; }
+
+  /* Question row: on a phone the checkbox+id+title+badge+link+button no
+     longer fit on one line without clipping. Force the trailing actions
+     (spacer onward) onto their own line instead of overflowing sideways. */
+  .qrow { flex-wrap: wrap; row-gap: 0.5rem; padding: 0.75rem 1rem; }
+  .qrow .qtitle { flex: 1 1 auto; min-width: 0; }
+  /* If a long title leaves no room for the badge on line 1, it wraps to its
+     own line — push it right there too, instead of stranding it under the
+     checkbox/id column. */
+  .qrow .badge { margin-left: auto; }
+  .qrow .spacer { flex-basis: 100%; height: 0; }
+  .qrow .lc-link { margin-left: auto; }
+  .qrow .btn.primary { padding: 0.45rem 0.7rem; font-size: 0.8rem; }
+
+  .complexity { flex-wrap: wrap; gap: 0.75rem 1.5rem; }
+}
