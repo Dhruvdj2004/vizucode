@@ -29,6 +29,8 @@ interface UserStore {
   findByEmail(email: string): Promise<User | undefined>;
   /** Returns null when the email is already taken. */
   create(email: string, firstName: string, passwordHash: string): Promise<User | null>;
+  /** Flips isPro to true (post payment-verification). Returns undefined if the id is unknown. */
+  markPro(id: number): Promise<User | undefined>;
 }
 
 const memUsers = new Map<string, User>();
@@ -65,6 +67,16 @@ const store: UserStore = db
           throw e;
         }
       },
+      async markPro(id) {
+        const r = await db.query(
+          'update users set is_pro = true where id = $1 returning email, first_name, password_hash',
+          [id]
+        );
+        const row = r.rows[0];
+        return row
+          ? { id, email: row.email, firstName: row.first_name, passwordHash: row.password_hash, isPro: true }
+          : undefined;
+      },
     }
   : {
       async findByEmail(email) {
@@ -74,6 +86,11 @@ const store: UserStore = db
         if (memUsers.has(email)) return null;
         const user: User = { id: nextId++, email, firstName, passwordHash, isPro: false };
         memUsers.set(email, user);
+        return user;
+      },
+      async markPro(id) {
+        const user = [...memUsers.values()].find((u) => u.id === id);
+        if (user) user.isPro = true;
         return user;
       },
     };
@@ -150,6 +167,15 @@ function signToken(user: User): string {
 
 function publicUser(user: User) {
   return { id: user.id, email: user.email, firstName: user.firstName, isPro: user.isPro };
+}
+
+export type PublicUser = ReturnType<typeof publicUser>;
+
+/** Flips a user to isPro and issues a fresh token carrying it — used after payment verification. */
+export async function markUserPro(id: number): Promise<{ token: string; user: PublicUser } | undefined> {
+  const user = await store.markPro(id);
+  if (!user) return undefined;
+  return { token: signToken(user), user: publicUser(user) };
 }
 
 // ---------- routes ----------

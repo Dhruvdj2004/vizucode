@@ -9,7 +9,7 @@ export interface AuthUser {
   isPro: boolean;
 }
 
-interface Session {
+export interface Session {
   token: string;
   user: AuthUser;
 }
@@ -70,4 +70,9 @@ export function login(email: string, password: string): Promise<Session> {
 
 export function logout() {
   setSession(null);
+}
+
+/** Persists a fresh session (used after a payment upgrades the account to Pro). */
+export function applySession(session: Session): void {
+  setSession(session);
 }

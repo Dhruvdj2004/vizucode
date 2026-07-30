@@ -15,6 +15,7 @@ import { toStatic } from '../src/lib/serialize';
 import { isRunError } from '../src/lib/types';
 import { authRouter } from './auth';
 import { progressRouter } from './progress';
+import { paymentRouter } from './payment';
 import { pool } from './db';
 
 // In production set ALLOWED_ORIGIN to the deployed frontend URL
@@ -38,7 +39,7 @@ app.use((_req, res, next) => {
 // Simple in-memory rate limit: per-IP, per-minute window. On Vercel this is
 // per-instance, not global — a soft limit there, not a hard guarantee.
 const WINDOW_MS = 60_000;
-const LIMITS = { read: 300, trace: 60, auth: 20 } as const;
+const LIMITS = { read: 300, trace: 60, auth: 20, payment: 20 } as const;
 type LimitKind = keyof typeof LIMITS;
 const hits = new Map<string, { windowStart: number; counts: Record<LimitKind, number> }>();
 function rateLimit(kind: LimitKind) {
@@ -47,7 +48,7 @@ function rateLimit(kind: LimitKind) {
     const now = Date.now();
     let entry = hits.get(ip);
     if (!entry || now - entry.windowStart > WINDOW_MS) {
-      entry = { windowStart: now, counts: { read: 0, trace: 0, auth: 0 } };
+      entry = { windowStart: now, counts: { read: 0, trace: 0, auth: 0, payment: 0 } };
       hits.set(ip, entry);
     }
     if (hits.size > 10_000) hits.clear(); // crude memory guard
@@ -71,6 +72,9 @@ app.use('/api/auth', rateLimit('auth'), authRouter);
 
 // Per-user progress (JWT required) — see server/progress.ts.
 app.use('/api/progress', rateLimit('read'), progressRouter);
+
+// Razorpay order create/verify (JWT required) — see server/payment.ts.
+app.use('/api/payment', rateLimit('payment'), paymentRouter);
 
 app.get('/api/health', rateLimit('read'), wrap(async (_req, res) => {
   if (!pool) {

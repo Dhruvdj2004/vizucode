@@ -4,6 +4,7 @@
 import { catalog, type CatalogEntry } from '../data/catalog';
 import { problemRegistry } from '../problems';
 import { toStatic, type StaticProblem } from './serialize';
+import type { Session } from './auth';
 
 export interface QuestionRow extends CatalogEntry {
   hasVisualizer: boolean;
@@ -59,6 +60,41 @@ export async function updateProgress(token: string, slug: string, solved: boolea
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? 'Could not save progress.');
   }
+}
+
+export interface RazorpayOrder {
+  orderId: string;
+  amount: number;
+  currency: string;
+}
+
+/** Creates a fixed-price Razorpay order for the signed-in user. Price is set server-side. */
+export async function createOrder(token: string): Promise<RazorpayOrder> {
+  const res = await fetch('/api/payment/create-order', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<RazorpayOrder> & { error?: string };
+  if (!res.ok || !data.orderId) throw new Error(data.error ?? 'Could not start checkout.');
+  return data as RazorpayOrder;
+}
+
+export interface VerifyPaymentPayload {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}
+
+/** Verifies the Razorpay checkout signature; on success the account is flipped to Pro. */
+export async function verifyPayment(token: string, payload: VerifyPaymentPayload): Promise<Session> {
+  const res = await fetch('/api/payment/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<Session> & { error?: string };
+  if (!res.ok || !data.token || !data.user) throw new Error(data.error ?? 'Payment verification failed.');
+  return { token: data.token, user: data.user };
 }
 
 export async function fetchProblem(slug: string): Promise<{ def: StaticProblem | null; source: DataSource }> {
