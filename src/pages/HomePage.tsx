@@ -14,6 +14,8 @@ export default function HomePage() {
   const [solved, setSolved] = useState<Set<string>>(new Set());
   const [streak, setStreak] = useState<Streak>({ current: 0, longest: 0 });
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [difficulty, setDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const navigate = useNavigate();
 
   useEffect(() => onAuthChange(() => setSession(getSession())), []);
@@ -86,6 +88,14 @@ export default function HomePage() {
   };
 
   const categories = useMemo(() => (rows ? [...new Set(rows.map((q) => q.category))] : []), [rows]);
+
+  const searching = query.trim() !== '' || difficulty !== 'All';
+  const matchesFilter = (q: QuestionRow) => {
+    if (difficulty !== 'All' && q.difficulty !== difficulty) return false;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+    return q.title.toLowerCase().includes(needle) || String(q.id) === needle;
+  };
 
   const stats = useMemo(() => {
     if (!rows) return null;
@@ -166,11 +176,43 @@ export default function HomePage() {
         </div>
       )}
 
+      <div className="panel search-bar">
+        <input
+          type="search"
+          className="search-input"
+          placeholder="Search by title or #id…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search questions"
+        />
+        <div className="diff-filter" role="group" aria-label="Filter by difficulty">
+          {(['All', 'Easy', 'Medium', 'Hard'] as const).map((d) => (
+            <button
+              key={d}
+              className={`diff-chip ${d.toLowerCase()} ${difficulty === d ? 'active' : ''}`}
+              onClick={() => setDifficulty(d)}
+              aria-pressed={difficulty === d}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {searching && rows.filter(matchesFilter).length === 0 && (
+        <div className="panel serif" style={{ textAlign: 'center', color: 'var(--ink-faint)' }}>
+          No questions match "{query || difficulty}".
+        </div>
+      )}
+
       {categories.map((cat) => {
-        const questions = rows.filter((q) => q.category === cat);
-        const catSolved = questions.filter((q) => solved.has(q.slug)).length;
+        const catQuestions = rows.filter((q) => q.category === cat);
+        const filtered = searching ? catQuestions.filter(matchesFilter) : catQuestions;
+        if (searching && filtered.length === 0) return null;
+        const questions = filtered;
+        const catSolved = catQuestions.filter((q) => solved.has(q.slug)).length;
         const locked = isCategoryLocked(cat, session?.user);
-        const isOpen = !!open[cat];
+        const isOpen = searching || !!open[cat];
         return (
           <section key={cat} className="panel cat">
             <button
@@ -181,10 +223,14 @@ export default function HomePage() {
               <span className={`chev ${isOpen ? 'open' : ''}`}>▶</span>
               {cat}
               <span className="count">
-                {session ? `${catSolved} / ${questions.length} solved` : `${questions.length} questions`}
+                {searching
+                  ? `${questions.length} match${questions.length === 1 ? '' : 'es'}`
+                  : session
+                    ? `${catSolved} / ${catQuestions.length} solved`
+                    : `${catQuestions.length} questions`}
               </span>
               <span className="cat-progress" aria-hidden>
-                <div style={{ width: `${session ? (catSolved / questions.length) * 100 : 0}%` }} />
+                <div style={{ width: `${session && !searching ? (catSolved / catQuestions.length) * 100 : 0}%` }} />
               </span>
             </button>
             {isOpen &&
