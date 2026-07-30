@@ -7,7 +7,12 @@ export const pool = process.env.DATABASE_URL
       connectionString: process.env.DATABASE_URL,
       // Supabase's pooler presents a cert that node's default CA set rejects.
       ssl: { rejectUnauthorized: false },
-      max: 5,
+      // On Vercel each warm function instance gets its own pool, and many
+      // instances can run concurrently — keep each one small (ideally against
+      // Supabase's connection pooler, not a direct connection) so they don't
+      // collectively exhaust Postgres's connection limit. A single long-lived
+      // local dev/server process can afford a bigger pool.
+      max: process.env.VERCEL ? 1 : 5,
     })
   : null;
 
