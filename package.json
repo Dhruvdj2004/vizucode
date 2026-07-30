@@ -1,0 +1,37 @@
+{
+  "name": "vizucode",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "server:build": "esbuild server/index.ts --bundle --packages=external --platform=node --format=esm --outfile=server/dist/server.mjs --log-level=warning",
+    "server": "npm run server:build && node --env-file-if-exists=.env server/dist/server.mjs",
+    "db:seed": "esbuild server/seed.ts --bundle --packages=external --platform=node --format=esm --outfile=server/dist/seed.mjs --log-level=warning && node --env-file-if-exists=.env server/dist/seed.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "express": "^4.22.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.25",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "esbuild": "^0.28.1",
+    "typescript": "~5.5.4",
+    "vite": "^5.4.8"
+  }
+}

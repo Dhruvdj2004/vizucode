@@ -1,0 +1,12 @@
+# dependencies & build output — never commit or deploy source-adjacent artifacts
+node_modules/
+dist/
+server/dist/
+*.tsbuildinfo
+
+# environment & secrets
+.env
+.env.*
+
+# OS noise
+.DS_Store

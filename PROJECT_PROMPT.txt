@@ -1,0 +1,269 @@
+================================================================================
+LEETCODE VISUALIZER — MASTER PROJECT PROMPT
+================================================================================
+
+PROJECT VISION
+--------------------------------------------------------------------------------
+A website containing 150 LeetCode questions, organized by category. Every
+question has an optimal solution (C++ and Java) and a "Visualize" button that
+opens a full interactive walkthrough of how the algorithm executes — animated,
+step-by-step, synced with the source code — in the same style/quality as the
+reference artifact ("Aggressive Cows — Binary Search on the Answer").
+
+================================================================================
+1. FULL USER FLOW
+================================================================================
+
+Home Page
+  -> Categories listed (Arrays, Binary Search, Two Pointers, Sliding Window,
+     Sorting, Linked List, Stack/Queue, Trees, Graphs, Dynamic Programming,
+     Backtracking, Greedy, Heap, Bit Manipulation, Strings, etc.)
+  -> Each category expands into its list of questions
+
+Question List (per category)
+  -> Each row shows: title, difficulty badge (Easy/Med/Hard), LeetCode link icon,
+     tags, and a [Visualize] button on the right
+  -> Clicking the LeetCode icon opens the original problem in a new tab
+  -> Clicking [Visualize] opens the Visualizer Page for that question
+
+Visualizer Page (the core deliverable — one per question)
+  -> Header: category eyebrow tag, question title, one-line plain-English
+     description of the technique used
+  -> Input panel: editable fields for a custom example (array/string/etc. +
+     any parameters like k, target), "Run" button, inline validation error text
+  -> Transport controls: Reset | Step back | Play/Pause | Step forward |
+     scrub bar | "step X / Y" counter
+  -> Live trace line: one sentence in plain English describing exactly what
+     the current step is doing, with inline colored tags for key values
+  -> Two-column layout:
+       LEFT  = one or more stacked visualization widgets specific to the
+               algorithm's pattern (see section 3)
+       RIGHT = source code panel (C++/Java tab switch), monospace, dark code
+               background, with the active line(s) highlighted and synced to
+               the current step; two highlight colors for when two related
+               lines are active at once (e.g. the caller and the callee)
+  -> Result panel: final answer shown big and bold once the algorithm finishes
+  -> Closing note: short paragraph explaining WHY the technique works for this
+     problem (the non-obvious insight, e.g. monotonicity for binary search)
+  -> Footer: complexity summary (time/space)
+
+================================================================================
+2. UI DESIGN SYSTEM ("best UI designer" spec)
+================================================================================
+
+Overall feel: calm, editorial, technical — like a well-designed algorithms
+textbook, not a flashy dashboard. Generous whitespace, soft shadows, rounded
+corners (10-14px), no harsh borders.
+
+COLOR TOKENS (light theme default, full dark-mode parity required)
+  --bg              page background                #eef1f5   (dark: #10151c)
+  --surface         card/panel background           #ffffff   (dark: #171e27)
+  --surface-2       input/control background         #e2e7ed   (dark: #212b36)
+  --surface-3       hover state background           #d3dae2   (dark: #2a3441)
+  --ink             primary text                     #1b232c   (dark: #e7ecf1)
+  --ink-soft        secondary text                   #57626f   (dark: #94a3b3)
+  --ink-faint       tertiary/labels                   #8b95a3   (dark: #5c6b7a)
+  --accent          primary accent (amber/orange)     #b96f27   (dark: #e0a24f)
+  --accent-soft     accent tint background            #f3e3d1   (dark: #3a2c1a)
+  --accent-2        secondary accent (teal/green)     #2f7d70   (dark: #57c2ae)
+  --accent-2-soft   teal tint background              #dcefec   (dark: #16302c)
+  --accent-3        tertiary accent (violet)          #6f5aa8   (dark: #a692e0)
+  --accent-3-soft   violet tint background            #e7e1f5   (dark: #251f3d)
+  --line            hairline borders                  #d7dee6   (dark: #2a3441)
+  --code-bg         code panel background             #182028   (dark: #0d1218)
+  --code-ink        code panel text                   #d7dee6   (dark: #cdd8e0)
+
+  Use --accent for "the value being tested / actively changing" (e.g. mid,
+  current pointer). Use --accent-2 for "confirmed / success / go" states.
+  Use --accent-3 for "final answer / result" values. Use --ink-faint /
+  dashed lines for "rejected / no / skip" states. This 3-accent system must
+  stay consistent across every visualization template so users learn the
+  color language once and reuse it everywhere.
+
+TYPOGRAPHY
+  Headings: system sans (-apple-system, "Avenir Next", "Segoe UI"), bold,
+            tight letter-spacing (-0.01em), size clamp(1.6rem, 2.6vw, 2.1rem)
+  Body/description: serif (ui-serif, Georgia) for the human-readable
+            explanation text only — gives it a "textbook" feel, distinct
+            from UI chrome
+  Code & data/labels: monospace (ui-monospace, "SF Mono", Menlo, Consolas),
+            tabular-nums for any numeric column so digits align
+  Eyebrow/section labels: uppercase, 0.68-0.72rem, letter-spacing 0.09-0.14em,
+            bold, colored with --accent or --ink-faint
+
+LAYOUT
+  Max content width ~1180px, centered, generous outer padding (2.5rem top)
+  Panels: 14px border-radius, 1px hairline border in --line, soft double
+          shadow (a tight 1px + a diffuse 24px blur), 1.25rem padding
+  Two-column grid for visualization+code: minmax(0,1.5fr) minmax(0,1fr),
+          collapsing to single column under 900px
+  Buttons: 8px radius, 0.5rem/0.85rem padding, primary button filled with
+          --accent + white/dark text depending on theme, secondary buttons
+          use --surface-2 background with --surface-3 hover
+  All interactive elements need visible focus rings (2px --accent outline)
+  Respect prefers-reduced-motion — no forced animation for users who disable it
+
+MOTION
+  Step transitions: 200-250ms ease for position/width changes (sliding
+  markers, growing bars) — nothing longer, this is a step-through tool, not
+  a cinematic animation
+  Auto-play speed: ~450-500ms per step by default, with a speed control
+  Active code line: instant highlight swap, no fade needed
+
+ACCESSIBILITY
+  Color is never the ONLY signal — pair every color-coded state with a text
+  label, icon, or pattern (e.g. dashed vs solid line for go/no-go), since
+  colorblind users must be able to follow the trace from the plain-English
+  line alone.
+
+================================================================================
+3. VISUALIZATION TEMPLATES (one widget family per algorithmic pattern)
+================================================================================
+
+Build ONE reusable, parameterized template per pattern below. Every question
+in that pattern reuses the same template with different data — do not build
+one-off visuals per question.
+
+  Binary Search (on array / on answer)
+    -> horizontal search-range bar (low/high shrinking), a "mid" marker,
+       a confirmed-answer marker; optional secondary number-line if the
+       search is "on the answer" over a derived domain (see Aggressive Cows)
+
+  Two Pointers / Sliding Window
+    -> horizontal array of boxes, two (or more) pointer carets underneath,
+       a highlighted window range, a running aggregate value (sum/count)
+
+  Sorting
+    -> horizontal bars (bar-chart style) that swap/shift with each
+       comparison/swap step; comparison pair highlighted
+
+  Linked List
+    -> boxes connected by arrows, pointer labels (head/slow/fast/prev/curr)
+       that move node-to-node each step
+
+  Stack / Queue / Monotonic Stack
+    -> vertical or horizontal stack of boxes with push/pop animations,
+       current element highlighted against the stack top
+
+  Trees (BST/Binary Tree/Traversals)
+    -> node-link tree diagram, current node highlighted, visited nodes
+       dimmed/checked, optional call-stack panel for recursive traversal
+
+  Graphs (BFS/DFS/Union-Find/Shortest Path)
+    -> node-link graph, queue/stack panel alongside for BFS/DFS frontier,
+       visited/frontier/unvisited color states, distance labels for
+       shortest-path problems
+
+  Dynamic Programming
+    -> grid/table matching the DP table shape, current cell highlighted,
+       source cells (dependencies) connected with a faint arrow/highlight,
+       running value fill-in as computed
+
+  Backtracking
+    -> tree of decisions (call tree) that grows/prunes live, current path
+       highlighted, "dead end -> backtrack" pruning shown explicitly
+
+  Heap / Priority Queue
+    -> binary heap as a tree AND as an array simultaneously (both views),
+       sift-up/sift-down highlighted
+
+  Bit Manipulation
+    -> row of bit boxes (0/1), operation applied bit-by-bit or as a masked
+       overlay
+
+Every template must include, at minimum: reset/step/play/scrub controls, a
+live trace sentence, a code panel with synced line highlighting, and a result
+readout — this is the shared "shell" (see reference artifact's transport +
+trace + code-panel + result markup) that wraps whichever visual widget is
+active.
+
+================================================================================
+4. CONTENT-GENERATION PIPELINE (per question, repeatable for all 150)
+================================================================================
+
+Input: a LeetCode question number or URL.
+
+Steps:
+  1. Identify problem: title, difficulty, tags, constraints, category/pattern
+     (map to one of the templates in section 3; add a new template only if
+     truly no existing pattern fits)
+  2. Write the most optimal C++ AND Java solution (state time/space
+     complexity)
+  3. Break the algorithm into a STEP TRACE: an ordered array of step objects,
+     each tagged with a "type" (matching source line tags) so the code panel
+     knows which line(s) to highlight per step, plus whatever state fields
+     the visual template needs to render that step (pointer positions, table
+     cell being filled, node being visited, etc.)
+  4. Write the plain-English trace-line template per step type (see the
+     `current.type === "..."` branches in the reference artifact — one
+     template string per step type, with inline value substitution)
+  5. Write the closing "why this works" note (1-3 sentences, the non-obvious
+     insight)
+  6. Store as one record: { problem, solutions: {cpp, java}, trace, note }
+
+================================================================================
+5. BUILD PHASES (strict order)
+================================================================================
+
+Phase 1 — Frontend only, local/mock JSON data
+  - Category + question list page with [Visualize] buttons
+  - Visualizer page shell (transport controls, trace line, code panel,
+    result readout) wired to local JSON
+  - Build the first 3 visualization templates end-to-end (recommend starting
+    with: Binary Search on Answer, Two Pointers/Sliding Window, Trees) using
+    ~10-15 seed questions, to lock the design language before scaling
+  - Confirm visual style matches the reference artifact before proceeding
+
+Phase 2 — Backend
+  - API endpoints to serve categories/questions/solutions/traces
+  - Swap local JSON fetches for API calls; no frontend behavior change
+
+Phase 3 — Database
+  - Persist problems/solutions/traces (schema: problems, solutions,
+    traces — one trace blob per problem is fine, JSON column)
+  - Migrate seed data into the database
+
+Phase 4 — Scale content
+  - Use the content-generation pipeline (section 4) to add the remaining
+    questions in batches, reusing existing templates; add new templates only
+    when a genuinely new pattern appears
+
+Phase 5 — Deploy
+  - Push to GitHub
+  - Deploy frontend + backend + managed database to hosting (e.g. Vercel +
+    Render/Railway + Supabase/Neon)
+
+================================================================================
+6. TECH STACK (defaults — confirm or override before Phase 1)
+================================================================================
+  Frontend   : React + TypeScript + Tailwind CSS
+  Code panel : custom-rendered (as in the reference artifact) or Shiki/Prism
+               for syntax highlighting, with manual active-line overlay
+  Backend    : Node.js + Express (or Next.js API routes, single repo)
+  Database   : PostgreSQL (Supabase/Neon) — or MongoDB if trace shapes vary
+               too much across templates to fit relational columns cleanly
+  Deployment : GitHub repo -> Vercel (frontend) + Render/Railway (backend) +
+               managed Postgres
+
+================================================================================
+7. CONSTRAINTS
+================================================================================
+  - No user accounts, auth, or extra languages beyond C++/Java unless asked
+  - No new visualization template unless an existing one genuinely cannot
+    represent the algorithm's pattern
+  - Every question requires: working LeetCode link, C++ solution, Java
+    solution, and a step trace — none optional
+  - Reuse the shared visualizer "shell" (transport + trace + code panel +
+    result) across all templates; only the left-side visual widget changes
+  - Keep the 3-accent color language (accent = active/testing, accent-2 =
+    confirmed/success, accent-3 = final result) consistent across every
+    template
+
+================================================================================
+NEXT STEP
+================================================================================
+Provide the first batch of question numbers/links (10-15), with category if
+known. Phase 1 will scaffold the category list, the visualizer shell, and the
+first 3 templates (Binary Search on Answer / Two Pointers-Sliding Window /
+Trees) against that batch for style approval before scaling to all 150.
+================================================================================
