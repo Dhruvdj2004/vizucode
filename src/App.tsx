@@ -33,6 +33,11 @@ export default function App() {
           {session ? (
             <>
               <span className="auth-greeting">Hi, {session.user.firstName}</span>
+              {!session.user.isPro && (
+                <Link to="/upgrade" className="btn primary">
+                  🔓 Upgrade
+                </Link>
+              )}
               <button
                 className="btn"
                 onClick={() => {

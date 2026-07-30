@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fetchQuestions, fetchProgress, updateProgress, type DataSource, type QuestionRow, type Streak } from '../lib/api';
 import { getSession, onAuthChange } from '../lib/auth';
+import { isCategoryLocked } from '../lib/plan';
 import LeetCodeIcon from '../components/LeetCodeIcon';
 import ProgressRing from '../components/ProgressRing';
 
@@ -168,21 +169,37 @@ export default function HomePage() {
       {categories.map((cat) => {
         const questions = rows.filter((q) => q.category === cat);
         const catSolved = questions.filter((q) => solved.has(q.slug)).length;
-        const isOpen = !!open[cat];
+        const locked = isCategoryLocked(cat, session?.user);
+        const isOpen = !locked && !!open[cat];
         return (
-          <section key={cat} className="panel cat">
+          <section key={cat} className={`panel cat ${locked ? 'locked' : ''}`}>
             <button
               className="cat-head"
-              onClick={() => setOpen((o) => ({ ...o, [cat]: !o[cat] }))}
+              onClick={() => {
+                if (locked) {
+                  navigate('/upgrade');
+                  return;
+                }
+                setOpen((o) => ({ ...o, [cat]: !o[cat] }));
+              }}
               aria-expanded={isOpen}
             >
               <span className={`chev ${isOpen ? 'open' : ''}`}>▶</span>
+              {locked && (
+                <span className="lock-icon" aria-hidden>
+                  🔒
+                </span>
+              )}
               {cat}
               <span className="count">
-                {session ? `${catSolved} / ${questions.length} solved` : `${questions.length} questions`}
+                {locked
+                  ? 'Locked — upgrade to unlock'
+                  : session
+                    ? `${catSolved} / ${questions.length} solved`
+                    : `${questions.length} questions`}
               </span>
               <span className="cat-progress" aria-hidden>
-                <div style={{ width: `${session ? (catSolved / questions.length) * 100 : 0}%` }} />
+                <div style={{ width: `${session && !locked ? (catSolved / questions.length) * 100 : 0}%` }} />
               </span>
             </button>
             {isOpen &&

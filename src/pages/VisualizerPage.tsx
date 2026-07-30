@@ -4,6 +4,8 @@ import { problemRegistry } from '../problems';
 import { fetchProblem } from '../lib/api';
 import type { StaticProblem } from '../lib/serialize';
 import { isRunError, type RunResult } from '../lib/types';
+import { getSession, onAuthChange } from '../lib/auth';
+import { isCategoryLocked } from '../lib/plan';
 import CodePanel from '../components/CodePanel';
 import TraceLine from '../components/TraceLine';
 import LeetCodeIcon from '../components/LeetCodeIcon';
@@ -29,6 +31,8 @@ export default function VisualizerPage() {
   // local fallback; the trace generator always runs locally for instant steps.
   const [problem, setProblem] = useState<StaticProblem | null | undefined>(undefined);
   const runner = slug ? problemRegistry[slug]?.run : undefined;
+  const [session, setSession] = useState(getSession);
+  useEffect(() => onAuthChange(() => setSession(getSession())), []);
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +113,18 @@ export default function VisualizerPage() {
         <p className="serif">This question doesn't have a step-trace yet. It's on the roadmap.</p>
         <Link to="/">
           <button className="btn primary">← Back to questions</button>
+        </Link>
+      </div>
+    );
+  }
+
+  if (isCategoryLocked(problem.category, session?.user)) {
+    return (
+      <div className="panel">
+        <h2>🔒 This one's locked</h2>
+        <p className="serif">Upgrade to unlock every pattern, including {problem.category}.</p>
+        <Link to="/upgrade">
+          <button className="btn primary">Upgrade</button>
         </Link>
       </div>
     );

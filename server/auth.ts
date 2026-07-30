@@ -22,6 +22,7 @@ interface User {
   email: string;
   firstName: string;
   passwordHash: string;
+  isPro: boolean;
 }
 
 interface UserStore {
@@ -38,12 +39,18 @@ const store: UserStore = db
   ? {
       async findByEmail(email) {
         const r = await db.query(
-          'select id, email, first_name, password_hash from users where email = $1',
+          'select id, email, first_name, password_hash, is_pro from users where email = $1',
           [email]
         );
         const row = r.rows[0];
         return row
-          ? { id: row.id, email: row.email, firstName: row.first_name, passwordHash: row.password_hash }
+          ? {
+              id: row.id,
+              email: row.email,
+              firstName: row.first_name,
+              passwordHash: row.password_hash,
+              isPro: row.is_pro,
+            }
           : undefined;
       },
       async create(email, firstName, passwordHash) {
@@ -52,7 +59,7 @@ const store: UserStore = db
             'insert into users (email, first_name, password_hash) values ($1, $2, $3) returning id',
             [email, firstName, passwordHash]
           );
-          return { id: r.rows[0].id, email, firstName, passwordHash };
+          return { id: r.rows[0].id, email, firstName, passwordHash, isPro: false };
         } catch (e) {
           if ((e as { code?: string }).code === '23505') return null; // unique_violation
           throw e;
@@ -65,7 +72,7 @@ const store: UserStore = db
       },
       async create(email, firstName, passwordHash) {
         if (memUsers.has(email)) return null;
-        const user: User = { id: nextId++, email, firstName, passwordHash };
+        const user: User = { id: nextId++, email, firstName, passwordHash, isPro: false };
         memUsers.set(email, user);
         return user;
       },
@@ -104,7 +111,7 @@ function firstIssue(err: z.ZodError): string {
 // ---------- JWT middleware ----------
 
 export interface AuthedRequest extends Request {
-  user?: { id: number; email: string; firstName: string };
+  user?: { id: number; email: string; firstName: string; isPro: boolean };
 }
 
 /** Rejects the request unless it carries a valid `Authorization: Bearer <token>`. */
@@ -116,8 +123,18 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
     return;
   }
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { sub: string; email: string; firstName: string };
-    req.user = { id: Number(payload.sub), email: payload.email, firstName: payload.firstName };
+    const payload = jwt.verify(token, JWT_SECRET) as {
+      sub: string;
+      email: string;
+      firstName: string;
+      isPro: boolean;
+    };
+    req.user = {
+      id: Number(payload.sub),
+      email: payload.email,
+      firstName: payload.firstName,
+      isPro: !!payload.isPro,
+    };
     next();
   } catch {
     res.status(401).json({ error: 'Session expired — sign in again.' });
@@ -125,14 +142,14 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
 }
 
 function signToken(user: User): string {
-  return jwt.sign({ email: user.email, firstName: user.firstName }, JWT_SECRET, {
+  return jwt.sign({ email: user.email, firstName: user.firstName, isPro: user.isPro }, JWT_SECRET, {
     subject: String(user.id),
     expiresIn: TOKEN_TTL,
   });
 }
 
 function publicUser(user: User) {
-  return { id: user.id, email: user.email, firstName: user.firstName };
+  return { id: user.id, email: user.email, firstName: user.firstName, isPro: user.isPro };
 }
 
 // ---------- routes ----------

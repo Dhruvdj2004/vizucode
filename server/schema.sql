@@ -33,8 +33,12 @@ create table if not exists users (
   email         text not null unique,
   first_name    text not null,
   password_hash text not null,
+  is_pro        boolean not null default false,
   created_at    timestamptz not null default now()
 );
+
+-- Safety net for databases that already had `users` before is_pro existed.
+alter table users add column if not exists is_pro boolean not null default false;
 
 -- Per-user solved questions: one row = "this user solved this question".
 -- Deliberately NO foreign key to questions(slug): the seeder re-creates the
