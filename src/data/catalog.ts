@@ -1272,5 +1272,13 @@ export const catalog: CatalogEntry[] = [
     "difficulty": "Medium",
     "leetcode": "https://leetcode.com/problems/simplify-path/",
     "slug": "simplify-path"
+  },
+  {
+    "id": 159,
+    "category": "Linked List",
+    "title": "Reverse Nodes in k-Group",
+    "difficulty": "Hard",
+    "leetcode": "https://leetcode.com/problems/reverse-nodes-in-k-group/",
+    "slug": "reverse-nodes-in-k-group"
   }
 ];

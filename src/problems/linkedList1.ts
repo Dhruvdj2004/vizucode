@@ -630,4 +630,136 @@ const mergeKLists: ProblemDef = {
   complexity: { time: 'O(N log k)', space: 'O(k)' },
 };
 
-export const linkedList1 = [reverseList, mergeTwoLists, reorderList, removeNth, listCycle, mergeKLists];
+/* ================= 25. Reverse Nodes in k-Group ================= */
+const reverseKGroup: ProblemDef = {
+  slug: 'reverse-nodes-in-k-group',
+  title: 'Reverse Nodes in k-Group',
+  category: 'Linked List',
+  difficulty: 'Hard',
+  leetcode: 'https://leetcode.com/problems/reverse-nodes-in-k-group/',
+  technique: 'Look ahead k nodes to confirm a full group exists, then reverse it in place and reconnect to groupPrev.',
+  widget: 'list',
+  widgetTitle: 'List, k nodes at a time',
+  inputs: [
+    { key: 'list', label: 'List values', defaultValue: '1, 2, 3, 4, 5, 6, 7, 8', wide: true },
+    { key: 'k', label: 'k', defaultValue: '3' },
+  ],
+  code: {
+    cpp: [
+      L('class Solution {'),
+      L('public:'),
+      L('    ListNode* reverseKGroup(ListNode* head, int k) {'),
+      L('        ListNode dummy(0, head);', 'init'),
+      L('        ListNode* groupPrev = &dummy;', 'init'),
+      L('        while (true) {'),
+      L('            ListNode* kth = groupPrev;', 'check'),
+      L('            for (int i = 0; i < k && kth; i++) kth = kth->next;', 'check'),
+      L('            if (!kth) break;', 'stop'),
+      L('            ListNode* groupNext = kth->next;', 'check'),
+      L('            ListNode* prev = groupNext;', 'reverse'),
+      L('            ListNode* curr = groupPrev->next;', 'reverse'),
+      L('            while (curr != groupNext) {', 'reverse'),
+      L('                ListNode* tmp = curr->next;', 'reverse'),
+      L('                curr->next = prev;', 'reverse'),
+      L('                prev = curr;', 'reverse'),
+      L('                curr = tmp;', 'reverse'),
+      L('            }'),
+      L('            ListNode* tmp = groupPrev->next;', 'connect'),
+      L('            groupPrev->next = kth;', 'connect'),
+      L('            groupPrev = tmp;', 'connect'),
+      L('        }'),
+      L('        return dummy.next;', 'ret'),
+      L('    }'),
+      L('};'),
+    ],
+    java: [
+      L('class Solution {'),
+      L('    public ListNode reverseKGroup(ListNode head, int k) {'),
+      L('        ListNode dummy = new ListNode(0, head);', 'init'),
+      L('        ListNode groupPrev = dummy;', 'init'),
+      L('        while (true) {'),
+      L('            ListNode kth = groupPrev;', 'check'),
+      L('            for (int i = 0; i < k && kth != null; i++) kth = kth.next;', 'check'),
+      L('            if (kth == null) break;', 'stop'),
+      L('            ListNode groupNext = kth.next;', 'check'),
+      L('            ListNode prev = groupNext;', 'reverse'),
+      L('            ListNode curr = groupPrev.next;', 'reverse'),
+      L('            while (curr != groupNext) {', 'reverse'),
+      L('                ListNode tmp = curr.next;', 'reverse'),
+      L('                curr.next = prev;', 'reverse'),
+      L('                prev = curr;', 'reverse'),
+      L('                curr = tmp;', 'reverse'),
+      L('            }'),
+      L('            ListNode tmp = groupPrev.next;', 'connect'),
+      L('            groupPrev.next = kth;', 'connect'),
+      L('            groupPrev = tmp;', 'connect'),
+      L('        }'),
+      L('        return dummy.next;', 'ret'),
+      L('    }'),
+      L('}'),
+    ],
+  },
+  run(values) {
+    const arr0 = parseIntArray(values.list, { maxLen: 12 });
+    if (typeof arr0 === 'string') return { error: arr0 };
+    const k = parseInt1(values.k, 'k', { min: 1 });
+    if (typeof k === 'string') return { error: k };
+    if (k > arr0.length) return { error: `k must be ≤ the list length (${arr0.length}).` };
+
+    const arr = [...arr0];
+    const n = arr.length;
+    const steps: Step[] = [];
+    const view = (hl: number[] = [], done: number): ListState => ({
+      chains: [
+        {
+          label: 'list',
+          items: arr.map((v, i) => ({
+            v,
+            mark: hl.includes(i) ? ('active' as const) : i < done ? ('win' as const) : undefined,
+          })),
+        },
+      ],
+    });
+    steps.push({
+      tag: 'init',
+      trace: ['Reverse the list ', A(`k = ${k}`), ' nodes at a time; a trailing group shorter than k stays untouched.'],
+      state: view([], 0),
+    });
+    let start = 0;
+    while (start + k <= n) {
+      const groupIdx = Array.from({ length: k }, (_, i) => start + i);
+      steps.push({
+        tag: 'check',
+        trace: ['Look ahead ', A(k), ' nodes: ', A(`[${groupIdx.map((i) => arr[i]).join(', ')}]`), ' is a full group, so it gets reversed.'],
+        state: view(groupIdx, start),
+      });
+      const seg = arr.slice(start, start + k).reverse();
+      for (let i = 0; i < k; i++) arr[start + i] = seg[i];
+      steps.push({
+        tag: 'reverse',
+        trace: ['Reverse pointers within the group — it becomes ', B(`[${seg.join(', ')}]`), '.'],
+        state: view(groupIdx, start),
+      });
+      start += k;
+      steps.push({
+        tag: 'connect',
+        trace: ['Reconnect: groupPrev now points at the new head ', B(seg[0]), ', and advances to the group\'s tail, ', B(seg[seg.length - 1]), '.'],
+        state: view([], start),
+      });
+    }
+    if (start < n) {
+      const rem = Array.from({ length: n - start }, (_, i) => start + i);
+      steps.push({
+        tag: 'stop',
+        trace: ['Only ', F(`${n - start}`), ' node(s) remain — fewer than k, so the lookahead hits the end and they\'re left in original order.'],
+        state: view(rem, start),
+      });
+    }
+    steps.push({ tag: 'ret', trace: ['Done: ', C(`[${arr.join(' → ')}]`)], state: view([], n) });
+    return { steps, result: `[${arr.join(' → ')}]`, resultDetail: `groups of ${k} reversed` };
+  },
+  note: 'Scanning ahead k nodes before touching any pointer is what makes a short trailing group safe: if the lookahead falls off the list, nothing has been rewired yet, so that remainder is left exactly as found. groupPrev always tracks the previous group\'s new tail, which is what makes the next group\'s reversal a self-contained, in-place operation.',
+  complexity: { time: 'O(n)', space: 'O(1)' },
+};
+
+export const linkedList1 = [reverseList, mergeTwoLists, reorderList, removeNth, listCycle, mergeKLists, reverseKGroup];
