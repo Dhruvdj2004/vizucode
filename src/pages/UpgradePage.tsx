@@ -80,7 +80,7 @@ export default function UpgradePage() {
         </p>
 
         <div className="price-row">
-          <span className="price-amount mono">₹49</span>
+          <span className="price-amount mono">₹1</span>
           <span className="price-period">one-time</span>
         </div>
 

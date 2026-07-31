@@ -12,7 +12,7 @@ const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
 // Single fixed-price product (see UpgradePage.tsx) — the amount is always
 // set here, never taken from the client, so a request can't be tampered
 // with to buy the upgrade for less.
-const PRO_PRICE_PAISE = 4900; // ₹49
+const PRO_PRICE_PAISE = 100; // ₹1
 
 const razorpay = KEY_ID && KEY_SECRET ? new Razorpay({ key_id: KEY_ID, key_secret: KEY_SECRET }) : null;
 
