@@ -13,3 +13,7 @@ server/dist/
 
 # Local Netlify folder
 .netlify
+
+# scripts/verify-visualizer.mjs scratch output
+.verify-chrome-profile/
+.verify-screenshots/
