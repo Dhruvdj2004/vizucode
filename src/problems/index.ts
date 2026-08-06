@@ -22,6 +22,21 @@ import { greedy } from './greedy';
 import { intervals } from './intervals';
 import { mathBits } from './mathBits';
 import { strings } from './strings';
+import { arraysHashing3 } from './arraysHashing3';
+import { pointers3 } from './pointers3';
+import { slidingWindow2 } from './slidingWindow2';
+import { binarySearch3 } from './binarySearch3';
+import { linkedList3 } from './linkedList3';
+import { stack2 } from './stack2';
+import { trees4 } from './trees4';
+import { trees5 } from './trees5';
+import { triesHeapBacktracking } from './triesHeapBacktracking';
+import { graphs3 } from './graphs3';
+import { graphs4 } from './graphs4';
+import { dp3 } from './dp3';
+import { dp4 } from './dp4';
+import { greedyStrings2 } from './greedyStrings2';
+import { mathBits2 } from './mathBits2';
 
 const all: ProblemDef[] = [
   ...binarySearchProblems,
@@ -47,6 +62,21 @@ const all: ProblemDef[] = [
   ...intervals,
   ...mathBits,
   ...strings,
+  ...arraysHashing3,
+  ...pointers3,
+  ...slidingWindow2,
+  ...binarySearch3,
+  ...linkedList3,
+  ...stack2,
+  ...trees4,
+  ...trees5,
+  ...triesHeapBacktracking,
+  ...graphs3,
+  ...graphs4,
+  ...dp3,
+  ...dp4,
+  ...greedyStrings2,
+  ...mathBits2,
 ];
 
 /** slug -> problem definition, for questions that have a visualizer built. */
