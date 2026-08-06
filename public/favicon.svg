@@ -1,28 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <style>
-    .frame { stroke: #1b232c; }
-    .edge  { stroke: #2f7d70; }
-    .node  { fill: #b96f27; }
-    @media (prefers-color-scheme: dark) {
-      .frame { stroke: #e7ecf1; }
-      .edge  { stroke: #57c2ae; }
-      .node  { fill: #e0a24f; }
-    }
-  </style>
-  <g class="frame" fill="none" stroke-width="4.5" stroke-linecap="round">
-    <path d="M8 32 A26 26 0 0 1 35.17 16.19" />
-    <path d="M41.32 17.73 A26 26 0 0 1 56 32" />
-    <path d="M56 32 A26 26 0 0 1 28.83 47.81" />
-    <path d="M22.68 46.27 A26 26 0 0 1 8 32" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Keep in sync with src/components/Logo.tsx. No prefers-color-scheme block:
+       the white disc is opaque, so the mark reads on light and dark tabs alike. -->
+  <circle cx="50" cy="50" r="50" fill="#fff" />
+  <g stroke="#f5a02d" stroke-width="3.2" stroke-linecap="round">
+    <path d="M22 35.5 H31" />
+    <path d="M15 42.5 H31" />
+    <path d="M11 49.5 H29" />
+    <path d="M15 56.5 H31" />
+    <path d="M22 63.5 H31" />
   </g>
-  <g class="edge" fill="none" stroke-width="2.4" stroke-linecap="round">
-    <path d="M24 32 L37.5 25.5" />
-    <path d="M37.5 25.5 L36.5 39.5" />
-    <path d="M36.5 39.5 L24 32" />
+  <g fill="#f5a02d">
+    <circle cx="16.5" cy="35.5" r="1.8" />
+    <circle cx="6" cy="49.5" r="1.8" />
+    <circle cx="16.5" cy="63.5" r="1.8" />
   </g>
-  <g class="node">
-    <circle cx="24" cy="32" r="3.6" />
-    <circle cx="37.5" cy="25.5" r="3.6" />
-    <circle cx="36.5" cy="39.5" r="3.6" />
+  <path d="M82.6 38.6 A17 17 0 1 0 82.6 61.4" fill="none" stroke="#f5a02d" stroke-width="10" stroke-linecap="round" />
+  <path d="M28 30 L41 70 L54 30" fill="none" stroke="#1a1c20" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" />
+  <g fill="none" stroke="#1a1c20" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M66 45 L61.5 50 L66 55" />
+    <path d="M68.8 44 L72.6 56" />
+    <path d="M75.5 45 L79.5 50 L75.5 55" />
   </g>
 </svg>

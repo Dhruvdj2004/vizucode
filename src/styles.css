@@ -780,3 +780,19 @@ svg.dg { display: block; width: 100%; height: auto; font-family: var(--font-sans
   .mod-cta { padding: 0.85rem 0.95rem; gap: 0.7rem; }
   .mod-cta-icon { font-size: 1.4rem; }
 }
+
+/* ---- Home: grouped module sections ---- */
+.mod-group { margin-bottom: 1.5rem; }
+.mod-group + .mod-group { margin-top: 1.75rem; }
+.mod-group-head {
+  display: flex; align-items: baseline; gap: 0.7rem;
+  margin: 0 0 0.7rem; padding-bottom: 0.45rem; border-bottom: 1px solid var(--line);
+}
+.mod-group-head h2 { font-size: 1rem; font-weight: 800; }
+.mod-group-head .count { margin-left: auto; font-size: 0.75rem; color: var(--ink-faint); }
+.mod-group-all {
+  margin-left: auto; font-size: 0.78rem; font-weight: 700;
+  color: var(--accent); text-decoration: none;
+}
+.mod-group-all:hover { text-decoration: underline; }
+.mod-group .mod-row { margin-bottom: 0; }

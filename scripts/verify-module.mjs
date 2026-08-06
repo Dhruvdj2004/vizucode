@@ -27,7 +27,7 @@ const CHROME =
 const PROFILE_DIR = path.join(ROOT, '.verify-chrome-profile-module');
 
 // Route bases of every theory module, matching the `key` in each registry.
-const ALL_MODULES = ['dbms', 'revision'];
+const ALL_MODULES = ['dbms', 'os', 'oops', 'revision'];
 
 const args = process.argv.slice(2);
 const wantScreenshots = args.includes('--screenshot');

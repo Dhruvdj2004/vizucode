@@ -11,6 +11,11 @@ import DbmsPage from './pages/DbmsPage';
 import DbmsTopicPage from './pages/DbmsTopicPage';
 import RevisionPage from './pages/RevisionPage';
 import RevisionTopicPage from './pages/RevisionTopicPage';
+import CorePage from './pages/CorePage';
+import OsPage from './pages/OsPage';
+import OsTopicPage from './pages/OsTopicPage';
+import OopsPage from './pages/OopsPage';
+import OopsTopicPage from './pages/OopsTopicPage';
 import RequireAuth from './lib/RequireAuth';
 import './styles.css';
 
@@ -64,6 +69,46 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             element={
               <RequireAuth>
                 <RevisionTopicPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="core"
+            element={
+              <RequireAuth>
+                <CorePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="os"
+            element={
+              <RequireAuth>
+                <OsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="os/:slug"
+            element={
+              <RequireAuth>
+                <OsTopicPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="oops"
+            element={
+              <RequireAuth>
+                <OopsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="oops/:slug"
+            element={
+              <RequireAuth>
+                <OopsTopicPage />
               </RequireAuth>
             }
           />

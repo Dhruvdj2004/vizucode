@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getSession, logout, onAuthChange } from './lib/auth';
+import { navSection } from './content/registry';
 import { Logo } from './components/Logo';
 
 function getInitialTheme(): 'light' | 'dark' {
@@ -14,8 +15,9 @@ export default function App() {
   const [session, setSession] = useState(getSession);
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  // The visualizer list is the "/" section; every other nav entry owns a prefix.
-  const section = pathname.startsWith('/dbms') ? 'dbms' : pathname.startsWith('/revision') ? 'revision' : 'dsa';
+  // Which nav entry lights up — the module registry owns that mapping, so a new
+  // core subject does not need this file changed.
+  const section = navSection(pathname);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -41,8 +43,8 @@ export default function App() {
           <Link to="/revision" className={section === 'revision' ? 'on' : ''}>
             Revision
           </Link>
-          <Link to="/dbms" className={section === 'dbms' ? 'on' : ''}>
-            DBMS
+          <Link to="/core" className={section === 'core' ? 'on' : ''}>
+            Core Subjects
           </Link>
         </nav>
         <div className="header-actions">

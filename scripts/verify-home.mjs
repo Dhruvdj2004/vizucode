@@ -114,10 +114,14 @@ async function main() {
   });
   await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/#/` });
 
-  if (!(await waitFor(call, `document.querySelectorAll('.mod-cta').length === 2`, 30000))) {
+  // One card per registered module: the revision notes plus each core subject.
+  const EXPECTED_CARDS = 4;
+  if (!(await waitFor(call, `document.querySelectorAll('.mod-cta').length === ${EXPECTED_CARDS}`, 30000))) {
     const n = await val(call, `document.querySelectorAll('.mod-cta').length`);
-    fail(`expected 2 module cards on the home page, found ${n}`);
+    fail(`expected ${EXPECTED_CARDS} module cards on the home page, found ${n}`);
   }
+  const groups = await val(call, `document.querySelectorAll('.mod-group').length`);
+  if (groups !== 2) fail(`expected 2 card groups (revision + core), found ${groups}`);
 
   const cards = JSON.parse(
     (await val(
@@ -159,8 +163,22 @@ async function main() {
     else console.log(`click: ${c.title} → ${hash} ✓`);
   }
 
+  // The /core hub should list exactly the core-subject modules.
+  await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/#/core` });
+  const coreOk = await waitFor(call, `document.querySelectorAll('.mod-cta').length === 3`, 15000);
+  const coreN = await val(call, `document.querySelectorAll('.mod-cta').length`);
+  if (!coreOk) fail(`/#/core showed ${coreN} cards, expected 3`);
+  else console.log(`core hub: ${coreN} core-subject cards ✓`);
+
+  if (wantScreenshots) {
+    const dir = path.join(ROOT, '.verify-screenshots', 'home');
+    mkdirSync(dir, { recursive: true });
+    const shot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+    writeFileSync(path.join(dir, 'core.png'), Buffer.from(shot.data, 'base64'));
+  }
+
   if (errors.length) fail(`console error — ${String(errors[0]).split('\n')[0]}`);
-  console.log(failed ? '\nFAILED' : '\nPASS — home page module buttons work');
+  console.log(failed ? '\nFAILED' : '\nPASS — home page and core hub work');
 }
 
 main()

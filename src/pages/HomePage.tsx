@@ -5,28 +5,8 @@ import { getSession, onAuthChange } from '../lib/auth';
 import { isCategoryLocked } from '../lib/plan';
 import LeetCodeIcon from '../components/LeetCodeIcon';
 import ProgressRing from '../components/ProgressRing';
-import { moduleStats } from '../content/module';
-import { dbmsModule } from '../dbms';
-import { dsaModule } from '../dsa';
-
-// Entry points to the written modules. Counts come from the registries so the
-// card copy can never drift from the number of topics that actually exist.
-const MODULE_LINKS = [
-  {
-    mod: dsaModule,
-    to: '/revision',
-    icon: '📗',
-    tint: 'a',
-    tagline: 'Graphs and DP explained in plain language, with diagrams and code.',
-  },
-  {
-    mod: dbmsModule,
-    to: '/dbms',
-    icon: '🗄️',
-    tint: 'b',
-    tagline: 'The full DBMS syllabus interviewers ask, drawn out topic by topic.',
-  },
-];
+import ModuleCards from '../components/ModuleCards';
+import { CORE_MODULES, REVISION_MODULES } from '../content/registry';
 
 export default function HomePage() {
   const [rows, setRows] = useState<QuestionRow[] | null>(null);
@@ -148,27 +128,22 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="mod-row">
-        {MODULE_LINKS.map(({ mod, to, icon, tint, tagline }) => {
-          const s = moduleStats(mod);
-          return (
-            <Link key={mod.key} to={to} className={`panel mod-cta ${tint}`}>
-              <span className="mod-cta-icon" aria-hidden>
-                {icon}
-              </span>
-              <span className="mod-cta-body">
-                <span className="mod-cta-title">{mod.title}</span>
-                <span className="mod-cta-tagline">{tagline}</span>
-                <span className="mod-cta-meta mono">
-                  {s.topics} topics · ~{s.hours} h{s.free > 0 && ` · ${s.free} free`}
-                </span>
-              </span>
-              <span className="mod-cta-go" aria-hidden>
-                →
-              </span>
-            </Link>
-          );
-        })}
+      <div className="mod-group">
+        <div className="mod-group-head">
+          <h2>Revision notes</h2>
+          <span className="count">written companions to the visualizers</span>
+        </div>
+        <ModuleCards links={REVISION_MODULES} />
+      </div>
+
+      <div className="mod-group">
+        <div className="mod-group-head">
+          <h2>Core subjects</h2>
+          <Link to="/core" className="mod-group-all">
+            See all →
+          </Link>
+        </div>
+        <ModuleCards links={CORE_MODULES} />
       </div>
 
       {session ? (
