@@ -159,9 +159,11 @@ async function main() {
     writeFileSync(path.join(shotDir, 'step-1.png'), Buffer.from(shot.data, 'base64'));
   }
 
-  // 5. Step through every step (cap at 60 — generous for any current problem).
+  // 5. Step through every step. The cap only exists so a run() that never
+  //     disables the forward button cannot hang the script — keep it above the
+  //     longest real trace (currently restore-ip-addresses at ~198 steps).
   let lastCounter = '';
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 400; i++) {
     const counter = (
       await call('Runtime.evaluate', { expression: 'document.querySelector(".counter")?.innerText' })
     ).result?.value;
