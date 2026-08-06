@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getSession, logout, onAuthChange } from './lib/auth';
+import { Logo } from './components/Logo';
 
 function getInitialTheme(): 'light' | 'dark' {
   const saved = localStorage.getItem('vizucode-theme');
@@ -12,6 +13,9 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme);
   const [session, setSession] = useState(getSession);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // The visualizer list is the "/" section; every other nav entry owns a prefix.
+  const section = pathname.startsWith('/dbms') ? 'dbms' : pathname.startsWith('/revision') ? 'revision' : 'dsa';
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -24,11 +28,23 @@ export default function App() {
     <div className="container">
       <header className="site-header">
         <Link to="/" className="site-brand">
+          <Logo size={30} />
           <span className="logo">
             Vizu<em>Code</em>
           </span>
           <span className="eyebrow faint">LeetCode, step by step</span>
         </Link>
+        <nav className="site-nav" aria-label="Sections">
+          <Link to="/" className={section === 'dsa' ? 'on' : ''}>
+            DSA
+          </Link>
+          <Link to="/revision" className={section === 'revision' ? 'on' : ''}>
+            Revision
+          </Link>
+          <Link to="/dbms" className={section === 'dbms' ? 'on' : ''}>
+            DBMS
+          </Link>
+        </nav>
         <div className="header-actions">
           {session ? (
             <>

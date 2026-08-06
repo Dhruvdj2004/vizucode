@@ -5,6 +5,28 @@ import { getSession, onAuthChange } from '../lib/auth';
 import { isCategoryLocked } from '../lib/plan';
 import LeetCodeIcon from '../components/LeetCodeIcon';
 import ProgressRing from '../components/ProgressRing';
+import { moduleStats } from '../content/module';
+import { dbmsModule } from '../dbms';
+import { dsaModule } from '../dsa';
+
+// Entry points to the written modules. Counts come from the registries so the
+// card copy can never drift from the number of topics that actually exist.
+const MODULE_LINKS = [
+  {
+    mod: dsaModule,
+    to: '/revision',
+    icon: '📗',
+    tint: 'a',
+    tagline: 'Graphs and DP explained in plain language, with diagrams and code.',
+  },
+  {
+    mod: dbmsModule,
+    to: '/dbms',
+    icon: '🗄️',
+    tint: 'b',
+    tagline: 'The full DBMS syllabus interviewers ask, drawn out topic by topic.',
+  },
+];
 
 export default function HomePage() {
   const [rows, setRows] = useState<QuestionRow[] | null>(null);
@@ -124,6 +146,29 @@ export default function HomePage() {
           {stats.total} curated LeetCode problems organized by pattern. Every visualizer walks the optimal
           algorithm step by step, synced with the C++ and Java source.
         </p>
+      </div>
+
+      <div className="mod-row">
+        {MODULE_LINKS.map(({ mod, to, icon, tint, tagline }) => {
+          const s = moduleStats(mod);
+          return (
+            <Link key={mod.key} to={to} className={`panel mod-cta ${tint}`}>
+              <span className="mod-cta-icon" aria-hidden>
+                {icon}
+              </span>
+              <span className="mod-cta-body">
+                <span className="mod-cta-title">{mod.title}</span>
+                <span className="mod-cta-tagline">{tagline}</span>
+                <span className="mod-cta-meta mono">
+                  {s.topics} topics · ~{s.hours} h{s.free > 0 && ` · ${s.free} free`}
+                </span>
+              </span>
+              <span className="mod-cta-go" aria-hidden>
+                →
+              </span>
+            </Link>
+          );
+        })}
       </div>
 
       {session ? (

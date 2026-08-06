@@ -14,6 +14,7 @@ server/dist/
 # Local Netlify folder
 .netlify
 
-# scripts/verify-visualizer.mjs scratch output
-.verify-chrome-profile/
+# scratch output from the scripts/verify-*.mjs headless checks — each run keeps
+# its own throwaway Chrome profile, which is hundreds of MB
+.verify-chrome-profile*/
 .verify-screenshots/

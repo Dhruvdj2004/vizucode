@@ -7,6 +7,10 @@ import VisualizerPage from './pages/VisualizerPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import UpgradePage from './pages/UpgradePage';
+import DbmsPage from './pages/DbmsPage';
+import DbmsTopicPage from './pages/DbmsTopicPage';
+import RevisionPage from './pages/RevisionPage';
+import RevisionTopicPage from './pages/RevisionTopicPage';
 import RequireAuth from './lib/RequireAuth';
 import './styles.css';
 
@@ -28,6 +32,38 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             element={
               <RequireAuth>
                 <VisualizerPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="dbms"
+            element={
+              <RequireAuth>
+                <DbmsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="dbms/:slug"
+            element={
+              <RequireAuth>
+                <DbmsTopicPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="revision"
+            element={
+              <RequireAuth>
+                <RevisionPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="revision/:slug"
+            element={
+              <RequireAuth>
+                <RevisionTopicPage />
               </RequireAuth>
             }
           />
