@@ -357,6 +357,104 @@ const container: ProblemDef = {
   },
   note: 'Area is limited by the shorter wall. Moving the taller wall inward can only shrink the width while the height stays capped — so the only move that might help is advancing the shorter wall. That single insight prunes O(n²) pairs down to one O(n) sweep.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Measure the container formed by every pair of walls and keep the largest.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxArea(vector<int>& height) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < height.size(); i++)', 'outer'),
+        L('            for (int j = i + 1; j < height.size(); j++) {', 'inner'),
+        L('                int area = min(height[i], height[j]) * (j - i);', 'area'),
+        L('                best = max(best, area);', 'best'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxArea(int[] height) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < height.length; i++)', 'outer'),
+        L('            for (int j = i + 1; j < height.length; j++) {', 'inner'),
+        L('                int area = Math.min(height[i], height[j]) * (j - i);', 'area'),
+        L('                best = Math.max(best, area);', 'best'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.height, { min: 0 });
+      if (typeof arr === 'string') return { error: arr };
+      if (arr.length < 2) return { error: 'Need at least two walls.' };
+
+      const steps: Step[] = [];
+      let best = 0;
+      let bestPair: [number, number] = [0, 1];
+      let tried = 0;
+      const st = (i: number, j: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr,
+        bars: true,
+        ptrs: [
+          { name: 'i', i, c: 'b' },
+          ...(j < arr.length ? [{ name: 'j', i: j, c: 'a' as const }] : []),
+        ],
+        aggs: [
+          { label: 'pairs tried', value: String(tried), c: 'a' },
+          { label: 'best area', value: String(best), c: 'c' },
+        ],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Brute force: measure ', A('every pair of walls'), ' and remember the largest area.'],
+        state: st(0, 1),
+      });
+      for (let i = 0; i < arr.length; i++) {
+        for (let j = i + 1; j < arr.length; j++) {
+          const area = Math.min(arr[i], arr[j]) * (j - i);
+          tried++;
+          const improved = area > best;
+          if (improved) {
+            best = area;
+            bestPair = [i, j];
+          }
+          steps.push({
+            tag: improved ? 'best' : 'area',
+            tag2: 'inner',
+            trace: [
+              'Walls ', B(i), ' and ', A(j), ': height ', A(Math.min(arr[i], arr[j])), ' × width ', A(j - i), ' = ',
+              improved ? B(area) : F(area),
+              improved ? ' — new best.' : ` — best stays ${best}.`,
+            ],
+            state: st(i, j, { window: [i, j], mark: { [i]: 'active', [j]: 'active' } }),
+          });
+        }
+      }
+      steps.push({
+        tag: 'ret',
+        trace: ['All ', C(tried), ' pairs measured — the biggest container holds ', C(best), '.'],
+        state: st(bestPair[0], bestPair[1], {
+          window: bestPair,
+          mark: { [bestPair[0]]: 'final', [bestPair[1]]: 'final' },
+        }),
+      });
+      return {
+        steps,
+        result: String(best),
+        resultDetail: `${tried} pairs measured — the two-pointer sweep needs ${arr.length - 1}`,
+      };
+    },
+    note: 'Every pair really is measured here, which is why it is obviously correct and obviously slow. The waste is that after fixing wall i, shrinking the width can only pay off if the height goes up — and once you notice that only the shorter wall limits the area, the whole inner loop collapses into a single pointer move.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================================================================
@@ -461,6 +559,100 @@ const moveZeroes: ProblemDef = {
   },
   note: 'Everything left of slow is a non-zero prefix in original order, and everything between slow and fast is zeroes — the swap maintains both invariants, so when fast finishes, the array is exactly the answer with no extra memory.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Extra array',
+    technique: 'Copy the non-zeroes into a second array, then pad it with zeroes and copy back.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    void moveZeroes(vector<int>& nums) {'),
+        L('        vector<int> out;', 'init'),
+        L('        for (int x : nums)', 'scan'),
+        L('            if (x != 0) out.push_back(x);', 'keep', 'drop'),
+        L('        while (out.size() < nums.size())', 'pad'),
+        L('            out.push_back(0);', 'pad'),
+        L('        nums = out;', 'copy'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public void moveZeroes(int[] nums) {'),
+        L('        int[] out = new int[nums.length];', 'init'),
+        L('        int k = 0;', 'init'),
+        L('        for (int x : nums)', 'scan'),
+        L('            if (x != 0) out[k++] = x;', 'keep', 'drop'),
+        L('        while (k < nums.length)', 'pad'),
+        L('            out[k++] = 0;', 'pad'),
+        L('        System.arraycopy(out, 0, nums, 0, nums.length);', 'copy'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const input = parseIntArray(values.nums);
+      if (typeof input === 'string') return { error: input };
+
+      const steps: Step[] = [];
+      const out: number[] = [];
+      const view = (read: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr: input,
+        ptrs: read < input.length ? [{ name: 'read', i: read, c: 'a' }] : [],
+        aggs: [{ label: 'out', value: `[${out.join(', ')}]`, c: 'b' }],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Start an ', B('empty second array'), ' — the non-zeroes will be copied into it in order.'],
+        state: view(0),
+      });
+      for (let i = 0; i < input.length; i++) {
+        if (input[i] !== 0) {
+          out.push(input[i]);
+          steps.push({
+            tag: 'keep',
+            tag2: 'scan',
+            trace: [A(input[i]), ' is non-zero — append it to out, now ', B(`[${out.join(', ')}]`), '.'],
+            state: view(i, { mark: { [i]: 'good' } }),
+          });
+        } else {
+          steps.push({
+            tag: 'drop',
+            tag2: 'scan',
+            trace: [F(0), ' — skip it entirely; the padding step will put the zeroes back at the end.'],
+            state: view(i, { mark: { [i]: 'dim' } }),
+          });
+        }
+      }
+      const zeros = input.length - out.length;
+      for (let z = 0; z < zeros; z++) out.push(0);
+      steps.push({
+        tag: 'pad',
+        trace: ['Scan done. Pad with the ', A(zeros), ' zeroes that were dropped: ', B(`[${out.join(', ')}]`), '.'],
+        state: {
+          arr: [...out],
+          mark: Object.fromEntries(out.map((v, i) => [i, v === 0 ? 'dim' : 'good'])),
+        } satisfies ArrayState,
+      });
+      steps.push({
+        tag: 'copy',
+        trace: ['Copy the second array back over the original: ', C(`[${out.join(', ')}]`), '.'],
+        state: {
+          arr: [...out],
+          mark: Object.fromEntries(out.map((_, i) => [i, 'final' as const])),
+        } satisfies ArrayState,
+      });
+      return {
+        steps,
+        result: `[${out.join(', ')}]`,
+        resultDetail: `correct, but it allocated a second array of ${input.length} elements`,
+      };
+    },
+    note: 'Correct and easy to reason about, and the usual first answer — but it breaks the "do this in-place" requirement by allocating a whole second array. The two-pointer version reaches the same layout by noticing that the space just past the non-zero prefix is exactly where a zero can be parked, so the swap needs no new memory at all.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================================================================
@@ -593,6 +785,119 @@ const longestSubstring: ProblemDef = {
   },
   note: 'The window only ever moves forward: r advances every iteration, and l jumps directly past a duplicate instead of creeping one step at a time (that is what remembering each character\'s last index buys). Both pointers traverse the string once, so the whole thing is O(n).',
   complexity: { time: 'O(n)', space: 'O(min(n, alphabet))' },
+  brute: {
+    label: 'Every substring',
+    technique: 'Start at each index, extend one character at a time, and stop the moment a repeat appears.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int lengthOfLongestSubstring(string s) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < s.size(); i++) {', 'outer'),
+        L('            set<char> seen;', 'reset'),
+        L('            for (int j = i; j < s.size(); j++) {', 'inner'),
+        L('                if (seen.count(s[j])) break;', 'stop'),
+        L('                seen.insert(s[j]);', 'extend'),
+        L('                best = max(best, j - i + 1);', 'best'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int lengthOfLongestSubstring(String s) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < s.length(); i++) {', 'outer'),
+        L('            Set<Character> seen = new HashSet<>();', 'reset'),
+        L('            for (int j = i; j < s.length(); j++) {', 'inner'),
+        L('                if (!seen.add(s.charAt(j))) break;', 'stop', 'extend'),
+        L('                best = Math.max(best, j - i + 1);', 'best'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = values.s ?? '';
+      if (s.length === 0) return { error: 'Enter a non-empty string.' };
+      if (s.length > 20) return { error: 'Keep it to at most 20 characters so the steps stay readable.' };
+      if (/\s/.test(s)) return { error: 'No whitespace characters, please.' };
+
+      const chars = s.split('');
+      const steps: Step[] = [];
+      let best = 0;
+      let bestRange: [number, number] = [0, -1];
+      let examined = 0;
+      const st = (i: number, j: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr: chars,
+        window: j >= i ? [i, j] : null,
+        aggs: [
+          { label: 'substrings tried', value: String(examined), c: 'a' },
+          { label: 'best', value: String(best), c: 'c' },
+        ],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Try every starting index in turn and grow the substring until a character repeats.'],
+        state: st(0, -1),
+      });
+      for (let i = 0; i < chars.length; i++) {
+        const seen = new Set<string>();
+        steps.push({
+          tag: 'reset',
+          tag2: 'outer',
+          trace: ['New start at index ', A(i), " ('", A(chars[i]), "') — the seen-set is emptied and rebuilt from scratch."],
+          state: st(i, -1, { mark: { [i]: 'active' } }),
+        });
+        for (let j = i; j < chars.length; j++) {
+          examined++;
+          if (seen.has(chars[j])) {
+            steps.push({
+              tag: 'stop',
+              trace: ["'", F(chars[j]), "' already appears in this window — stop extending from ", F(i), '.'],
+              state: st(i, j - 1, { mark: { [j]: 'dim' } }),
+            });
+            break;
+          }
+          seen.add(chars[j]);
+          const len = j - i + 1;
+          const improved = len > best;
+          if (improved) {
+            best = len;
+            bestRange = [i, j];
+          }
+          steps.push({
+            tag: improved ? 'best' : 'extend',
+            trace: [
+              'Window "', improved ? B(s.slice(i, j + 1)) : A(s.slice(i, j + 1)), '" has length ',
+              improved ? B(len) : F(len),
+              improved ? ' — new best.' : ` — best stays ${best}.`,
+            ],
+            state: st(i, j),
+          });
+        }
+      }
+      steps.push({
+        tag: 'ret',
+        trace: [C(examined), ' substrings examined; the longest without repeats was "', C(s.slice(bestRange[0], bestRange[1] + 1)), '" at length ', C(best), '.'],
+        state: st(bestRange[0], bestRange[1]),
+      });
+      return {
+        steps,
+        result: String(best),
+        resultDetail: `longest substring: "${s.slice(bestRange[0], bestRange[1] + 1)}" — after ${examined} substring checks`,
+      };
+    },
+    note: 'Every start index rebuilds its seen-set from nothing, so work already done is thrown away — that is the whole inefficiency. The sliding window keeps one set alive across the entire string and moves the left edge forward instead of restarting it, which is why the same answer falls out in a single pass.',
+    complexity: { time: 'O(n²)', space: 'O(min(n, alphabet))' },
+  },
 };
 
 /* ================================================================
@@ -713,6 +1018,110 @@ const buySellStock: ProblemDef = {
   },
   note: 'For any sell day, the only buy that matters is the cheapest price before it — so carrying one running minimum replaces checking every earlier day. One number of state turns an O(n²) pair search into a single pass.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Try every buy day against every later sell day and keep the largest profit.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxProfit(vector<int>& prices) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int buy = 0; buy < prices.size(); buy++)', 'outer'),
+        L('            for (int sell = buy + 1; sell < prices.size(); sell++)', 'inner'),
+        L('                best = max(best, prices[sell] - prices[buy]);', 'profit'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxProfit(int[] prices) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int buy = 0; buy < prices.length; buy++)', 'outer'),
+        L('            for (int sell = buy + 1; sell < prices.length; sell++)', 'inner'),
+        L('                best = Math.max(best, prices[sell] - prices[buy]);', 'profit'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const prices = parseIntArray(values.prices, { min: 0 });
+      if (typeof prices === 'string') return { error: prices };
+      if (prices.length < 1) return { error: 'Need at least one price.' };
+
+      const steps: Step[] = [];
+      let best = 0;
+      let bestBuy = -1;
+      let bestSell = -1;
+      let tried = 0;
+      const st = (buy: number, sell: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr: prices,
+        bars: true,
+        ptrs: [
+          { name: 'buy', i: buy, c: 'b' },
+          ...(sell < prices.length ? [{ name: 'sell', i: sell, c: 'a' as const }] : []),
+        ],
+        aggs: [
+          { label: 'pairs tried', value: String(tried), c: 'a' },
+          { label: 'best profit', value: String(best), c: 'c' },
+        ],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Brute force: test ', A('every buy day'), ' against ', A('every later sell day'), '.'],
+        state: st(0, 1),
+      });
+      for (let buy = 0; buy < prices.length; buy++) {
+        steps.push({
+          tag: 'outer',
+          trace: ['Suppose we buy on day ', B(buy), ' at ', B(prices[buy]), ' — now try selling on each later day.'],
+          state: st(buy, buy + 1, { mark: { [buy]: 'good' } }),
+        });
+        for (let sell = buy + 1; sell < prices.length; sell++) {
+          const profit = prices[sell] - prices[buy];
+          tried++;
+          const improved = profit > best;
+          if (improved) {
+            best = profit;
+            bestBuy = buy;
+            bestSell = sell;
+          }
+          steps.push({
+            tag: 'profit',
+            tag2: 'inner',
+            trace: [
+              'Sell on day ', A(sell), ' at ', A(prices[sell]), ' → profit ',
+              improved ? B(profit) : F(profit),
+              improved ? ' — new best.' : ` — best stays ${best}.`,
+            ],
+            state: st(buy, sell, { mark: { [buy]: 'good', [sell]: 'active' } }),
+          });
+        }
+      }
+      steps.push({
+        tag: 'ret',
+        trace: ['All ', C(tried), ' buy/sell pairs tried — the best profit is ', C(best), '.'],
+        state:
+          bestBuy >= 0
+            ? st(bestBuy, bestSell, { mark: { [bestBuy]: 'final', [bestSell]: 'final' } })
+            : st(0, prices.length),
+      });
+      return {
+        steps,
+        result: String(best),
+        resultDetail:
+          best === 0
+            ? `prices only fell — never trade (after ${tried} pair checks)`
+            : `buy day ${bestBuy} at ${prices[bestBuy]}, sell day ${bestSell} at ${prices[bestSell]} — after ${tried} pair checks`,
+      };
+    },
+    note: 'Watch the buy pointer: for a fixed sell day it revisits every earlier price, even though only the cheapest of them could ever win. Replacing that inner loop with one running minimum is the entire optimisation, and it is why the answer drops from O(n²) to O(n).',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 export const pointerProblems = [twoSumII, container, moveZeroes, longestSubstring, buySellStock];
