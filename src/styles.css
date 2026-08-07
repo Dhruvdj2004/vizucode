@@ -293,8 +293,24 @@ h1, h2, h3 { letter-spacing: -0.01em; margin: 0; }
 .note-panel { font-family: var(--font-serif); color: var(--ink-soft); font-size: 0.98rem; margin-bottom: 1.25rem; }
 .note-panel strong { color: var(--ink); }
 
-.complexity { display: flex; gap: 2rem; color: var(--ink-soft); font-size: 0.85rem; }
+.complexity { display: flex; gap: 2rem; color: var(--ink-soft); font-size: 0.85rem; flex-wrap: wrap; }
 .complexity b { font-family: var(--font-mono); color: var(--ink); }
+.complexity .cx-vs { color: var(--ink-faint); }
+.complexity .cx-vs b { color: var(--ink-soft); }
+
+/* Optimal / brute-force switch above the visualizer. Both approaches share
+   the widget and the inputs, so this only swaps code, trace and prose. */
+.approach-tabs { display: flex; gap: 0.5rem; margin-bottom: 0.9rem; flex-wrap: wrap; }
+.approach-tab {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  padding: 0.45rem 0.85rem; border-radius: 999px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--ink-soft); font-size: 0.85rem; font-weight: 600;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+.approach-tab:hover { border-color: var(--accent); }
+.approach-tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.approach-cx { font-size: 0.72rem; opacity: 0.75; }
 
 /* ============ Shared viz primitives ============ */
 .boxes { display: flex; gap: 0.35rem; flex-wrap: nowrap; overflow-x: auto; padding: 0.5rem 0.25rem 0; }

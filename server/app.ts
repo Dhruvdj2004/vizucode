@@ -158,7 +158,8 @@ app.get('/api/questions/:slug', rateLimit('read'), wrap(async (req, res) => {
     const r = await pool.query(
       `select q.id, q.slug, q.category, q.title, q.difficulty, q.leetcode,
               pc.technique, pc.widget, pc.widget_title, pc.inputs,
-              pc.code_cpp, pc.code_java, pc.note, pc.time_complexity, pc.space_complexity
+              pc.code_cpp, pc.code_java, pc.note, pc.time_complexity, pc.space_complexity,
+              pc.brute
        from questions q left join problem_content pc using (slug)
        where q.slug = $1`,
       [req.params.slug]
@@ -185,6 +186,7 @@ app.get('/api/questions/:slug', rateLimit('read'), wrap(async (req, res) => {
             code: { cpp: row.code_cpp, java: row.code_java },
             note: row.note,
             complexity: { time: row.time_complexity, space: row.space_complexity },
+            ...(row.brute ? { brute: row.brute } : {}),
           }
         : {}),
       hasVisualizer: has,

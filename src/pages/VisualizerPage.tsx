@@ -30,7 +30,16 @@ export default function VisualizerPage() {
   // Static content (metadata, code, inputs, note) comes from the API with a
   // local fallback; the trace generator always runs locally for instant steps.
   const [problem, setProblem] = useState<StaticProblem | null | undefined>(undefined);
-  const runner = slug ? problemRegistry[slug]?.run : undefined;
+  const def = slug ? problemRegistry[slug] : undefined;
+  // Which solution is on screen. The brute force shares this problem's widget
+  // and inputs, so switching only swaps the code, the trace generator and the
+  // surrounding prose — the same run values stay in the boxes.
+  const [approach, setApproach] = useState<'optimal' | 'brute'>('optimal');
+  const hasBrute = !!problem?.brute && !!def?.brute;
+  const showBrute = hasBrute && approach === 'brute';
+  const runner = showBrute ? def?.brute?.run : def?.run;
+  // What the prose panels describe: the selected approach's own text.
+  const view = showBrute && problem?.brute ? problem.brute : problem;
   const [session, setSession] = useState(getSession);
   useEffect(() => onAuthChange(() => setSession(getSession())), []);
 
@@ -41,6 +50,8 @@ export default function VisualizerPage() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(0); // default 0.5×
   const timer = useRef<number | null>(null);
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
 
   useEffect(() => {
     let alive = true;
@@ -73,12 +84,22 @@ export default function VisualizerPage() {
     [runner]
   );
 
-  // Initialize inputs + first run when the problem loads.
+  // Reset the inputs and drop back to the optimal solution when a different
+  // question loads.
   useEffect(() => {
-    if (!problem || !runner) return;
+    if (!problem) return;
     const defaults = Object.fromEntries(problem.inputs.map((f) => [f.key, f.defaultValue]));
+    valuesRef.current = defaults;
     setValues(defaults);
-    doRun(defaults);
+    setApproach('optimal');
+  }, [problem]);
+
+  // (Re)run on load and whenever the approach switches, so flipping to the
+  // brute force replays whatever is currently in the boxes instead of
+  // clearing it. Values come through a ref on purpose: typing should not
+  // re-run on every keystroke — that is what Run and Enter are for.
+  useEffect(() => {
+    if (problem && runner) doRun(valuesRef.current);
   }, [problem, runner, doRun]);
 
   const last = run ? run.steps.length - 1 : 0;
@@ -164,8 +185,31 @@ export default function VisualizerPage() {
             <LeetCodeIcon size={18} />
           </a>
         </h1>
-        <p className="serif desc">{problem.technique}</p>
+        <p className="serif desc">{view?.technique}</p>
       </div>
+
+      {hasBrute && (
+        <div className="approach-tabs" role="tablist" aria-label="Solution approach">
+          <button
+            role="tab"
+            aria-selected={!showBrute}
+            className={`approach-tab${!showBrute ? ' on' : ''}`}
+            onClick={() => setApproach('optimal')}
+          >
+            Optimal
+            <span className="approach-cx mono">{problem.complexity.time}</span>
+          </button>
+          <button
+            role="tab"
+            aria-selected={showBrute}
+            className={`approach-tab${showBrute ? ' on' : ''}`}
+            onClick={() => setApproach('brute')}
+          >
+            {problem.brute!.label}
+            <span className="approach-cx mono">{problem.brute!.complexity.time}</span>
+          </button>
+        </div>
+      )}
 
       <div className="panel" style={{ marginBottom: '1.25rem' }}>
         <div className="input-panel">
@@ -238,7 +282,7 @@ export default function VisualizerPage() {
             {widget}
           </div>
         </div>
-        <CodePanel code={problem.code} activeTag={step?.tag} activeTag2={step?.tag2} />
+        <CodePanel code={view!.code} activeTag={step?.tag} activeTag2={step?.tag2} />
       </div>
 
       {finished && run && (
@@ -250,16 +294,29 @@ export default function VisualizerPage() {
       )}
 
       <div className="panel note-panel">
-        <strong>Why this works.</strong> {problem.note}
+        <strong>Why this works.</strong> {view!.note}
       </div>
 
       <div className="complexity">
         <span>
-          Time <b>{problem.complexity.time}</b>
+          Time <b>{view!.complexity.time}</b>
         </span>
         <span>
-          Space <b>{problem.complexity.space}</b>
+          Space <b>{view!.complexity.space}</b>
         </span>
+        {hasBrute && (
+          <span className="cx-vs">
+            {showBrute ? (
+              <>
+                Optimal does it in <b>{problem.complexity.time}</b>
+              </>
+            ) : (
+              <>
+                {problem.brute!.label} takes <b>{problem.brute!.complexity.time}</b>
+              </>
+            )}
+          </span>
+        )}
         <span style={{ marginLeft: 'auto' }}>
           <Link to="/">← All questions</Link>
         </span>

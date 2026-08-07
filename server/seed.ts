@@ -44,8 +44,8 @@ async function main() {
       await client.query(
         `insert into problem_content
            (slug, technique, widget, widget_title, inputs,
-            code_cpp, code_java, note, time_complexity, space_complexity)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            code_cpp, code_java, note, time_complexity, space_complexity, brute)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [
           s.slug,
           s.technique,
@@ -57,6 +57,7 @@ async function main() {
           s.note,
           s.complexity.time,
           s.complexity.space,
+          s.brute ? JSON.stringify(s.brute) : null,
         ]
       );
     }

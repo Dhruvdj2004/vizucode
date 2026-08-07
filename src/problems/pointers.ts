@@ -136,6 +136,106 @@ const twoSumII: ProblemDef = {
   },
   note: 'Sorted order makes each comparison decisive: if the pair sum is too small, no pair using the current left value can ever work (the right pointer already sits on the largest remaining number), so l advances — and symmetrically for r. Each step permanently eliminates one element, giving O(n).',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Try every pair with two nested loops — no use is made of the fact that the array is sorted.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> twoSum(vector<int>& numbers, int target) {'),
+        L('        int n = numbers.size();', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            for (int j = i + 1; j < n; j++) {', 'inner'),
+        L('                if (numbers[i] + numbers[j] == target)', 'test', 'found'),
+        L('                    return {i + 1, j + 1};', 'found'),
+        L('            }'),
+        L('        }'),
+        L('        return {};', 'none'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] twoSum(int[] numbers, int target) {'),
+        L('        int n = numbers.length;', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            for (int j = i + 1; j < n; j++) {', 'inner'),
+        L('                if (numbers[i] + numbers[j] == target)', 'test', 'found'),
+        L('                    return new int[]{i + 1, j + 1};', 'found'),
+        L('            }'),
+        L('        }'),
+        L('        return new int[]{};', 'none'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.numbers);
+      if (typeof arr === 'string') return { error: arr };
+      if (arr.length < 2) return { error: 'Need at least two numbers.' };
+      const target = parseInt1(values.target, 'Target');
+      if (typeof target === 'string') return { error: target };
+
+      const steps: Step[] = [];
+      const st = (i: number, j: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr,
+        ptrs: [
+          { name: 'i', i, c: 'b' },
+          ...(j < arr.length ? [{ name: 'j', i: j, c: 'a' as const }] : []),
+        ],
+        aggs: [{ label: 'target', value: String(target), c: 'c' }],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['No cleverness: test ', A('every pair'), ' (i, j) with i < j until one sums to ', C(target), '.'],
+        state: st(0, 1),
+      });
+      let found: [number, number] | null = null;
+      let tried = 0;
+      outer: for (let i = 0; i < arr.length; i++) {
+        steps.push({
+          tag: 'outer',
+          trace: ['Fix the left number ', B(arr[i]), ' at index ', B(i), ' and pair it against everything to its right.'],
+          state: st(i, i + 1, { mark: { [i]: 'good' } }),
+        });
+        for (let j = i + 1; j < arr.length; j++) {
+          const sum = arr[i] + arr[j];
+          tried++;
+          if (sum === target) {
+            found = [i + 1, j + 1];
+            steps.push({
+              tag: 'found',
+              trace: [B(arr[i]), ' + ', A(arr[j]), ' = ', C(sum), ' — match after ', C(tried), ' pair checks. Return ', C(`[${i + 1}, ${j + 1}]`), '.'],
+              state: st(i, j, { mark: { [i]: 'final', [j]: 'final' } }),
+            });
+            break outer;
+          }
+          steps.push({
+            tag: 'test',
+            trace: [B(arr[i]), ' + ', A(arr[j]), ' = ', F(sum), ' ≠ ', C(target), ' — try the next j.'],
+            state: st(i, j, { mark: { [i]: 'good', [j]: 'dim' } }),
+          });
+        }
+      }
+      if (!found) {
+        steps.push({
+          tag: 'none',
+          trace: ['All ', F(tried), ' pairs tested — nothing sums to ', C(target), '.'],
+          state: st(arr.length - 2, arr.length - 1),
+        });
+      }
+      return {
+        steps,
+        result: found ? `[${found[0]}, ${found[1]}]` : 'no pair',
+        resultDetail: `${tried} pair checks — the two-pointer version needs at most ${arr.length}`,
+      };
+    },
+    note: 'This is correct but wasteful: it re-tests pairs the sorted order has already ruled out. Once numbers[i] + numbers[j] overshoots the target, every larger j overshoots too — the nested loop keeps going anyway. Recognising that is exactly the step from O(n²) to the O(n) two-pointer sweep.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================================================================

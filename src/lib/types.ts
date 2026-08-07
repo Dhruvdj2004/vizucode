@@ -52,6 +52,22 @@ export type WidgetKind =
   | 'bits'
   | 'intervals';
 
+/** A second, slower way to solve the same problem, visualized with the same
+ *  widget and the same inputs so the two can be compared step for step.
+ *  Everything the optimal solution owns except the shared shell (widget,
+ *  inputs, title, category) is redeclared here, because the brute force is a
+ *  genuinely different algorithm with its own code, insight and complexity. */
+export interface Approach {
+  /** Tab label, e.g. "Brute force" or "Sorting". */
+  label: string;
+  technique: string;
+  code: { cpp: CodeLine[]; java: CodeLine[] };
+  /** "Why this works", and usually why it is too slow. */
+  note: string;
+  complexity: { time: string; space: string };
+  run: (values: Record<string, string>) => RunResult | RunError;
+}
+
 export interface ProblemDef {
   slug: string;
   title: string;
@@ -68,6 +84,8 @@ export interface ProblemDef {
   /** "Why this works" closing insight. */
   note: string;
   complexity: { time: string; space: string };
+  /** Optional slower solution shown alongside, on the same widget. */
+  brute?: Approach;
 }
 
 export const isRunError = (r: RunResult | RunError): r is RunError =>

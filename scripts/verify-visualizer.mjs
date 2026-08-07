@@ -125,6 +125,14 @@ async function main() {
   await call('Page.enable');
   await call('Runtime.enable');
 
+  // Block the API so the page always takes the local problemRegistry
+  // fallback. Vite proxies /api to :4000, so without this a dev API server
+  // left running would serve whatever its database was last seeded with —
+  // and the script would silently verify stale content instead of the
+  // sources being edited.
+  await call('Network.enable');
+  await call('Network.setBlockedURLs', { urls: ['*/api/*'] });
+
   // 3. Own origin first so localStorage sticks, then inject a fake Pro session.
   await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/` });
   await waitForCondition(call, `document.readyState === 'complete'`, 30000);
@@ -162,29 +170,72 @@ async function main() {
   // 5. Step through every step. The cap only exists so a run() that never
   //     disables the forward button cannot hang the script — keep it above the
   //     longest real trace (currently restore-ip-addresses at ~198 steps).
-  let lastCounter = '';
-  for (let i = 0; i < 400; i++) {
-    const counter = (
-      await call('Runtime.evaluate', { expression: 'document.querySelector(".counter")?.innerText' })
+  const stepToEnd = async (what) => {
+    let lastCounter = '';
+    for (let i = 0; i < 400; i++) {
+      const counter = (
+        await call('Runtime.evaluate', { expression: 'document.querySelector(".counter")?.innerText' })
+      ).result?.value;
+      if (counter) lastCounter = counter;
+      const clicked = (
+        await call('Runtime.evaluate', {
+          expression: `(() => { const b = document.querySelector('[aria-label="Step forward"]'); if (b && !b.disabled) { b.click(); return true; } return false; })()`,
+        })
+      ).result?.value;
+      if (!clicked) break;
+      await sleep(60);
+    }
+    await waitForCondition(call, `!!document.querySelector(".result-panel .rvalue")`, 5000);
+    const result = (
+      await call('Runtime.evaluate', { expression: 'document.querySelector(".result-panel .rvalue")?.innerText' })
     ).result?.value;
-    if (counter) lastCounter = counter;
-    const clicked = (
-      await call('Runtime.evaluate', {
-        expression: `(() => { const b = document.querySelector('[aria-label="Step forward"]'); if (b && !b.disabled) { b.click(); return true; } return false; })()`,
-      })
-    ).result?.value;
-    if (!clicked) break;
-    await sleep(60);
-  }
-  await waitForCondition(call, `!!document.querySelector(".result-panel .rvalue")`, 5000);
-  const resultText = (
-    await call('Runtime.evaluate', { expression: 'document.querySelector(".result-panel .rvalue")?.innerText' })
-  ).result?.value;
-  if (!resultText) fail('never reached a "Result" panel — run() may not terminate its step list');
+    if (!result) fail(`${what}: never reached a "Result" panel — run() may not terminate its step list`);
+    return { lastCounter, result };
+  };
+
+  const optimal = await stepToEnd('optimal');
+  const { lastCounter, result: resultText } = optimal;
 
   if (wantScreenshots) {
     const shot = await call('Page.captureScreenshot', { format: 'png' });
     writeFileSync(path.join(shotDir, 'step-last.png'), Buffer.from(shot.data, 'base64'));
+  }
+
+  // 5b. If this problem also ships a second approach, the tab must switch the
+  //     code and replay the same inputs through the other trace generator —
+  //     so run the identical walk again on it.
+  let bruteSummary = 'none';
+  const hasBrute = (
+    await call('Runtime.evaluate', { expression: `document.querySelectorAll('.approach-tab').length === 2` })
+  ).result?.value;
+  if (hasBrute) {
+    const label = (
+      await call('Runtime.evaluate', {
+        expression: `document.querySelectorAll('.approach-tab')[1].childNodes[0].textContent.trim()`,
+      })
+    ).result?.value;
+    await call('Runtime.evaluate', { expression: `document.querySelectorAll('.approach-tab')[1].click()` });
+    const switched = await waitForCondition(
+      call,
+      `document.querySelectorAll('.approach-tab')[1].classList.contains('on') &&
+       !document.querySelector('.result-panel')`,
+      5000
+    );
+    if (!switched) fail('clicking the second approach tab did not restart its trace at step 1');
+    const brute = await stepToEnd(`brute (${label})`);
+    bruteSummary = `${label} — ${brute.lastCounter}, result: ${brute.result}`;
+    if (wantScreenshots) {
+      const shot = await call('Page.captureScreenshot', { format: 'png' });
+      writeFileSync(path.join(shotDir, 'step-brute-last.png'), Buffer.from(shot.data, 'base64'));
+    }
+    // Both approaches solve the same problem on the same input, so a
+    // disagreement here is a real bug in one of them.
+    if (brute.result && resultText && brute.result !== resultText) {
+      fail(`the two approaches disagree: optimal says "${resultText}", ${label} says "${brute.result}"`);
+    }
+    await call('Runtime.evaluate', { expression: `document.querySelectorAll('.approach-tab')[0].click()` });
+    await waitForCondition(call, `document.querySelectorAll('.approach-tab')[0].classList.contains('on')`, 5000);
+    await stepToEnd('optimal (after switching back)');
   }
 
   // 6. Java tab.
@@ -210,6 +261,7 @@ async function main() {
   console.log(`last step reached: ${lastCounter}`);
   console.log(`result: ${resultText}`);
   console.log(`java tab: ${javaActive}`);
+  console.log(`second approach: ${bruteSummary}`);
   if (wantScreenshots) console.log(`screenshots: ${shotDir}`);
   console.log(consoleErrors.length ? `console messages: ${JSON.stringify(consoleErrors)}` : 'console: clean');
 }

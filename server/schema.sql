@@ -22,8 +22,15 @@ create table if not exists problem_content (
   code_java        jsonb not null,  -- CodeLine[] with step tags
   note             text  not null,
   time_complexity  text  not null,
-  space_complexity text  not null
+  space_complexity text  not null,
+  -- The optional slower approach shown next to the optimal one: label,
+  -- technique, code, note and complexity as one blob (StaticApproach). Its
+  -- trace generator is code and stays in the TS bundle, like `run`.
+  brute            jsonb
 );
+
+-- Safety net for databases seeded before the second approach existed.
+alter table problem_content add column if not exists brute jsonb;
 
 create index if not exists idx_questions_category on questions (category);
 
