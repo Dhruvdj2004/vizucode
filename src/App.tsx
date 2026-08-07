@@ -34,7 +34,7 @@ export default function App() {
           <span className="logo">
             Vizu<em>Code</em>
           </span>
-          <span className="eyebrow faint">LeetCode, step by step</span>
+          <span className="eyebrow faint">Lets code</span>
         </Link>
         <nav className="site-nav" aria-label="Sections">
           <Link to="/" className={section === 'dsa' ? 'on' : ''}>

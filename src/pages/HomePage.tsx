@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { fetchQuestions, fetchProgress, updateProgress, type DataSource, type QuestionRow, type Streak } from '../lib/api';
+import { fetchQuestions, fetchProgress, updateProgress, type QuestionRow, type Streak } from '../lib/api';
 import { getSession, onAuthChange } from '../lib/auth';
 import { isCategoryLocked } from '../lib/plan';
 import LeetCodeIcon from '../components/LeetCodeIcon';
@@ -10,7 +10,6 @@ import { CORE_MODULES, REVISION_MODULES } from '../content/registry';
 
 export default function HomePage() {
   const [rows, setRows] = useState<QuestionRow[] | null>(null);
-  const [source, setSource] = useState<DataSource>('local');
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [session, setSession] = useState(getSession);
   const [solved, setSolved] = useState<Set<string>>(new Set());
@@ -24,10 +23,9 @@ export default function HomePage() {
 
   useEffect(() => {
     let alive = true;
-    fetchQuestions().then(({ rows, source }) => {
+    fetchQuestions().then(({ rows }) => {
       if (!alive) return;
       setRows(rows);
-      setSource(source);
       setOpen({ [rows[0]?.category]: true });
     });
     return () => {
@@ -305,9 +303,6 @@ export default function HomePage() {
           </section>
         );
       })}
-      <p className="serif" style={{ color: 'var(--ink-faint)', fontSize: '0.8rem', textAlign: 'right' }}>
-        data source: {source === 'api' ? 'API server' : 'local bundle'}
-      </p>
     </>
   );
 }
