@@ -17,9 +17,9 @@ export default function CorePage() {
         <div className="eyebrow">Placement prep, visualized</div>
         <h1 className="page-title">Core Subjects</h1>
         <p className="serif desc">
-          The three theory subjects every campus and off-campus interview draws from — {totals.topics} topics in
-          all, roughly {totals.hours} hours end to end. Written in plain English, every concept drawn as a diagram,
-          and each topic closing with the questions interviewers actually repeat.
+          The {CORE_MODULES.length} theory subjects every campus and off-campus interview draws from —{' '}
+          {totals.topics} topics in all, roughly {totals.hours} hours end to end. Written in plain English, every
+          concept drawn as a diagram, and each topic closing with the questions interviewers actually repeat.
         </p>
       </div>
 

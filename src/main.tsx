@@ -20,6 +20,8 @@ import CnPage from './pages/CnPage';
 import CnTopicPage from './pages/CnTopicPage';
 import SqlPage from './pages/SqlPage';
 import SqlTopicPage from './pages/SqlTopicPage';
+import SdPage from './pages/SdPage';
+import SdTopicPage from './pages/SdTopicPage';
 import RequireAuth from './lib/RequireAuth';
 import './styles.css';
 
@@ -145,6 +147,22 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             element={
               <RequireAuth>
                 <SqlTopicPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="sd"
+            element={
+              <RequireAuth>
+                <SdPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="sd/:slug"
+            element={
+              <RequireAuth>
+                <SdTopicPage />
               </RequireAuth>
             }
           />

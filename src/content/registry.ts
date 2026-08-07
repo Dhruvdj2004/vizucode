@@ -8,6 +8,7 @@ import { osModule } from '../os';
 import { oopsModule } from '../oops';
 import { cnModule } from '../cn';
 import { sqlModule } from '../sql';
+import { sdModule } from '../sd';
 import { dsaModule } from '../dsa';
 
 export interface ModuleLink {
@@ -51,6 +52,12 @@ export const CORE_MODULES: ModuleLink[] = [
     icon: '🔍',
     tint: 'b',
     tagline: 'Clause execution order, joins, aggregation and window functions.',
+  },
+  {
+    mod: sdModule,
+    icon: '🏗️',
+    tint: 'c',
+    tagline: 'HLD + LLD for freshers — scaling, caching, SOLID and the patterns interviewers ask you to write.',
   },
 ];
 
