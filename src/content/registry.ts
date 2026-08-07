@@ -6,6 +6,8 @@ import type { ContentModule } from './module';
 import { dbmsModule } from '../dbms';
 import { osModule } from '../os';
 import { oopsModule } from '../oops';
+import { cnModule } from '../cn';
+import { sqlModule } from '../sql';
 import { dsaModule } from '../dsa';
 
 export interface ModuleLink {
@@ -37,6 +39,18 @@ export const CORE_MODULES: ModuleLink[] = [
     icon: '🧩',
     tint: 'c',
     tagline: 'The four pillars, virtual functions, copy semantics and SOLID.',
+  },
+  {
+    mod: cnModule,
+    icon: '🌐',
+    tint: 'a',
+    tagline: 'Topologies, OSI and TCP/IP, addressing, DNS, TCP vs UDP and HTTPS.',
+  },
+  {
+    mod: sqlModule,
+    icon: '🔍',
+    tint: 'b',
+    tagline: 'Clause execution order, joins, aggregation and window functions.',
   },
 ];
 

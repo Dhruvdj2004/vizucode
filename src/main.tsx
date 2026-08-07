@@ -16,6 +16,10 @@ import OsPage from './pages/OsPage';
 import OsTopicPage from './pages/OsTopicPage';
 import OopsPage from './pages/OopsPage';
 import OopsTopicPage from './pages/OopsTopicPage';
+import CnPage from './pages/CnPage';
+import CnTopicPage from './pages/CnTopicPage';
+import SqlPage from './pages/SqlPage';
+import SqlTopicPage from './pages/SqlTopicPage';
 import RequireAuth from './lib/RequireAuth';
 import './styles.css';
 
@@ -109,6 +113,38 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             element={
               <RequireAuth>
                 <OopsTopicPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="cn"
+            element={
+              <RequireAuth>
+                <CnPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="cn/:slug"
+            element={
+              <RequireAuth>
+                <CnTopicPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="sql"
+            element={
+              <RequireAuth>
+                <SqlPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="sql/:slug"
+            element={
+              <RequireAuth>
+                <SqlTopicPage />
               </RequireAuth>
             }
           />

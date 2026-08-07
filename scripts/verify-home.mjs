@@ -115,7 +115,7 @@ async function main() {
   await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/#/` });
 
   // One card per registered module: the revision notes plus each core subject.
-  const EXPECTED_CARDS = 4;
+  const EXPECTED_CARDS = 6;
   if (!(await waitFor(call, `document.querySelectorAll('.mod-cta').length === ${EXPECTED_CARDS}`, 30000))) {
     const n = await val(call, `document.querySelectorAll('.mod-cta').length`);
     fail(`expected ${EXPECTED_CARDS} module cards on the home page, found ${n}`);
@@ -165,9 +165,9 @@ async function main() {
 
   // The /core hub should list exactly the core-subject modules.
   await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/#/core` });
-  const coreOk = await waitFor(call, `document.querySelectorAll('.mod-cta').length === 3`, 15000);
+  const coreOk = await waitFor(call, `document.querySelectorAll('.mod-cta').length === 5`, 15000);
   const coreN = await val(call, `document.querySelectorAll('.mod-cta').length`);
-  if (!coreOk) fail(`/#/core showed ${coreN} cards, expected 3`);
+  if (!coreOk) fail(`/#/core showed ${coreN} cards, expected 5`);
   else console.log(`core hub: ${coreN} core-subject cards ✓`);
 
   if (wantScreenshots) {
