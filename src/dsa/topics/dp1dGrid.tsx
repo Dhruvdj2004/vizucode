@@ -60,7 +60,7 @@ function UniquePathsGrid() {
 
 const topic: Topic = {
   slug: 'dp-1d-grid',
-  num: 8,
+  num: 9,
   unit: 'Dynamic Programming',
   title: '1D DP & Grid DP',
   blurb:

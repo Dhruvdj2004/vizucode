@@ -9,6 +9,7 @@ import osMemory from './topics/osMemory';
 import osScheduling from './topics/osScheduling';
 import osSyncDeadlock from './topics/osSyncDeadlock';
 import osStorage from './topics/osStorage';
+import osRevision from './topics/osRevision';
 
 export const osModule = createModule({
   key: 'os',
@@ -20,5 +21,5 @@ export const osModule = createModule({
     `${topics} topics covering the operating-systems questions interviews actually ask — processes and threads, ` +
     `memory and paging, every scheduling algorithm worked on one example, synchronization, deadlock and storage. ` +
     `Plain language, drawn out, about ${hours} hours end to end.`,
-  topics: [osFundamentals, osProcesses, osMemory, osScheduling, osSyncDeadlock, osStorage],
+  topics: [osFundamentals, osProcesses, osMemory, osScheduling, osSyncDeadlock, osStorage, osRevision],
 });

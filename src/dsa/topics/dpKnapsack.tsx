@@ -61,7 +61,7 @@ function CoinStrip() {
 
 const topic: Topic = {
   slug: 'dp-knapsack',
-  num: 9,
+  num: 10,
   unit: 'Dynamic Programming',
   title: '0/1 Knapsack & Unbounded Knapsack',
   blurb:

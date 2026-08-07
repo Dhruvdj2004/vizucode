@@ -28,6 +28,7 @@ import bTrees from './topics/bTrees';
 import hashing from './topics/hashing';
 import queryProcessing from './topics/queryProcessing';
 import nosqlCap from './topics/nosqlCap';
+import dbmsRevision from './topics/dbmsRevision';
 
 export const dbmsModule = createModule({
   key: 'dbms',
@@ -65,6 +66,7 @@ export const dbmsModule = createModule({
     hashing,
     queryProcessing,
     nosqlCap,
+    dbmsRevision,
   ],
 });
 

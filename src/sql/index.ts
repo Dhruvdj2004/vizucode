@@ -7,6 +7,7 @@ import sqlBasics from './topics/sqlBasics';
 import sqlJoins from './topics/sqlJoins';
 import sqlAggregation from './topics/sqlAggregation';
 import sqlWindow from './topics/sqlWindow';
+import sqlRevision from './topics/sqlRevision';
 
 export const sqlModule = createModule({
   key: 'sql',
@@ -18,5 +19,5 @@ export const sqlModule = createModule({
     `${topics} topics covering the SQL interviews actually test — the command families and clause execution ` +
     `order, every join with the rows it keeps, aggregation and subqueries, and window functions. Worked on one ` +
     `small table throughout, about ${hours} hours end to end.`,
-  topics: [sqlBasics, sqlJoins, sqlAggregation, sqlWindow],
+  topics: [sqlBasics, sqlJoins, sqlAggregation, sqlWindow, sqlRevision],
 });

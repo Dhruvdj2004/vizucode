@@ -90,7 +90,7 @@ function EditTable() {
 
 const topic: Topic = {
   slug: 'dp-strings',
-  num: 10,
+  num: 11,
   unit: 'Dynamic Programming',
   title: 'LCS, LIS & Edit Distance',
   blurb:

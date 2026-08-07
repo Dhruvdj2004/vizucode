@@ -9,6 +9,7 @@ import cnAddressing from './topics/cnAddressing';
 import cnDevices from './topics/cnDevices';
 import cnTransport from './topics/cnTransport';
 import cnSecurity from './topics/cnSecurity';
+import cnRevision from './topics/cnRevision';
 
 export const cnModule = createModule({
   key: 'cn',
@@ -20,5 +21,5 @@ export const cnModule = createModule({
     `${topics} topics covering the networking questions interviews actually ask — topologies, the OSI and TCP/IP ` +
     `models, addressing and DNS, the devices at each layer, TCP versus UDP and the web protocols. Plain language, ` +
     `drawn out, about ${hours} hours end to end.`,
-  topics: [cnBasics, cnModels, cnAddressing, cnDevices, cnTransport, cnSecurity],
+  topics: [cnBasics, cnModels, cnAddressing, cnDevices, cnTransport, cnSecurity, cnRevision],
 });

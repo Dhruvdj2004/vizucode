@@ -10,6 +10,7 @@ import oopClassInternals from './topics/oopClassInternals';
 import oopCopyingCasting from './topics/oopCopyingCasting';
 import oopRelationships from './topics/oopRelationships';
 import oopSolidExtras from './topics/oopSolidExtras';
+import oopRevision from './topics/oopRevision';
 
 export const oopsModule = createModule({
   key: 'oops',
@@ -29,5 +30,6 @@ export const oopsModule = createModule({
     oopCopyingCasting,
     oopRelationships,
     oopSolidExtras,
+    oopRevision,
   ],
 });

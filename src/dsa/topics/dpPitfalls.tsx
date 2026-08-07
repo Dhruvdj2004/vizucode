@@ -2,7 +2,7 @@ import type { Topic } from '../../content/types';
 
 const topic: Topic = {
   slug: 'dp-pitfalls',
-  num: 11,
+  num: 12,
   unit: 'Dynamic Programming',
   title: 'Pitfalls & Practice Roadmap',
   blurb:

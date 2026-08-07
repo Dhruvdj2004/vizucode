@@ -15,6 +15,8 @@ import dp1dGrid from './topics/dp1dGrid';
 import dpKnapsack from './topics/dpKnapsack';
 import dpStrings from './topics/dpStrings';
 import dpPitfalls from './topics/dpPitfalls';
+import graphRevision from './topics/graphRevision';
+import dpRevision from './topics/dpRevision';
 
 export const dsaModule = createModule({
   key: 'revision',
@@ -33,10 +35,12 @@ export const dsaModule = createModule({
     graphShortestPaths,
     graphMstScc,
     graphBridges,
+    graphRevision,
     dpIntuition,
     dp1dGrid,
     dpKnapsack,
     dpStrings,
     dpPitfalls,
+    dpRevision,
   ],
 });

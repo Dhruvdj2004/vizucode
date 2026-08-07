@@ -81,7 +81,7 @@ function MemoVsTab() {
 
 const topic: Topic = {
   slug: 'dp-intuition',
-  num: 7,
+  num: 8,
   unit: 'Dynamic Programming',
   title: 'The Core Idea, Memoization & the 5-Step Framework',
   blurb:
