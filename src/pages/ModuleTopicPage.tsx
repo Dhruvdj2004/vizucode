@@ -45,6 +45,18 @@ export default function ModuleTopicPage({ mod }: { mod: ContentModule }) {
     return () => obs.disconnect();
   }, [topic, locked]);
 
+  // HashRouter owns the URL fragment, so an <a href="#section"> would replace the
+  // route itself — #/revision/dp-pitfalls becomes #common-pitfalls, which matches
+  // no route and navigates away instead of scrolling. There is no href form that
+  // survives that, so the rail scrolls the section into view directly and leaves
+  // the URL untouched.
+  function jumpTo(id: string) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActive(id);
+  }
+
   if (!topic) {
     return (
       <div className="panel serif">
@@ -101,18 +113,21 @@ export default function ModuleTopicPage({ mod }: { mod: ContentModule }) {
         <nav className="panel db-toc" aria-label="On this page">
           <div className="eyebrow">On this page</div>
           <ol>
-            {topic.sections.map((s) => (
+            {[
+              ...topic.sections.map((s) => ({ id: s.id, heading: s.heading })),
+              { id: 'interview', heading: 'Interview questions' },
+            ].map((s) => (
               <li key={s.id}>
-                <a href={`#${s.id}`} className={active === s.id ? 'on' : ''}>
+                <button
+                  type="button"
+                  className={active === s.id ? 'on' : ''}
+                  aria-current={active === s.id ? 'true' : undefined}
+                  onClick={() => jumpTo(s.id)}
+                >
                   {s.heading}
-                </a>
+                </button>
               </li>
             ))}
-            <li>
-              <a href="#interview" className={active === 'interview' ? 'on' : ''}>
-                Interview questions
-              </a>
-            </li>
           </ol>
         </nav>
 

@@ -119,7 +119,10 @@ async function main() {
       consoleErrors.push(msg.params.args.map((a) => a.value ?? a.description ?? '').join(' '));
     }
     if (msg.method === 'Runtime.exceptionThrown') {
-      consoleErrors.push(msg.params.exceptionDetails.text);
+      // `.text` is just "Uncaught" for a rejected promise — the useful part is
+      // the exception value itself.
+      const d = msg.params.exceptionDetails;
+      consoleErrors.push(d.exception?.description || d.exception?.value || d.text);
     }
   });
   await call('Page.enable');

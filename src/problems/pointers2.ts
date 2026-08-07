@@ -94,6 +94,101 @@ const validPalindrome: ProblemDef = {
   },
   note: 'Skipping non-alphanumerics inside the loop (rather than pre-cleaning the string) keeps it O(1) space — the pointers simply refuse to stop on characters that don\'t count.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Clean & reverse',
+    technique: 'Build a cleaned lowercase copy, reverse it, and compare the two strings.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isPalindrome(string s) {'),
+        L('        string t;', 'init'),
+        L('        for (char c : s)', 'clean'),
+        L('            if (isalnum(c)) t += tolower(c);', 'keep', 'drop'),
+        L('        string rev = t;', 'rev'),
+        L('        reverse(rev.begin(), rev.end());', 'rev'),
+        L('        return t == rev;', 'cmp'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isPalindrome(String s) {'),
+        L('        StringBuilder t = new StringBuilder();', 'init'),
+        L('        for (char c : s.toCharArray())', 'clean'),
+        L('            if (Character.isLetterOrDigit(c))', 'keep', 'drop'),
+        L('                t.append(Character.toLowerCase(c));', 'keep'),
+        L('        String rev = t.reverse().toString();', 'rev'),
+        L('        return t.reverse().toString().equals(rev);', 'cmp'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = values.s ?? '';
+      if (s.length === 0) return { error: 'Enter a non-empty string.' };
+      if (s.length > 40) return { error: 'Keep it to at most 40 characters so the steps stay readable.' };
+
+      const chars = s.split('');
+      const isAlnum = (c: string) => /[a-z0-9]/i.test(c);
+      const steps: Step[] = [];
+      let cleaned = '';
+      const view = (i: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr: chars.map((c) => (c === ' ' ? '␣' : c)),
+        ptrs: i < chars.length ? [{ name: 'scan', i, c: 'a' }] : [],
+        aggs: [{ label: 'cleaned', value: cleaned || '(empty)', c: 'b' }],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Build a ', B('cleaned copy'), ' first — only letters and digits, all lowercase.'],
+        state: view(0),
+      });
+      for (let i = 0; i < chars.length; i++) {
+        const keep = isAlnum(chars[i]);
+        if (keep) cleaned += chars[i].toLowerCase();
+        steps.push({
+          tag: keep ? 'keep' : 'drop',
+          tag2: 'clean',
+          trace: keep
+            ? ["Keep '", A(chars[i]), "' as '", B(chars[i].toLowerCase()), "' → \"", B(cleaned), '".']
+            : ["'", F(chars[i] === ' ' ? '␣' : chars[i]), "' is punctuation or a space — dropped."],
+          state: view(i, { mark: { [i]: keep ? 'good' : 'dim' } }),
+        });
+      }
+      const rev = [...cleaned].reverse().join('');
+      steps.push({
+        tag: 'rev',
+        trace: ['Reverse the cleaned string: "', B(cleaned), '" → "', A(rev), '".'],
+        state: {
+          arr: [...cleaned],
+          aggs: [
+            { label: 'cleaned', value: cleaned, c: 'b' },
+            { label: 'reversed', value: rev, c: 'a' },
+          ],
+        } satisfies ArrayState,
+      });
+      const ok = cleaned === rev;
+      steps.push({
+        tag: 'cmp',
+        trace: ok
+          ? ['The two strings are identical — it reads the same both ways: ', C('true'), '.']
+          : ['The two strings differ — not a palindrome: ', C('false'), '.'],
+        state: {
+          arr: [...cleaned],
+          mark: Object.fromEntries([...cleaned].map((_, i) => [i, ok ? 'final' : 'dim'])),
+          aggs: [
+            { label: 'cleaned', value: cleaned, c: 'b' },
+            { label: 'reversed', value: rev, c: ok ? 'b' : 'a' },
+          ],
+        } satisfies ArrayState,
+      });
+      return { steps, result: String(ok), resultDetail: `built two strings of length ${cleaned.length} to decide it` };
+    },
+    note: 'Perfectly readable, and the answer is right — but it allocates two whole extra strings and always scans the entire input, even when the very first pair already disagrees. The two-pointer version skips non-alphanumerics in place and bails at the first mismatch, so it uses no extra memory and often stops early.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 18. 3Sum ================= */
@@ -214,6 +309,111 @@ const threeSum: ProblemDef = {
   },
   note: 'Fixing one element reduces 3Sum to the sorted-two-pointer 2Sum you already trust, and sorting makes duplicate handling trivial: equal values sit side by side, so skipping repeats of the anchor and of l removes duplicate triplets without a hash set.',
   complexity: { time: 'O(n²)', space: 'O(1) beyond output' },
+  brute: {
+    label: 'Three loops',
+    technique: 'Test every triple of indices and use a set to drop the duplicate triplets.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> threeSum(vector<int>& nums) {'),
+        L('        sort(nums.begin(), nums.end());', 'sort'),
+        L('        set<vector<int>> uniq;', 'sort'),
+        L('        int n = nums.size();'),
+        L('        for (int i = 0; i < n; i++)', 'i'),
+        L('          for (int j = i + 1; j < n; j++)', 'j'),
+        L('            for (int k = j + 1; k < n; k++)', 'k'),
+        L('              if (nums[i] + nums[j] + nums[k] == 0)', 'test', 'hit'),
+        L('                uniq.insert({nums[i], nums[j], nums[k]});', 'hit'),
+        L('        return {uniq.begin(), uniq.end()};', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<Integer>> threeSum(int[] nums) {'),
+        L('        Arrays.sort(nums);', 'sort'),
+        L('        Set<List<Integer>> uniq = new LinkedHashSet<>();', 'sort'),
+        L('        int n = nums.length;'),
+        L('        for (int i = 0; i < n; i++)', 'i'),
+        L('          for (int j = i + 1; j < n; j++)', 'j'),
+        L('            for (int k = j + 1; k < n; k++)', 'k'),
+        L('              if (nums[i] + nums[j] + nums[k] == 0)', 'test', 'hit'),
+        L('                uniq.add(List.of(nums[i], nums[j], nums[k]));', 'hit'),
+        L('        return new ArrayList<>(uniq);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = parseIntArray(values.nums, { maxLen: 12 });
+      if (typeof raw === 'string') return { error: raw };
+      if (raw.length < 3) return { error: 'Need at least three numbers.' };
+
+      const arr = [...raw].sort((x, y) => x - y);
+      const steps: Step[] = [];
+      const seen = new Set<string>();
+      const res: number[][] = [];
+      let tested = 0;
+      const st = (mark: Record<number, 'active' | 'final' | 'dim'>): ArrayState => ({
+        arr,
+        mark,
+        aggs: [
+          { label: 'triples tested', value: String(tested), c: 'a' },
+          { label: 'found', value: res.length ? res.map((t) => `[${t.join(',')}]`).join(' ') : '—', c: 'b' },
+        ],
+      });
+
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort so the output order is predictable: ', A(`[${arr.join(', ')}]`), '. Then test every triple of indices.'],
+        state: st({}),
+      });
+      for (let i = 0; i < arr.length; i++) {
+        for (let j = i + 1; j < arr.length; j++) {
+          for (let k = j + 1; k < arr.length; k++) {
+            tested++;
+            const sum = arr[i] + arr[j] + arr[k];
+            const triple = [arr[i], arr[j], arr[k]];
+            const key = triple.join(',');
+            if (sum === 0) {
+              const fresh = !seen.has(key);
+              if (fresh) {
+                seen.add(key);
+                res.push(triple);
+              }
+              steps.push({
+                tag: 'hit',
+                trace: [
+                  triple.join(' + '), ' = ', B(0), ' — ',
+                  fresh ? B('new triplet') : F('a duplicate of one already found, discard'), '.',
+                ],
+                state: st({ [i]: fresh ? 'final' : 'dim', [j]: fresh ? 'final' : 'dim', [k]: fresh ? 'final' : 'dim' }),
+              });
+            } else {
+              steps.push({
+                tag: 'test',
+                trace: [triple.join(' + '), ' = ', F(sum), ' ≠ 0.'],
+                state: st({ [i]: 'active', [j]: 'active', [k]: 'active' }),
+              });
+            }
+          }
+        }
+      }
+      steps.push({
+        tag: 'ret',
+        trace: [C(tested), ' triples tested, giving ', C(res.length), ' unique triplet(s).'],
+        state: st({}),
+      });
+      return {
+        steps,
+        result: res.length === 0 ? '[]' : `[${res.map((t) => `[${t.join(',')}]`).join(', ')}]`,
+        resultDetail: `${res.length} unique triplets — after ${tested} index combinations`,
+      };
+    },
+    note: 'The innermost loop is the one to kill. With the array sorted and i fixed, the other two numbers must sum to −nums[i] on a sorted range, which two converging pointers find in one sweep — and because equal values are then adjacent, skipping duplicates becomes a comparison rather than a set. That is O(n³) with O(k) memory down to O(n²) with none.',
+    complexity: { time: 'O(n³)', space: 'O(k) for the dedupe set' },
+  },
 };
 
 /* ================= 20. Trapping Rain Water ================= */
@@ -327,6 +527,104 @@ const trappingRain: ProblemDef = {
   },
   note: 'When height[l] < height[r], the right side is guaranteed to have a wall at least as tall as the left one — so leftMax alone decides the water above l, no matter what lies between. That certainty is what lets each cell be settled the moment a pointer touches it.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Scan both sides',
+    technique: 'For each bar, scan left and right for the tallest wall on each side; the water above it is the smaller of the two, minus its own height.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int trap(vector<int>& height) {'),
+        L('        int water = 0;', 'init'),
+        L('        for (int i = 0; i < height.size(); i++) {', 'loop'),
+        L('            int lm = 0, rm = 0;', 'scan'),
+        L('            for (int j = 0; j <= i; j++) lm = max(lm, height[j]);', 'scan'),
+        L('            for (int j = i; j < height.size(); j++) rm = max(rm, height[j]);', 'scan'),
+        L('            water += min(lm, rm) - height[i];', 'add'),
+        L('        }'),
+        L('        return water;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int trap(int[] height) {'),
+        L('        int water = 0;', 'init'),
+        L('        for (int i = 0; i < height.length; i++) {', 'loop'),
+        L('            int lm = 0, rm = 0;', 'scan'),
+        L('            for (int j = 0; j <= i; j++) lm = Math.max(lm, height[j]);', 'scan'),
+        L('            for (int j = i; j < height.length; j++) rm = Math.max(rm, height[j]);', 'scan'),
+        L('            water += Math.min(lm, rm) - height[i];', 'add'),
+        L('        }'),
+        L('        return water;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const h = parseIntArray(values.height, { min: 0 });
+      if (typeof h === 'string') return { error: h };
+      if (h.length === 0) return { error: 'Enter at least one height.' };
+
+      const steps: Step[] = [];
+      let water = 0;
+      const settled: Record<number, 'good' | 'dim'> = {};
+      const st = (i: number, lm: number, rm: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr: h,
+        bars: true,
+        ptrs: i < h.length ? [{ name: 'i', i, c: 'a' }] : [],
+        mark: { ...settled, ...(extra?.mark ?? {}) },
+        aggs: [
+          { label: 'leftMax', value: String(lm), c: 'b' },
+          { label: 'rightMax', value: String(rm), c: 'b' },
+          { label: 'water', value: String(water), c: 'c' },
+        ],
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['For every bar, rescan the whole array to find the tallest wall on ', A('each side'), '.'],
+        state: st(0, 0, 0),
+      });
+      for (let i = 0; i < h.length; i++) {
+        let lm = 0;
+        for (let j = 0; j <= i; j++) lm = Math.max(lm, h[j]);
+        let rm = 0;
+        for (let j = i; j < h.length; j++) rm = Math.max(rm, h[j]);
+        steps.push({
+          tag: 'scan',
+          tag2: 'loop',
+          trace: [
+            'Bar ', A(i), ' (height ', A(h[i]), '): rescanning left gives ', B(lm), ', rescanning right gives ', B(rm), '.',
+          ],
+          state: st(i, lm, rm, { mark: { [i]: 'active' } }),
+        });
+        const add = Math.min(lm, rm) - h[i];
+        water += add;
+        settled[i] = add > 0 ? 'good' : 'dim';
+        steps.push({
+          tag: 'add',
+          trace:
+            add > 0
+              ? ['min(', B(lm), ', ', B(rm), ') − ', A(h[i]), ' = ', B(add), ' units held here. Running total ', C(water), '.']
+              : ['This bar is as tall as its smaller wall — ', F('no water'), ' sits on it. Total stays ', C(water), '.'],
+          state: st(i, lm, rm),
+        });
+      }
+      steps.push({
+        tag: 'ret',
+        trace: ['Every bar measured — total trapped water: ', C(water), '.'],
+        state: st(h.length, 0, 0),
+      });
+      return {
+        steps,
+        result: String(water),
+        resultDetail: `units of water trapped — but the array was rescanned ${h.length} times`,
+      };
+    },
+    note: 'The two inner scans recompute the same prefix and suffix maxima over and over. Caching them in two arrays already gets this to O(n) at O(n) space; the two-pointer version goes further by noticing that whichever side is currently shorter is the side whose maximum is already known — so it needs neither array.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= 21. Sort Colors ================= */
@@ -411,6 +709,92 @@ const sortColors: ProblemDef = {
   },
   note: 'The subtle beat: after swapping a 2 to the back, mid does NOT advance — the value that arrived from hi is unexamined and could be anything. Swapped-down 0s are safe because everything below mid has already been vetted.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Counting sort',
+    technique: 'Count how many 0s, 1s and 2s there are, then overwrite the array with that many of each.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    void sortColors(vector<int>& nums) {'),
+        L('        int cnt[3] = {0, 0, 0};', 'init'),
+        L('        for (int x : nums)', 'count'),
+        L('            cnt[x]++;', 'count'),
+        L('        int k = 0;', 'write'),
+        L('        for (int c = 0; c < 3; c++)', 'write'),
+        L('            for (int i = 0; i < cnt[c]; i++)', 'write'),
+        L('                nums[k++] = c;', 'write'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public void sortColors(int[] nums) {'),
+        L('        int[] cnt = new int[3];', 'init'),
+        L('        for (int x : nums)', 'count'),
+        L('            cnt[x]++;', 'count'),
+        L('        int k = 0;', 'write'),
+        L('        for (int c = 0; c < 3; c++)', 'write'),
+        L('            for (int i = 0; i < cnt[c]; i++)', 'write'),
+        L('                nums[k++] = c;', 'write'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = parseIntArray(values.nums, { min: 0, max: 2 });
+      if (typeof raw === 'string') return { error: raw };
+
+      const steps: Step[] = [];
+      const cnt = [0, 0, 0];
+      const view = (i: number, arr: number[], extra?: Partial<ArrayState>): ArrayState => ({
+        arr,
+        ptrs: i < arr.length ? [{ name: i < raw.length ? 'scan' : 'write', i, c: 'a' }] : [],
+        aggs: [
+          { label: '0s', value: String(cnt[0]), c: 'b' },
+          { label: '1s', value: String(cnt[1]), c: 'a' },
+          { label: '2s', value: String(cnt[2]), c: 'c' },
+        ],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Pass one: just ', A('count'), ' how many of each colour there are. Nothing moves yet.'],
+        state: view(0, raw),
+      });
+      for (let i = 0; i < raw.length; i++) {
+        cnt[raw[i]]++;
+        steps.push({
+          tag: 'count',
+          trace: ['Saw a ', A(raw[i]), ' — that tally is now ', B(cnt[raw[i]]), '.'],
+          state: view(i, raw, { mark: { [i]: 'good' } }),
+        });
+      }
+      const out: number[] = [];
+      for (let c = 0; c < 3; c++) for (let i = 0; i < cnt[c]; i++) out.push(c);
+      for (let k = 0; k < out.length; k++) {
+        steps.push({
+          tag: 'write',
+          trace: ['Pass two: overwrite slot ', A(k), ' with ', B(out[k]), '.'],
+          state: view(k, raw.map((v, i) => (i <= k ? out[i] : v)), {
+            mark: Object.fromEntries(raw.map((_, i) => [i, i <= k ? 'good' : 'dim'])),
+          }),
+        });
+      }
+      steps.push({
+        tag: 'write',
+        trace: ['Rewritten in order: ', C(`[${out.join(', ')}]`), '. Correct — but the array was touched twice.'],
+        state: {
+          arr: out,
+          mark: Object.fromEntries(out.map((v, i) => [i, v === 0 ? 'good' : v === 2 ? 'final' : 'active'])),
+        } satisfies ArrayState,
+      });
+      return { steps, result: `[${out.join(', ')}]`, resultDetail: 'two passes: one to count, one to overwrite' };
+    },
+    note: 'This is the standard counting sort, and for three values it is genuinely O(n) — the objection is not speed but that it reads the array twice and overwrites every element rather than sorting what is there. The Dutch-flag partition does it in a single pass, which is what the follow-up question is really asking for.',
+    complexity: { time: 'O(n), two passes', space: 'O(1)' },
+  },
 };
 
 /* ================= 25. Longest Repeating Character Replacement ================= */

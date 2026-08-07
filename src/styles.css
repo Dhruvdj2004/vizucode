@@ -641,13 +641,16 @@ h1, h2, h3 { letter-spacing: -0.01em; margin: 0; }
 .db-toc { position: sticky; top: 1.2rem; padding: 0.9rem; }
 .db-toc .eyebrow { margin-bottom: 0.5rem; }
 .db-toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.12rem; }
-.db-toc a {
-  display: block; text-decoration: none; font-size: 0.82rem; line-height: 1.35;
+/* Buttons, not links: under HashRouter a "#section" href would clobber the route. */
+.db-toc button {
+  display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+  background: none; border: none; font-size: 0.82rem; line-height: 1.35;
   color: var(--ink-soft); padding: 0.32rem 0.45rem; border-radius: 6px;
   border-left: 2px solid transparent;
 }
-.db-toc a:hover { background: var(--surface-2); color: var(--ink); }
-.db-toc a.on { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
+.db-toc button:hover { background: var(--surface-2); color: var(--ink); }
+.db-toc button.on { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
+.db-toc button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .db-body { min-width: 0; display: flex; flex-direction: column; gap: 1rem; }
 .db-section { scroll-margin-top: 1rem; }
@@ -769,7 +772,7 @@ svg.dg { display: block; width: 100%; height: auto; font-family: var(--font-sans
   .db-layout { grid-template-columns: 1fr; }
   .db-toc { position: static; }
   .db-toc ol { flex-direction: row; flex-wrap: wrap; gap: 0.3rem; }
-  .db-toc a { border-left: 0; border: 1px solid var(--line); }
+  .db-toc button { width: auto; border-left: 0; border: 1px solid var(--line); }
 }
 
 @media (max-width: 640px) {
