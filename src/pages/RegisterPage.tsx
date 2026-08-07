@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { register } from '../lib/auth';
+import { register, DeviceLimitError, type DeviceSession } from '../lib/auth';
+import GoogleSignInButton from '../lib/GoogleSignInButton';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -9,6 +10,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [devices, setDevices] = useState<DeviceSession[] | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -74,6 +76,18 @@ export default function RegisterPage() {
             {busy ? 'Creating account…' : 'Create account'}
           </button>
         </form>
+        <div className="auth-divider">or</div>
+        <GoogleSignInButton
+          onSuccess={() => navigate('/')}
+          onDeviceLimit={(sessions) => setDevices(sessions)}
+          onError={setError}
+        />
+        {devices && (
+          <p className="input-error" role="alert">
+            You're already signed in on {devices.length} devices — sign in at{' '}
+            <Link to="/login">the sign-in page</Link> to sign one out first.
+          </p>
+        )}
         <p className="auth-alt">
           Already have an account? <Link to="/login">Sign in</Link>
         </p>

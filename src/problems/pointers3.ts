@@ -160,6 +160,126 @@ const fourSum: ProblemDef = {
   },
   note: 'Sorting turns the inner search from "try every pair" into a single sweep, because a sum that is too small can only be fixed from the left and one that is too big only from the right. The duplicate skips are what make the output a set of unique quadruplets without any post-processing.',
   complexity: { time: 'O(n³)', space: 'O(1) beyond output' },
+  brute: {
+    label: 'Four loops',
+    technique: 'Four nested loops over every index combination, with a set to throw away duplicate quadruplets.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> fourSum(vector<int>& nums, int target) {'),
+        L('        sort(nums.begin(), nums.end());', 'sort'),
+        L('        set<vector<int>> uniq;', 'sort'),
+        L('        int n = nums.size();'),
+        L('        for (int i = 0; i < n; i++)', 'i'),
+        L('          for (int j = i + 1; j < n; j++)', 'j'),
+        L('            for (int k = j + 1; k < n; k++)', 'k'),
+        L('              for (int l = k + 1; l < n; l++)', 'l'),
+        L('                if (nums[i]+nums[j]+nums[k]+nums[l] == target)', 'test', 'hit'),
+        L('                  uniq.insert({nums[i],nums[j],nums[k],nums[l]});', 'hit'),
+        L('        return {uniq.begin(), uniq.end()};', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<Integer>> fourSum(int[] nums, int target) {'),
+        L('        Arrays.sort(nums);', 'sort'),
+        L('        Set<List<Integer>> uniq = new LinkedHashSet<>();', 'sort'),
+        L('        int n = nums.length;'),
+        L('        for (int i = 0; i < n; i++)', 'i'),
+        L('          for (int j = i + 1; j < n; j++)', 'j'),
+        L('            for (int k = j + 1; k < n; k++)', 'k'),
+        L('              for (int l = k + 1; l < n; l++)', 'l'),
+        L('                if (nums[i]+nums[j]+nums[k]+nums[l] == target)', 'test', 'hit'),
+        L('                  uniq.add(List.of(nums[i],nums[j],nums[k],nums[l]));', 'hit'),
+        L('        return new ArrayList<>(uniq);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = parseIntArray(values.nums, { maxLen: 12 });
+      if (typeof raw === 'string') return { error: raw };
+      if (raw.length < 4) return { error: 'Need at least four numbers.' };
+      const target = parseInt1(values.target, 'Target');
+      if (typeof target === 'string') return { error: target };
+
+      const a = [...raw].sort((x, y) => x - y);
+      const steps: Step[] = [];
+      const seen = new Set<string>();
+      const res: number[][] = [];
+      let tested = 0;
+      const st = (mark: Record<number, 'active' | 'good' | 'final' | 'dim'>, note?: string): ArrayState => ({
+        arr: a,
+        mark,
+        aggs: [
+          { label: 'combos tested', value: String(tested), c: 'a' },
+          { label: 'target', value: String(target), c: 'c' },
+          ...(note ? [{ label: 'found', value: note, c: 'b' as const }] : []),
+        ],
+      });
+
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort first so the quadruplets come out in a predictable order: ', A(`[${a.join(', ')}]`), '. Then test every 4-index combination.'],
+        state: st({}),
+      });
+      outer: for (let i = 0; i < a.length; i++) {
+        for (let j = i + 1; j < a.length; j++) {
+          for (let k = j + 1; k < a.length; k++) {
+            for (let l = k + 1; l < a.length; l++) {
+              tested++;
+              const sum = a[i] + a[j] + a[k] + a[l];
+              const quad = [a[i], a[j], a[k], a[l]];
+              const key = quad.join(',');
+              const mark = { [i]: 'active', [j]: 'active', [k]: 'active', [l]: 'active' } as Record<
+                number,
+                'active'
+              >;
+              if (sum === target) {
+                const fresh = !seen.has(key);
+                if (fresh) {
+                  seen.add(key);
+                  res.push(quad);
+                }
+                steps.push({
+                  tag: 'hit',
+                  trace: [
+                    quad.join(' + '), ' = ', B(sum), ' — ',
+                    fresh ? B('new quadruplet') : F('a duplicate of one already found, discard'), '.',
+                  ],
+                  state: st(
+                    Object.fromEntries(Object.keys(mark).map((x) => [x, fresh ? 'final' : 'dim'])) as never,
+                    res.map((q) => `[${q.join(',')}]`).join(' ')
+                  ),
+                });
+              } else {
+                steps.push({
+                  tag: 'test',
+                  trace: [quad.join(' + '), ' = ', F(sum), ' ≠ ', C(target), '.'],
+                  state: st(mark),
+                });
+              }
+              if (steps.length > MAX_STEPS) break outer;
+            }
+          }
+        }
+      }
+      steps.push({
+        tag: 'ret',
+        trace: [C(tested), ' combinations tested, yielding ', C(res.length), ' unique quadruplet(s).'],
+        state: st({}, res.map((q) => `[${q.join(',')}]`).join(' ')),
+      });
+      return {
+        steps,
+        result: res.length ? res.map((q) => `[${q.join(',')}]`).join(', ') : 'none',
+        resultDetail: `${tested} index combinations examined`,
+      };
+    },
+    note: 'Two of the four loops are doing work the sorted order already answers: once i and j are fixed, the remaining pair is a Two Sum on a sorted range, which a converging pair of pointers finds in one sweep. That is the difference between O(n⁴) and O(n³) — and it is also what removes the need for a set, because the pointer version skips duplicates as it goes.',
+    complexity: { time: 'O(n⁴)', space: 'O(k) for the dedupe set' },
+  },
 };
 
 /* ================= 3Sum Closest ================= */
@@ -285,6 +405,104 @@ const threeSumClosest: ProblemDef = {
   },
   note: 'Moving the pointer on the side that is "wrong" is safe because sorting makes the sum monotonic in each pointer: every pair skipped would have moved the sum further from the target, not closer. Tracking distance instead of equality is the only change from 3Sum.',
   complexity: { time: 'O(n²)', space: 'O(1)' },
+  brute: {
+    label: 'Three loops',
+    technique: 'Add up every triple and keep whichever sum lands nearest the target.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int threeSumClosest(vector<int>& nums, int target) {'),
+        L('        int best = nums[0] + nums[1] + nums[2];', 'init'),
+        L('        int n = nums.size();'),
+        L('        for (int i = 0; i < n; i++)', 'i'),
+        L('          for (int j = i + 1; j < n; j++)', 'j'),
+        L('            for (int k = j + 1; k < n; k++) {', 'k'),
+        L('              int sum = nums[i] + nums[j] + nums[k];', 'sum'),
+        L('              if (abs(sum - target) < abs(best - target))', 'sum', 'better'),
+        L('                best = sum;', 'better'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int threeSumClosest(int[] nums, int target) {'),
+        L('        int best = nums[0] + nums[1] + nums[2];', 'init'),
+        L('        int n = nums.length;'),
+        L('        for (int i = 0; i < n; i++)', 'i'),
+        L('          for (int j = i + 1; j < n; j++)', 'j'),
+        L('            for (int k = j + 1; k < n; k++) {', 'k'),
+        L('              int sum = nums[i] + nums[j] + nums[k];', 'sum'),
+        L('              if (Math.abs(sum - target) < Math.abs(best - target))', 'sum', 'better'),
+        L('                best = sum;', 'better'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = parseIntArray(values.nums, { maxLen: 12 });
+      if (typeof raw === 'string') return { error: raw };
+      if (raw.length < 3) return { error: 'Need at least three numbers.' };
+      const target = parseInt1(values.target, 'Target');
+      if (typeof target === 'string') return { error: target };
+
+      const a = [...raw].sort((x, y) => x - y);
+      const steps: Step[] = [];
+      let best = a[0] + a[1] + a[2];
+      let bestTriple: [number, number, number] = [0, 1, 2];
+      let tested = 0;
+      const st = (mark: Record<number, 'active' | 'final' | 'dim'>): ArrayState => ({
+        arr: a,
+        mark,
+        aggs: [
+          { label: 'triples tested', value: String(tested), c: 'a' },
+          { label: 'closest sum', value: String(best), c: 'b' },
+          { label: 'distance', value: String(Math.abs(best - target)), c: 'c' },
+        ],
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['No shortcuts: add up ', A('every triple'), ' and keep the sum closest to ', C(target), '. Start with ', B(best), '.'],
+        state: st({ 0: 'active', 1: 'active', 2: 'active' }),
+      });
+      outer: for (let i = 0; i < a.length; i++) {
+        for (let j = i + 1; j < a.length; j++) {
+          for (let k = j + 1; k < a.length; k++) {
+            tested++;
+            const sum = a[i] + a[j] + a[k];
+            const better = Math.abs(sum - target) < Math.abs(best - target);
+            if (better) {
+              best = sum;
+              bestTriple = [i, j, k];
+            }
+            steps.push({
+              tag: better ? 'better' : 'sum',
+              trace: [
+                `${a[i]} + ${a[j]} + ${a[k]} = `, better ? B(sum) : F(sum),
+                ` (distance ${Math.abs(sum - target)})`,
+                better ? ' — closer than anything so far.' : ` — the best is still ${best}.`,
+              ],
+              state: st({ [i]: 'active', [j]: 'active', [k]: 'active' }),
+            });
+            if (steps.length > MAX_STEPS) break outer;
+          }
+        }
+      }
+      steps.push({
+        tag: 'ret',
+        trace: ['All ', C(tested), ' triples added — the closest sum is ', C(best), '.'],
+        state: st({ [bestTriple[0]]: 'final', [bestTriple[1]]: 'final', [bestTriple[2]]: 'final' }),
+      });
+      return { steps, result: String(best), resultDetail: `distance ${Math.abs(best - target)} — after ${tested} triples` };
+    },
+    note: 'The innermost loop is the wasteful one. With the array sorted and i fixed, the remaining two numbers form a sorted pair search: if their sum is under the target only a bigger left value can help, and if it is over, only a smaller right one. One converging sweep replaces the whole k-loop, taking this from O(n³) to O(n²).',
+    complexity: { time: 'O(n³)', space: 'O(1)' },
+  },
 };
 
 /* ================= Remove Duplicates from Sorted Array ================= */
@@ -374,6 +592,100 @@ const removeDuplicates: ProblemDef = {
   },
   note: 'Sorted input is doing the heavy lifting: duplicates can only be adjacent, so comparing against the last kept value is enough — no set, no extra array. The write head can never overtake the read head, which is why the copy is safe in place.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Set + rebuild',
+    technique: 'Collect the distinct values in a set, then write them back over the front of the array.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int removeDuplicates(vector<int>& nums) {'),
+        L('        set<int> uniq(nums.begin(), nums.end());', 'collect'),
+        L('        int k = 0;', 'rewrite'),
+        L('        for (int v : uniq)', 'rewrite'),
+        L('            nums[k++] = v;', 'write'),
+        L('        return k;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int removeDuplicates(int[] nums) {'),
+        L('        TreeSet<Integer> uniq = new TreeSet<>();', 'collect'),
+        L('        for (int v : nums) uniq.add(v);', 'collect'),
+        L('        int k = 0;', 'rewrite'),
+        L('        for (int v : uniq)', 'rewrite'),
+        L('            nums[k++] = v;', 'write'),
+        L('        return k;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = parseIntArray(values.nums);
+      if (typeof raw === 'string') return { error: raw };
+      for (let i = 1; i < raw.length; i++)
+        if (raw[i] < raw[i - 1]) return { error: 'Array must be sorted in non-decreasing order.' };
+
+      const steps: Step[] = [];
+      const uniq: number[] = [];
+      const seen = new Set<number>();
+      const view = (read: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr: raw,
+        ptrs: read < raw.length ? [{ name: 'read', i: read, c: 'a' }] : [],
+        aggs: [{ label: 'set', value: `{${uniq.join(', ')}}`, c: 'b' }],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'collect',
+        trace: ['Pour everything into a ', B('set'), ' and let it drop the duplicates for us.'],
+        state: view(0),
+      });
+      for (let i = 0; i < raw.length; i++) {
+        const fresh = !seen.has(raw[i]);
+        if (fresh) {
+          seen.add(raw[i]);
+          uniq.push(raw[i]);
+        }
+        steps.push({
+          tag: 'collect',
+          trace: fresh
+            ? [A(raw[i]), ' is new — the set is now ', B(`{${uniq.join(', ')}}`), '.']
+            : [F(raw[i]), ' is already in the set — silently ignored.'],
+          state: view(i, { mark: { [i]: fresh ? 'good' : 'dim' } }),
+        });
+      }
+      const out = [...uniq, ...raw.slice(uniq.length).map(() => 0)];
+      for (let k = 0; k < uniq.length; k++) {
+        steps.push({
+          tag: 'write',
+          tag2: 'rewrite',
+          trace: ['Write ', B(uniq[k]), ' back into slot ', A(k), '.'],
+          state: {
+            arr: out.map((v, i) => (i < raw.length ? (i <= k ? uniq[Math.min(i, uniq.length - 1)] : raw[i]) : v)),
+            mark: Object.fromEntries(raw.map((_, i) => [i, i <= k ? 'good' : 'dim'])),
+          } satisfies ArrayState,
+        });
+      }
+      steps.push({
+        tag: 'ret',
+        trace: ['First ', C(uniq.length), ' slots hold the distinct values: [', C(uniq.join(', ')), '].'],
+        state: {
+          arr: raw.map((v, i) => (i < uniq.length ? uniq[i] : v)),
+          window: [0, uniq.length - 1],
+          mark: Object.fromEntries(raw.map((_, i) => [i, i < uniq.length ? 'final' : 'dim'])),
+        } satisfies ArrayState,
+      });
+      return {
+        steps,
+        result: String(uniq.length),
+        resultDetail: `[${uniq.join(', ')}] — but a set of up to ${raw.length} values was allocated to get there`,
+      };
+    },
+    note: 'This works on any array, sorted or not — which is precisely why it is the wrong tool here. It pays O(n) memory and a log factor per insertion to rediscover something the input already guarantees: in a sorted array equal values are adjacent, so a single comparison with the previous kept value is enough.',
+    complexity: { time: 'O(n log n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Squares of a Sorted Array ================= */
@@ -473,6 +785,75 @@ const sortedSquares: ProblemDef = {
   },
   note: 'Sorting the squares afterwards is O(n log n); recognising that the input is already sorted by value, hence by |value| from the outside in, gets it to O(n). Filling the result backwards is the same trick as merging two sorted lists in place — write where the answer is largest first.',
   complexity: { time: 'O(n)', space: 'O(n) for the output' },
+  brute: {
+    label: 'Square then sort',
+    technique: 'Square every element, then hand the whole array to a sort.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> sortedSquares(vector<int>& nums) {'),
+        L('        for (int& x : nums)', 'square'),
+        L('            x = x * x;', 'square'),
+        L('        sort(nums.begin(), nums.end());', 'sort'),
+        L('        return nums;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] sortedSquares(int[] nums) {'),
+        L('        for (int i = 0; i < nums.length; i++)', 'square'),
+        L('            nums[i] = nums[i] * nums[i];', 'square'),
+        L('        Arrays.sort(nums);', 'sort'),
+        L('        return nums;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = parseIntArray(values.nums);
+      if (typeof raw === 'string') return { error: raw };
+      for (let i = 1; i < raw.length; i++)
+        if (raw[i] < raw[i - 1]) return { error: 'Array must be sorted in non-decreasing order.' };
+
+      const steps: Step[] = [];
+      const sq = [...raw];
+      steps.push({
+        tag: 'square',
+        trace: ['Ignore the sortedness entirely — just square everything, then sort the result.'],
+        state: { arr: [...sq] } satisfies ArrayState,
+      });
+      for (let i = 0; i < sq.length; i++) {
+        sq[i] = raw[i] * raw[i];
+        steps.push({
+          tag: 'square',
+          trace: [A(raw[i]), '² = ', B(sq[i]), '. Note the order is now broken — negatives squared can outrank positives.'],
+          state: {
+            arr: sq.map((v, k) => (k <= i ? v : raw[k])),
+            mark: { [i]: 'good' },
+          } satisfies ArrayState,
+        });
+      }
+      const sorted = [...sq].sort((x, y) => x - y);
+      steps.push({
+        tag: 'sort',
+        trace: ['Now sort the squares: ', F(`[${sq.join(', ')}]`), ' → ', C(`[${sorted.join(', ')}]`), '.'],
+        state: { arr: sorted, mark: Object.fromEntries(sorted.map((_, i) => [i, 'good' as const])) } satisfies ArrayState,
+      });
+      steps.push({
+        tag: 'ret',
+        trace: ['Done — but that sort cost ', F('O(n log n)'), ', which the input had already paid for once.'],
+        state: {
+          arr: sorted,
+          mark: Object.fromEntries(sorted.map((_, i) => [i, 'final' as const])),
+        } satisfies ArrayState,
+      });
+      return { steps, result: `[${sorted.join(', ')}]`, resultDetail: 'correct, but it re-sorts data that was nearly ordered already' };
+    },
+    note: 'Squaring destroys the ordering only in the middle: the array is still sorted by absolute value reading inwards from both ends. The sort throws that structure away and rebuilds it from scratch. Merging from the two ends instead keeps it and lands the same answer in O(n).',
+    complexity: { time: 'O(n log n)', space: 'O(n) for the output' },
+  },
 };
 
 /* ================= Valid Palindrome II ================= */
@@ -595,6 +976,107 @@ const validPalindromeII: ProblemDef = {
   },
   note: 'The first mismatch is the only place a deletion can possibly help — everything outside it already mirrors correctly, so deleting there would just create a new mismatch. That reduces "try deleting every character" (O(n²)) to two linear checks after one linear scan.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Delete each',
+    technique: 'Remove one character at a time and test whether what is left reads the same backwards.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool validPalindrome(string s) {'),
+        L('        if (isPal(s)) return true;', 'whole'),
+        L('        for (int i = 0; i < s.size(); i++) {', 'loop'),
+        L('            string t = s.substr(0, i) + s.substr(i + 1);', 'build'),
+        L('            if (isPal(t)) return true;', 'test', 'yes'),
+        L('        }'),
+        L('        return false;', 'no'),
+        L('    }'),
+        L('    bool isPal(const string& t) {'),
+        L('        for (int i = 0, j = t.size()-1; i < j; i++, j--)'),
+        L('            if (t[i] != t[j]) return false;'),
+        L('        return true;'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean validPalindrome(String s) {'),
+        L('        if (isPal(s)) return true;', 'whole'),
+        L('        for (int i = 0; i < s.length(); i++) {', 'loop'),
+        L('            String t = s.substring(0, i) + s.substring(i + 1);', 'build'),
+        L('            if (isPal(t)) return true;', 'test', 'yes'),
+        L('        }'),
+        L('        return false;', 'no'),
+        L('    }'),
+        L('    boolean isPal(String t) {'),
+        L('        for (int i = 0, j = t.length()-1; i < j; i++, j--)'),
+        L('            if (t.charAt(i) != t.charAt(j)) return false;'),
+        L('        return true;'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim();
+      if (s.length === 0) return { error: 'Enter a non-empty string.' };
+      if (s.length > 16) return { error: 'Keep it to at most 16 characters so the steps stay readable.' };
+
+      const ch = s.split('');
+      const isPal = (t: string) => {
+        for (let i = 0, j = t.length - 1; i < j; i++, j--) if (t[i] !== t[j]) return false;
+        return true;
+      };
+      const steps: Step[] = [];
+      const st = (mark: Record<number, 'active' | 'good' | 'final' | 'dim'>, note: string): ArrayState => ({
+        arr: ch,
+        mark,
+        aggs: [{ label: 'testing', value: note, c: 'a' }],
+      });
+
+      const wholeOk = isPal(s);
+      steps.push({
+        tag: 'whole',
+        trace: ['First, is "', A(s), '" already a palindrome? ', wholeOk ? B('yes') : F('no'), '.'],
+        state: st({}, s),
+      });
+      let ok = wholeOk;
+      let deleted: string | null = null;
+      if (!wholeOk) {
+        for (let i = 0; i < ch.length; i++) {
+          const t = s.slice(0, i) + s.slice(i + 1);
+          const good = isPal(t);
+          steps.push({
+            tag: good ? 'yes' : 'test',
+            tag2: 'build',
+            trace: [
+              "Delete '", A(ch[i]), "' at index ", A(i), ' → "', good ? B(t) : F(t), '" — ',
+              good ? B('a palindrome!') : F('still not a palindrome'), '.',
+            ],
+            state: st({ [i]: good ? 'final' : 'dim' }, t),
+          });
+          if (good) {
+            ok = true;
+            deleted = ch[i];
+            break;
+          }
+        }
+      }
+      if (!ok) {
+        steps.push({
+          tag: 'no',
+          trace: ['Every single deletion was tried and none worked — ', C('not'), ' a near-palindrome.'],
+          state: st(Object.fromEntries(ch.map((_, i) => [i, 'dim' as const])), 'exhausted'),
+        });
+      }
+      return {
+        steps,
+        result: ok ? 'true' : 'false',
+        resultDetail: deleted ? `by deleting '${deleted}'` : ok ? 'already a palindrome' : undefined,
+      };
+    },
+    note: 'n deletions, each verified by a full O(n) palindrome scan — O(n²) to answer a question one pass can settle. The waste is testing deletions in places that already match: only the first mismatching pair is a candidate, so there are exactly two strings worth checking, not n.',
+    complexity: { time: 'O(n²)', space: 'O(n) per candidate string' },
+  },
 };
 
 export const pointers3: ProblemDef[] = [fourSum, threeSumClosest, removeDuplicates, sortedSquares, validPalindromeII];

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { login, forceLogin, DeviceLimitError, type DeviceSession } from '../lib/auth';
+import GoogleSignInButton from '../lib/GoogleSignInButton';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -114,6 +115,12 @@ export default function LoginPage() {
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        <div className="auth-divider">or</div>
+        <GoogleSignInButton
+          onSuccess={() => navigate('/')}
+          onDeviceLimit={setDevices}
+          onError={setError}
+        />
         <p className="auth-alt">
           New here? <Link to="/register">Create an account</Link>
         </p>

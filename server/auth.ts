@@ -6,8 +6,12 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
 import { pool } from './db';
 import { sessionStore, deviceLabel, MAX_DEVICES } from './sessions';
+
+const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID;
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'vizucode-dev-secret-change-me';
 if (!process.env.JWT_SECRET) {
@@ -22,7 +26,7 @@ interface User {
   id: number;
   email: string;
   firstName: string;
-  passwordHash: string;
+  passwordHash: string | null;
   isPro: boolean;
 }
 
@@ -32,6 +36,12 @@ interface UserStore {
   create(email: string, firstName: string, passwordHash: string): Promise<User | null>;
   /** Flips isPro to true (post payment-verification). Returns undefined if the id is unknown. */
   markPro(id: number): Promise<User | undefined>;
+  /**
+   * Finds the user for a verified Google account by email, linking the
+   * google_id if the account existed with a password only. Creates a new
+   * (password-less) account if none existed.
+   */
+  findOrCreateGoogle(email: string, firstName: string, googleId: string): Promise<User>;
 }
 
 const memUsers = new Map<string, User>();
@@ -78,6 +88,28 @@ const store: UserStore = db
           ? { id, email: row.email, firstName: row.first_name, passwordHash: row.password_hash, isPro: true }
           : undefined;
       },
+      async findOrCreateGoogle(email, firstName, googleId) {
+        const existing = await db.query(
+          'select id, email, first_name, password_hash, is_pro from users where email = $1',
+          [email]
+        );
+        const row = existing.rows[0];
+        if (row) {
+          await db.query('update users set google_id = $1 where id = $2 and google_id is null', [googleId, row.id]);
+          return {
+            id: row.id,
+            email: row.email,
+            firstName: row.first_name,
+            passwordHash: row.password_hash,
+            isPro: row.is_pro,
+          };
+        }
+        const r = await db.query(
+          'insert into users (email, first_name, google_id) values ($1, $2, $3) returning id',
+          [email, firstName, googleId]
+        );
+        return { id: r.rows[0].id, email, firstName, passwordHash: null, isPro: false };
+      },
     }
   : {
       async findByEmail(email) {
@@ -92,6 +124,14 @@ const store: UserStore = db
       async markPro(id) {
         const user = [...memUsers.values()].find((u) => u.id === id);
         if (user) user.isPro = true;
+        return user;
+      },
+      async findOrCreateGoogle(email, firstName, googleId) {
+        const existing = memUsers.get(email);
+        if (existing) return existing;
+        const user: User = { id: nextId++, email, firstName, passwordHash: null, isPro: false };
+        memUsers.set(email, user);
+        void googleId; // not tracked in the dev in-memory store
         return user;
       },
     };
@@ -230,8 +270,9 @@ authRouter.post('/login', wrap(async (req, res) => {
   const { email, password } = parsed.data;
   const user = await store.findByEmail(email);
   // Same message for unknown email and wrong password, so the endpoint
-  // doesn't reveal which emails are registered.
-  const ok = user && (await bcrypt.compare(password, user.passwordHash));
+  // doesn't reveal which emails are registered. Google-only accounts have no
+  // passwordHash, so they always fail password login (as intended).
+  const ok = user?.passwordHash && (await bcrypt.compare(password, user.passwordHash));
   if (!ok) {
     res.status(401).json({ error: 'Incorrect email or password.' });
     return;
@@ -254,6 +295,57 @@ const forceLoginSchema = z.object({
   revokeSessionId: z.string({ error: 'Missing session to sign out.' }).min(1),
 });
 
+const googleSchema = z.object({
+  credential: z.string({ error: 'Missing Google credential.' }).min(1),
+});
+
+/**
+ * POST /api/auth/google — body: { credential } (the ID token from Google
+ * Identity Services). Verifies it against Google's servers, then finds or
+ * creates the account by email. Subject to the same MAX_DEVICES cap as
+ * password login (returns the same device-list 409 for the frontend to
+ * offer force-login on).
+ */
+authRouter.post('/google', wrap(async (req, res) => {
+  if (!googleClient) {
+    res.status(500).json({ error: 'Google sign-in is not configured on this server.' });
+    return;
+  }
+  const parsed = googleSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: firstIssue(parsed.error) });
+    return;
+  }
+  let payload: { email?: string; email_verified?: boolean; given_name?: string; name?: string; sub: string };
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: parsed.data.credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    payload = ticket.getPayload() as typeof payload;
+  } catch {
+    res.status(401).json({ error: 'Could not verify Google sign-in — try again.' });
+    return;
+  }
+  if (!payload?.email || !payload.email_verified) {
+    res.status(401).json({ error: 'Your Google account has no verified email.' });
+    return;
+  }
+  const email = payload.email.toLowerCase();
+  const firstName = payload.given_name || payload.name || 'there';
+  const user = await store.findOrCreateGoogle(email, firstName, payload.sub);
+  const sessions = await sessionStore.list(user.id);
+  if (sessions.length >= MAX_DEVICES) {
+    res.status(409).json({
+      error: `You're already signed in on ${MAX_DEVICES} devices — sign out of one to continue.`,
+      sessions,
+    });
+    return;
+  }
+  const session = await sessionStore.create(user.id, deviceLabel(req.headers['user-agent']));
+  res.json({ token: signToken(user, session.id), user: publicUser(user) });
+}));
+
 /**
  * POST /api/auth/login/force — body: { email, password, revokeSessionId }.
  * Re-verifies the password (the caller has no session token yet, since the
@@ -268,7 +360,7 @@ authRouter.post('/login/force', wrap(async (req, res) => {
   }
   const { email, password, revokeSessionId } = parsed.data;
   const user = await store.findByEmail(email);
-  const ok = user && (await bcrypt.compare(password, user.passwordHash));
+  const ok = user?.passwordHash && (await bcrypt.compare(password, user.passwordHash));
   if (!ok) {
     res.status(401).json({ error: 'Incorrect email or password.' });
     return;

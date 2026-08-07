@@ -39,13 +39,18 @@ create table if not exists users (
   id            integer generated always as identity primary key,
   email         text not null unique,
   first_name    text not null,
-  password_hash text not null,
+  password_hash text,
   is_pro        boolean not null default false,
   created_at    timestamptz not null default now()
 );
 
 -- Safety net for databases that already had `users` before is_pro existed.
 alter table users add column if not exists is_pro boolean not null default false;
+
+-- Google sign-in support: password_hash is null for Google-only accounts,
+-- google_id (Google's stable "sub" claim) identifies them instead.
+alter table users add column if not exists google_id text unique;
+alter table users alter column password_hash drop not null;
 
 -- Per-user solved questions: one row = "this user solved this question".
 -- Deliberately NO foreign key to questions(slug): the seeder re-creates the

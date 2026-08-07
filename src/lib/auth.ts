@@ -80,6 +80,33 @@ export function register(email: string, password: string, firstName: string): Pr
   return postAuth('/api/auth/register', { email, password, firstName });
 }
 
+/** Throws DeviceLimitError (carrying the signed-in device list) at the device cap, like login(). */
+export async function googleLogin(credential: string): Promise<Session> {
+  let res: globalThis.Response;
+  try {
+    res = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential }),
+    });
+  } catch {
+    throw new Error('Cannot reach the server — is `npm run server` running?');
+  }
+  const data = (await res.json().catch(() => ({}))) as Partial<Session> & {
+    error?: string;
+    sessions?: DeviceSession[];
+  };
+  if (res.status === 409 && data.sessions) {
+    throw new DeviceLimitError(data.error ?? 'Too many devices are signed in.', data.sessions);
+  }
+  if (!res.ok || !data.token || !data.user) {
+    throw new Error(data.error ?? 'Something went wrong — try again.');
+  }
+  const session = { token: data.token, user: data.user };
+  setSession(session);
+  return session;
+}
+
 /** Throws DeviceLimitError (carrying the signed-in device list) instead of a plain Error at the device cap. */
 export async function login(email: string, password: string): Promise<Session> {
   let res: globalThis.Response;
