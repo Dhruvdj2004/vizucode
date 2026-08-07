@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { register, DeviceLimitError, type DeviceSession } from '../lib/auth';
 import GoogleSignInButton from '../lib/GoogleSignInButton';
+import { PasswordField } from '../components/PasswordField';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -55,18 +56,14 @@ export default function RegisterPage() {
               required
             />
           </div>
-          <div className="field auth-field">
-            <label htmlFor="reg-password">Password</label>
-            <input
-              id="reg-password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            <span className="auth-hint">At least 8 characters.</span>
-          </div>
+          <PasswordField
+            id="reg-password"
+            label="Password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            hint="At least 8 characters."
+          />
           {error && (
             <p className="input-error" role="alert">
               {error}

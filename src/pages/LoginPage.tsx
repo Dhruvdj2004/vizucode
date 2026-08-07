@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { login, forceLogin, DeviceLimitError, type DeviceSession } from '../lib/auth';
 import GoogleSignInButton from '../lib/GoogleSignInButton';
+import { PasswordField } from '../components/PasswordField';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -95,17 +96,13 @@ export default function LoginPage() {
               required
             />
           </div>
-          <div className="field auth-field">
-            <label htmlFor="login-password">Password</label>
-            <input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+          <PasswordField
+            id="login-password"
+            label="Password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="current-password"
+          />
           {error && (
             <p className="input-error" role="alert">
               {error}
