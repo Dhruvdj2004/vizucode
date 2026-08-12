@@ -11,8 +11,7 @@
     "server": "npm run server:build && node --env-file-if-exists=.env server/dist/server.mjs",
     "db:seed": "esbuild server/seed.ts --bundle --packages=external --platform=node --format=esm --outfile=server/dist/seed.mjs --log-level=warning && node --env-file-if-exists=.env server/dist/seed.mjs",
     "api:build": "esbuild server/app.ts --bundle --packages=external --platform=node --format=esm --outfile=server/dist/app.mjs --log-level=warning",
-    "vercel-build": "npm run api:build && npm run build",
-    "netlify-build": "npm run api:build && npm run build"
+    "vercel-build": "npm run api:build && npm run build"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -25,7 +24,6 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2",
-    "serverless-http": "^4.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

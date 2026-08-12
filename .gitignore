@@ -18,3 +18,5 @@ server/dist/
 # its own throwaway Chrome profile, which is hundreds of MB
 .verify-chrome-profile*/
 .verify-screenshots/
+.vercel
+.env*
