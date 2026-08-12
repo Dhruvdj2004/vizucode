@@ -1,4 +1,4 @@
--- Visucode Phase 3 schema (Supabase / PostgreSQL).
+-- VizuCode Phase 3 schema (Supabase / PostgreSQL).
 -- Applied automatically by `npm run db:seed` — safe to re-run.
 
 create table if not exists questions (
