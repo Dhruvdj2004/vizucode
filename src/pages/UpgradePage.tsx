@@ -7,6 +7,14 @@ import { loadRazorpayScript } from '../lib/razorpay';
 
 const RAZORPAY_KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID as string | undefined;
 
+// Mirrors the server-side price rule in server/payment.ts — display only,
+// the actual charge is always computed server-side from the JWT email.
+const STUDENT_EMAIL_SUFFIX = '@ietdavv.edu.in';
+
+function displayPrice(email: string | undefined): string {
+  return email?.toLowerCase().endsWith(STUDENT_EMAIL_SUFFIX) ? '₹1' : '₹49';
+}
+
 const FEATURES = [
   `Everything in Free (${FREE_CATEGORY} stays open either way)`,
   'All 158 questions across every pattern, unlocked',
@@ -80,7 +88,7 @@ export default function UpgradePage() {
         </p>
 
         <div className="price-row">
-          <span className="price-amount mono">₹1</span>
+          <span className="price-amount mono">{displayPrice(session?.user.email)}</span>
           <span className="price-period">one-time</span>
         </div>
 

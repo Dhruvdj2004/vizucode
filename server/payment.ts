@@ -9,10 +9,16 @@ import { requireAuth, markUserPro, type AuthedRequest } from './auth';
 const KEY_ID = process.env.RAZORPAY_KEY_ID;
 const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
 
-// Single fixed-price product (see UpgradePage.tsx) — the amount is always
-// set here, never taken from the client, so a request can't be tampered
-// with to buy the upgrade for less.
-const PRO_PRICE_PAISE = 100; // ₹1
+// Price is derived server-side from the signed-in user's email, never taken
+// from the client, so a request can't be tampered with to buy the upgrade
+// for less. Students on the college domain get the discounted price.
+const STUDENT_EMAIL_SUFFIX = '@ietdavv.edu.in';
+const STUDENT_PRICE_PAISE = 100; // ₹1
+const STANDARD_PRICE_PAISE = 4900; // ₹49
+
+function priceForEmail(email: string): number {
+  return email.toLowerCase().endsWith(STUDENT_EMAIL_SUFFIX) ? STUDENT_PRICE_PAISE : STANDARD_PRICE_PAISE;
+}
 
 const razorpay = KEY_ID && KEY_SECRET ? new Razorpay({ key_id: KEY_ID, key_secret: KEY_SECRET }) : null;
 
@@ -38,13 +44,10 @@ paymentRouter.post('/create-order', wrap(async (req, res) => {
     res.status(500).json({ error: 'Payments are not configured on this server.' });
     return;
   }
-  if (PRO_PRICE_PAISE < 100) {
-    res.status(500).json({ error: 'Misconfigured price.' });
-    return;
-  }
+  const amount = priceForEmail(req.user!.email);
   try {
     const order = await razorpay.orders.create({
-      amount: PRO_PRICE_PAISE,
+      amount,
       currency: 'INR',
       receipt: `pro-${req.user!.id}-${Date.now()}`,
     });
