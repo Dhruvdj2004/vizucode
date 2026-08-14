@@ -24,10 +24,7 @@ export const dsaModule = createModule({
   eyebrow: 'Interview prep, in plain language',
   title: 'DSA Revision Notes',
   back: '← DSA revision',
-  intro: ({ topics, hours }) =>
-    `${topics} topics covering the graph and dynamic programming syllabus interviews actually ask — ` +
-    `every algorithm explained in plain language, drawn as a diagram, and paired with working code plus ` +
-    `the questions that follow it. About ${hours} hours end to end.`,
+  intro: () => '',
   topics: [
     graphBasics,
     graphTraversal,

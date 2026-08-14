@@ -16,6 +16,7 @@ import { isRunError } from '../src/lib/types';
 import { authRouter } from './auth';
 import { progressRouter } from './progress';
 import { paymentRouter } from './payment';
+import { feedbackRouter } from './feedback';
 import { pool } from './db';
 
 // In production set ALLOWED_ORIGIN to the deployed frontend URL
@@ -75,6 +76,10 @@ app.use('/api/progress', rateLimit('read'), progressRouter);
 
 // Razorpay order create/verify (JWT required) — see server/payment.ts.
 app.use('/api/payment', rateLimit('payment'), paymentRouter);
+
+// Public feedback/suggestions (open to everyone) — see server/feedback.ts.
+// Its own POST-specific rate limit lives inside the router.
+app.use('/api/feedback', rateLimit('read'), feedbackRouter);
 
 app.get('/api/health', rateLimit('read'), wrap(async (_req, res) => {
   if (!pool) {

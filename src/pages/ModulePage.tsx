@@ -19,7 +19,7 @@ export default function ModulePage({ mod }: { mod: ContentModule }) {
       <div className="viz-header">
         <div className="eyebrow">{mod.eyebrow}</div>
         <h1 className="page-title">{mod.title}</h1>
-        <p className="serif desc">{mod.intro(stats)}</p>
+        {mod.intro(stats) && <p className="serif desc">{mod.intro(stats)}</p>}
       </div>
 
       {units.map(({ unit, topics }) => (

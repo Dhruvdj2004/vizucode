@@ -97,6 +97,37 @@ export async function verifyPayment(token: string, payload: VerifyPaymentPayload
   return { token: data.token, user: data.user };
 }
 
+export interface FeedbackEntry {
+  id: number;
+  name: string;
+  rating: number;
+  message: string;
+  createdAt: string;
+}
+
+export interface FeedbackSummary {
+  entries: FeedbackEntry[];
+  average: number;
+  count: number;
+}
+
+/** Latest feedback/suggestions, plus the average star rating. Public — no auth. */
+export async function fetchFeedback(): Promise<FeedbackSummary> {
+  return getJson<FeedbackSummary>('/api/feedback');
+}
+
+/** Submits a piece of feedback with a 1-5 star rating. Public — no auth. */
+export async function submitFeedback(name: string, rating: number, message: string): Promise<FeedbackEntry> {
+  const res = await fetch('/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, rating, message }),
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<FeedbackEntry> & { error?: string };
+  if (!res.ok || !data.id) throw new Error(data.error ?? 'Could not submit feedback.');
+  return data as FeedbackEntry;
+}
+
 export async function fetchProblem(slug: string): Promise<{ def: StaticProblem | null; source: DataSource }> {
   try {
     const def = await getJson<StaticProblem & { hasVisualizer: boolean }>(`/api/questions/${encodeURIComponent(slug)}`);

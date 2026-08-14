@@ -77,6 +77,18 @@ create table if not exists user_sessions (
 
 create index if not exists idx_sessions_user on user_sessions (user_id);
 
+-- Public feedback/suggestions with a 1-5 star rating. Anyone can submit —
+-- no auth required — so there is deliberately no user_id / foreign key.
+create table if not exists feedback (
+  id         integer generated always as identity primary key,
+  name       text     not null,
+  rating     smallint not null check (rating between 1 and 5),
+  message    text     not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_feedback_created on feedback (created_at desc);
+
 -- The backend connects as the table owner and is unaffected; this keeps
 -- Supabase's auto-generated public REST API from exposing the tables.
 alter table questions enable row level security;
@@ -84,3 +96,4 @@ alter table problem_content enable row level security;
 alter table users enable row level security;
 alter table user_progress enable row level security;
 alter table user_sessions enable row level security;
+alter table feedback enable row level security;

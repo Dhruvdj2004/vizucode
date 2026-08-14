@@ -11,6 +11,8 @@ import { sqlModule } from '../sql';
 import { sdModule } from '../sd';
 import { dsaModule } from '../dsa';
 
+export { navSection } from './navKeys';
+
 export interface ModuleLink {
   mod: ContentModule;
   /** Emoji shown on the card. */
@@ -75,11 +77,3 @@ export const ALL_MODULES: ModuleLink[] = [...REVISION_MODULES, ...CORE_MODULES];
 
 /** Route bases owned by the Core Subjects section. */
 export const CORE_KEYS = CORE_MODULES.map((m) => m.mod.key);
-
-/** Which header nav entry should light up for a given pathname. */
-export function navSection(pathname: string): 'dsa' | 'revision' | 'core' {
-  const base = pathname.split('/')[1] ?? '';
-  if (base === 'core' || CORE_KEYS.includes(base)) return 'core';
-  if (REVISION_MODULES.some((m) => m.mod.key === base)) return 'revision';
-  return 'dsa';
-}

@@ -1,3 +1,12 @@
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: var(--ink-faint);
+  font-size: 0.95rem;
+}
+
 /* ============ Design tokens (PROJECT_PROMPT §2) ============ */
 :root {
   --bg: #eef1f5;
@@ -232,8 +241,35 @@ h1, h2, h3 { letter-spacing: -0.01em; margin: 0; }
   min-width: 90px;
 }
 .field input.lg { min-width: 260px; }
+.field textarea {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 0.5rem 0.7rem; font-family: inherit; font-size: 0.9rem; color: var(--ink);
+  resize: vertical;
+}
 .input-error { color: #c0392b; font-size: 0.82rem; width: 100%; }
 :root[data-theme="dark"] .input-error { color: #e88074; }
+
+/* ============ Star rating ============ */
+.star-rating { display: flex; gap: 0.15rem; }
+.star-rating .star {
+  background: none; border: none; padding: 0; font-size: 1.4rem; line-height: 1;
+  color: var(--accent); cursor: pointer;
+}
+.star-rating.readonly .star { cursor: default; font-size: 1.1rem; }
+.star-rating .star:disabled { opacity: 1; }
+
+/* ============ Feedback page ============ */
+.feedback-layout { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 1.25rem; align-items: start; }
+@media (max-width: 760px) { .feedback-layout { grid-template-columns: 1fr; } }
+.feedback-summary { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+.feedback-average { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.feedback-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+.feedback-item { border-top: 1px solid var(--line); padding-top: 0.9rem; }
+.feedback-item:first-child { border-top: none; padding-top: 0; }
+.feedback-item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
+.feedback-item-name { font-weight: 700; font-size: 0.9rem; }
+.feedback-item-message { font-family: var(--font-serif); color: var(--ink-soft); font-size: 0.92rem; margin: 0.2rem 0; }
+.feedback-item-date { font-size: 0.72rem; color: var(--ink-faint); }
 
 .transport { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .transport .scrub { flex: 1; min-width: 140px; accent-color: var(--accent); }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getSession, logout, onAuthChange } from './lib/auth';
-import { navSection } from './content/registry';
+import { navSection } from './content/navKeys';
 import { Logo } from './components/Logo';
 
 function getInitialTheme(): 'light' | 'dark' {
@@ -45,6 +45,9 @@ export default function App() {
           </Link>
           <Link to="/core" className={section === 'core' ? 'on' : ''}>
             Core Subjects
+          </Link>
+          <Link to="/feedback" className={pathname === '/feedback' ? 'on' : ''}>
+            Feedback
           </Link>
         </nav>
         <div className="header-actions">

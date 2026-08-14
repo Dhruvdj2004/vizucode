@@ -120,28 +120,6 @@ export default function HomePage() {
       <div className="viz-header">
         <div className="eyebrow">Interview prep, visualized</div>
         <h1 className="page-title">DSA Interview Questions</h1>
-        <p className="serif desc">
-          {stats.total} curated LeetCode problems organized by pattern. Every visualizer walks the optimal
-          algorithm step by step, synced with the C++ and Java source.
-        </p>
-      </div>
-
-      <div className="mod-group">
-        <div className="mod-group-head">
-          <h2>Revision notes</h2>
-          <span className="count">written companions to the visualizers</span>
-        </div>
-        <ModuleCards links={REVISION_MODULES} />
-      </div>
-
-      <div className="mod-group">
-        <div className="mod-group-head">
-          <h2>Core subjects</h2>
-          <Link to="/core" className="mod-group-all">
-            See all →
-          </Link>
-        </div>
-        <ModuleCards links={CORE_MODULES} />
       </div>
 
       {session ? (
@@ -303,6 +281,24 @@ export default function HomePage() {
           </section>
         );
       })}
+
+      <div className="mod-group">
+        <div className="mod-group-head">
+          <h2>Revision notes</h2>
+          <span className="count">written companions to the visualizers</span>
+        </div>
+        <ModuleCards links={REVISION_MODULES} />
+      </div>
+
+      <div className="mod-group">
+        <div className="mod-group-head">
+          <h2>Core subjects</h2>
+          <Link to="/core" className="mod-group-all">
+            See all →
+          </Link>
+        </div>
+        <ModuleCards links={CORE_MODULES} />
+      </div>
     </>
   );
 }
