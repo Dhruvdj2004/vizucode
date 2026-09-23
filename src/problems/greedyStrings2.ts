@@ -112,6 +112,79 @@ const assignCookies: ProblemDef = {
   },
   note: 'An exchange argument proves the greedy: if an optimal solution gave a bigger cookie to the least greedy child, swapping in the smallest adequate one keeps it valid and frees a larger cookie. Discarding a too-small cookie outright is safe because the children only get greedier from here.',
   complexity: { time: 'O(n log n + m log m)', space: 'O(1)' },
+  brute: {
+    label: 'Scan all cookies',
+    technique: 'For each child from least to most greedy, scan every cookie to find the smallest unused one that satisfies them.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findContentChildren(vector<int>& g, vector<int>& s) {'),
+        L('        sort(g.begin(), g.end());', 'init'),
+        L('        vector<bool> used(s.size(), false); int fed = 0;', 'init'),
+        L('        for (int child : g) {', 'child'),
+        L('            int pick = -1;', 'child'),
+        L('            for (int j = 0; j < s.size(); j++)  // O(m) scan', 'child'),
+        L('                if (!used[j] && s[j] >= child && (pick == -1 || s[j] < s[pick])) pick = j;', 'child'),
+        L('            if (pick != -1) { used[pick] = true; fed++; }', 'feed'),
+        L('        }'),
+        L('        return fed;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findContentChildren(int[] g, int[] s) {'),
+        L('        Arrays.sort(g);', 'init'),
+        L('        boolean[] used = new boolean[s.length]; int fed = 0;', 'init'),
+        L('        for (int child : g) {', 'child'),
+        L('            int pick = -1;', 'child'),
+        L('            for (int j = 0; j < s.length; j++)  // O(m) scan', 'child'),
+        L('                if (!used[j] && s[j] >= child && (pick == -1 || s[j] < s[pick])) pick = j;', 'child'),
+        L('            if (pick != -1) { used[pick] = true; fed++; }', 'feed'),
+        L('        }'),
+        L('        return fed;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const gRaw = parseIntArray(values.g, { min: 1, maxLen: 10 });
+      if (typeof gRaw === 'string') return { error: gRaw };
+      const s = parseIntArray(values.s, { min: 1, maxLen: 10 });
+      if (typeof s === 'string') return { error: s };
+      const g = [...gRaw].sort((x, y) => x - y);
+      const used = s.map(() => false);
+      const fed: number[] = [];
+      let scans = 0;
+      const steps: Step[] = [];
+      const st = (pick?: number): StackState => ({
+        array: { arr: s, mark: Object.fromEntries(s.map((_, j) => [j, j === pick ? 'active' : used[j] ? 'dim' : undefined]).filter(([, m]) => m)) },
+        stack: fed.map((v) => ({ v: `greed ${v}`, c: 'b' as const })),
+        stackLabel: 'Children fed',
+        aggs: [{ label: 'cookies scanned', value: String(scans), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['Children sorted by greed; cookies stay unsorted, so each child scans all of them.'], state: st() });
+      for (const child of g) {
+        let pick = -1;
+        for (let j = 0; j < s.length; j++) {
+          scans++;
+          if (!used[j] && s[j] >= child && (pick === -1 || s[j] < s[pick])) pick = j;
+        }
+        if (pick >= 0) {
+          used[pick] = true;
+          fed.push(child);
+          steps.push({ tag: 'feed', trace: ['Child with greed ', A(child), ': smallest cookie that satisfies is ', B(s[pick]), '.'], state: st(pick) });
+        } else {
+          steps.push({ tag: 'child', trace: ['Child with greed ', F(child), ': no unused cookie is big enough.'], state: st() });
+        }
+      }
+      steps.push({ tag: 'ret', trace: [C(fed.length), ' child(ren) content after ', A(scans), ' cookie checks.'], state: st() });
+      return { steps, result: String(fed.length) };
+    },
+    note: 'Each child rescans every cookie, so this is O(n·m). Sorting the cookies too lets a single pointer sweep both lists in O(n log n + m log m).',
+    complexity: { time: 'O(n·m)', space: 'O(m)' },
+  },
 };
 
 /* ================= Lemonade Change ================= */
@@ -230,6 +303,90 @@ const lemonadeChange: ProblemDef = {
   },
   note: 'A $10 note can only ever pay part of a $15 change, while a $5 works in both cases — so spending $10 first is never worse. That asymmetry is what makes the greedy provably correct rather than a heuristic.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Try both ways to change $20',
+    technique: 'Whenever a $20 can be changed two ways ($10+$5 or three $5s), explore both with backtracking.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    bool go(vector<int>& b, int i, int five, int ten) {'),
+        L('        if (i == b.size()) return true;', 'ret'),
+        L('        if (b[i] == 5) return go(b, i + 1, five + 1, ten);', 'five'),
+        L('        if (b[i] == 10) return five > 0 && go(b, i + 1, five - 1, ten + 1);', 'ten', 'fail'),
+        L('        bool ok = false;', 'branch'),
+        L('        if (ten > 0 && five > 0) ok = go(b, i + 1, five - 1, ten - 1);', 'branch'),
+        L('        if (!ok && five >= 3) ok = go(b, i + 1, five - 3, ten);', 'branch'),
+        L('        return ok;', 'fail'),
+        L('    }'),
+        L('public:'),
+        L('    bool lemonadeChange(vector<int>& bills) { return go(bills, 0, 0, 0); }', 'init'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    boolean go(int[] b, int i, int five, int ten) {'),
+        L('        if (i == b.length) return true;', 'ret'),
+        L('        if (b[i] == 5) return go(b, i + 1, five + 1, ten);', 'five'),
+        L('        if (b[i] == 10) return five > 0 && go(b, i + 1, five - 1, ten + 1);', 'ten', 'fail'),
+        L('        boolean ok = false;', 'branch'),
+        L('        if (ten > 0 && five > 0) ok = go(b, i + 1, five - 1, ten - 1);', 'branch'),
+        L('        if (!ok && five >= 3) ok = go(b, i + 1, five - 3, ten);', 'branch'),
+        L('        return ok;', 'fail'),
+        L('    }'),
+        L('    public boolean lemonadeChange(int[] bills) { return go(bills, 0, 0, 0); }', 'init'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const bills = parseIntArray(values.bills, { min: 5, max: 20, maxLen: 12 });
+      if (typeof bills === 'string') return { error: bills };
+      if (!bills.every((b) => b === 5 || b === 10 || b === 20)) return { error: 'Each bill must be 5, 10 or 20.' };
+      const steps: Step[] = [];
+      let calls = 0;
+      const st = (i: number, five: number, ten: number, m: 'active' | 'dim' = 'active'): ArrayState => ({
+        arr: bills.map((b) => `$${b}`),
+        mark: { ...Object.fromEntries(bills.slice(0, i).map((_, k) => [k, 'good' as const])), ...(i < bills.length ? { [i]: m } : {}) },
+        aggs: [
+          { label: '$5 in till', value: String(five), c: 'a' },
+          { label: '$10 in till', value: String(ten), c: 'b' },
+          { label: 'calls', value: String(calls), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['No "prefer $10+$5" rule: at each $20, try every legal way to give change and back up if it fails later.'], state: st(0, 0, 0) });
+      const go = (i: number, five: number, ten: number): boolean => {
+        calls++;
+        if (i === bills.length) return true;
+        const b = bills[i];
+        if (b === 5) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'five', trace: ['$5 — keep it.'], state: st(i, five + 1, ten) });
+          return go(i + 1, five + 1, ten);
+        }
+        if (b === 10) {
+          if (five === 0) {
+            if (steps.length < MAX_STEPS) steps.push({ tag: 'fail', trace: ['$10 but no $5 to give back — this branch fails.'], state: st(i, five, ten, 'dim') });
+            return false;
+          }
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'ten', trace: ['$10 — give back a $5.'], state: st(i, five - 1, ten + 1) });
+          return go(i + 1, five - 1, ten + 1);
+        }
+        if (ten > 0 && five > 0) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'branch', trace: ['$20 — try change as ', A('$10 + $5'), ' first.'], state: st(i, five - 1, ten - 1) });
+          if (go(i + 1, five - 1, ten - 1)) return true;
+        }
+        if (five >= 3) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'branch', trace: ['$20 — try change as ', A('three $5s'), '.'], state: st(i, five - 3, ten) });
+          if (go(i + 1, five - 3, ten)) return true;
+        }
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'fail', trace: ['$20 with no working way to make $15 — back up.'], state: st(i, five, ten, 'dim') });
+        return false;
+      };
+      const ok = go(0, 0, 0);
+      steps.push({ tag: 'ret', trace: ['Answer: ', C(String(ok)), ' after ', A(calls), ' calls.'], state: st(bills.length, 0, 0) });
+      return { steps, result: String(ok) };
+    },
+    note: 'Exploring both change options can double the work at every $20. Always preferring $10 + $5 is provably never worse, because $5 bills can make any change a $10 can — so the greedy needs no backtracking.',
+    complexity: { time: 'O(2^(#20s))', space: 'O(n) stack' },
+  },
 };
 
 /* ================= Candy ================= */
@@ -340,6 +497,89 @@ const candy: ProblemDef = {
   },
   note: 'One pass cannot work because the two constraints point in opposite directions — a child at the top of a long descent needs to know how far the descent runs. Taking the max rather than overwriting in the second pass is essential; overwriting would break the left-neighbour rule that was just established.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Repeat until stable',
+    technique: 'Start everyone at 1 candy and keep sweeping, fixing any child who out-rates a neighbour without having more, until a sweep changes nothing.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int candy(vector<int>& r) {'),
+        L('        int n = r.size();', 'init'),
+        L('        vector<int> c(n, 1);', 'init'),
+        L('        bool changed = true;', 'init'),
+        L('        while (changed) {', 'pass'),
+        L('            changed = false;', 'pass'),
+        L('            for (int i = 0; i < n; i++) {', 'pass'),
+        L('                if (i > 0 && r[i] > r[i-1] && c[i] <= c[i-1]) { c[i] = c[i-1] + 1; changed = true; }', 'pass'),
+        L('                if (i + 1 < n && r[i] > r[i+1] && c[i] <= c[i+1]) { c[i] = c[i+1] + 1; changed = true; }', 'pass'),
+        L('            }'),
+        L('        }'),
+        L('        return accumulate(c.begin(), c.end(), 0);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int candy(int[] r) {'),
+        L('        int n = r.length;', 'init'),
+        L('        int[] c = new int[n]; Arrays.fill(c, 1);', 'init'),
+        L('        boolean changed = true;', 'init'),
+        L('        while (changed) {', 'pass'),
+        L('            changed = false;', 'pass'),
+        L('            for (int i = 0; i < n; i++) {', 'pass'),
+        L('                if (i > 0 && r[i] > r[i-1] && c[i] <= c[i-1]) { c[i] = c[i-1] + 1; changed = true; }', 'pass'),
+        L('                if (i + 1 < n && r[i] > r[i+1] && c[i] <= c[i+1]) { c[i] = c[i+1] + 1; changed = true; }', 'pass'),
+        L('            }'),
+        L('        }'),
+        L('        int total = 0; for (int x : c) total += x;', 'ret'),
+        L('        return total;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const r = parseIntArray(values.ratings, { maxLen: 12 });
+      if (typeof r === 'string') return { error: r };
+      const n = r.length;
+      const c = r.map(() => 1);
+      const steps: Step[] = [];
+      const st = (fixed: number[] = []): ArrayState => ({
+        arr: r,
+        mark: Object.fromEntries(fixed.map((i) => [i, 'active' as const])),
+        aggs: [
+          { label: 'candies', value: c.join(', '), c: 'b' },
+          { label: 'total', value: String(c.reduce((a, b) => a + b, 0)), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Everyone starts with 1. Sweep repeatedly, fixing any violation, until nothing changes.'], state: st() });
+      let pass = 0;
+      let changed = true;
+      while (changed) {
+        changed = false;
+        pass++;
+        const fixed: number[] = [];
+        for (let i = 0; i < n; i++) {
+          if (i > 0 && r[i] > r[i - 1] && c[i] <= c[i - 1]) {
+            c[i] = c[i - 1] + 1;
+            changed = true;
+            fixed.push(i);
+          }
+          if (i + 1 < n && r[i] > r[i + 1] && c[i] <= c[i + 1]) {
+            c[i] = c[i + 1] + 1;
+            changed = true;
+            fixed.push(i);
+          }
+        }
+        steps.push({ tag: 'pass', trace: ['Sweep ', A(pass), ': ', changed ? ['fixed ', fixed.length, ' child(ren) — sweep again.'].join('') : 'no violations left.'], state: st(fixed) });
+      }
+      const total = c.reduce((a, b) => a + b, 0);
+      steps.push({ tag: 'ret', trace: ['Stable after ', A(pass), ' sweeps — ', C(total), ' candies.'], state: st() });
+      return { steps, result: String(total), resultDetail: c.join(', ') };
+    },
+    note: 'A long falling run fixes only one more child per sweep, so this can take n sweeps — O(n²). One left-to-right and one right-to-left pass settle rising and falling runs directly.',
+    complexity: { time: 'O(n²)', space: 'O(n)' },
+  },
 };
 
 /* ================= Minimum Number of Arrows to Burst Balloons ================= */
@@ -462,6 +702,99 @@ const minArrows: ProblemDef = {
   },
   note: 'Sorting by right edge is what makes the greedy exchange-safe: the earliest-ending balloon must be hit by some arrow, and shooting at its right edge dominates every other position for that arrow. This is the same shape as non-overlapping intervals — count the groups rather than the removals.',
   complexity: { time: 'O(n log n)', space: 'O(1)' },
+  brute: {
+    label: 'Try every set of shots',
+    technique: 'An optimal arrow can always sit at some balloon’s right edge; try every subset of right edges, smallest first, until one bursts everything.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findMinArrowShots(vector<vector<int>>& p) {'),
+        L('        int n = p.size(), best = n;', 'init'),
+        L('        for (int mask = 1; mask < (1 << n); mask++) {', 'try'),
+        L('            if (__builtin_popcount(mask) >= best) continue;', 'try'),
+        L('            bool all = true;', 'try'),
+        L('            for (auto& b : p) {', 'try'),
+        L('                bool hit = false;', 'try'),
+        L('                for (int i = 0; i < n; i++)', 'try'),
+        L('                    if (mask >> i & 1 && b[0] <= p[i][1] && p[i][1] <= b[1]) hit = true;', 'try'),
+        L('                all &= hit;', 'try'),
+        L('            }'),
+        L('            if (all) best = __builtin_popcount(mask);', 'hit'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findMinArrowShots(int[][] p) {'),
+        L('        int n = p.length, best = n;', 'init'),
+        L('        for (int mask = 1; mask < (1 << n); mask++) {', 'try'),
+        L('            if (Integer.bitCount(mask) >= best) continue;', 'try'),
+        L('            boolean all = true;', 'try'),
+        L('            for (int[] b : p) {', 'try'),
+        L('                boolean hit = false;', 'try'),
+        L('                for (int i = 0; i < n; i++)', 'try'),
+        L('                    if ((mask >> i & 1) == 1 && b[0] <= p[i][1] && p[i][1] <= b[1]) hit = true;', 'try'),
+        L('                all &= hit;', 'try'),
+        L('            }'),
+        L('            if (all) best = Integer.bitCount(mask);', 'hit'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parts = (values.intervals ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+      if (parts.length === 0) return { error: 'Enter balloons like "1-6, 2-8".' };
+      if (parts.length > 8) return { error: 'Keep it to at most 8 balloons.' };
+      const pts: [number, number][] = [];
+      for (const p of parts) {
+        const m = p.match(/^(-?\d+)\s*[-–:]\s*(-?\d+)$/);
+        if (!m) return { error: `Bad balloon "${p}" — use "start-end".` };
+        const s = Number(m[1]);
+        const e = Number(m[2]);
+        if (e < s) return { error: `Balloon "${p}" ends before it starts.` };
+        pts.push([s, e]);
+      }
+      const n = pts.length;
+      const lo = Math.min(...pts.map((p) => p[0]));
+      const hi = Math.max(...pts.map((p) => p[1]));
+      const steps: Step[] = [];
+      let best = n;
+      let bestShots = pts.map((p) => p[1]);
+      let tried = 0;
+      const view = (shots: number[]): IntervalsState => ({
+        intervals: pts.map(([s, e]) => ({ s, e, label: `${s}–${e}`, mark: shots.some((x) => s <= x && x <= e) ? ('good' as const) : ('dim' as const) })),
+        domain: [lo, hi],
+        aggs: [
+          { label: 'shots tried', value: shots.join(', ') || '—', c: 'a' },
+          { label: 'fewest so far', value: String(best), c: 'c' },
+          { label: 'subsets checked', value: String(tried), c: 'b' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Any arrow can slide right to some balloon’s right edge without losing hits, so only those ', A(n), ' positions need testing.'], state: view([]) });
+      for (let mask = 1; mask < 1 << n; mask++) {
+        const shots = pts.filter((_, i) => mask >> i & 1).map((p) => p[1]);
+        if (shots.length >= best) continue;
+        tried++;
+        const all = pts.every(([s, e]) => shots.some((x) => s <= x && x <= e));
+        if (all) {
+          best = shots.length;
+          bestShots = shots;
+          steps.push({ tag: 'hit', trace: ['Shots at ', B(shots.join(', ')), ' burst every balloon — ', B(best), ' arrow(s).'], state: view(shots) });
+        } else if (steps.length < 30) {
+          steps.push({ tag: 'try', trace: ['Shots at ', A(shots.join(', ')), ' miss some balloons.'], state: view(shots) });
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Fewest arrows: ', C(best), '.'], state: view(bestShots) });
+      return { steps, result: String(best), resultDetail: `shots at ${[...bestShots].sort((a, b) => a - b).join(', ')}` };
+    },
+    note: 'Exponential in the number of balloons. Sorting by right edge and shooting at the first unburst balloon’s right edge is provably optimal and takes O(n log n).',
+    complexity: { time: 'O(2ⁿ · n²)', space: 'O(n)' },
+  },
 };
 
 /* ================= Queue Reconstruction by Height ================= */
@@ -553,6 +886,86 @@ const queueReconstruction: ProblemDef = {
   },
   note: 'Inserting a shorter person later never disturbs an earlier placement, because taller people simply do not count them — that is what makes tallest-first order safe. Within one height the smaller count must go first, otherwise the two would displace each other.',
   complexity: { time: 'O(n²) with array insertion', space: 'O(n)' },
+  brute: {
+    label: 'Shortest first into empty slots',
+    technique: 'Sort shortest first; each person takes the (k+1)-th slot that is still empty or will hold someone at least as tall.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> reconstructQueue(vector<vector<int>>& people) {'),
+        L('        sort(people.begin(), people.end(), [](auto& a, auto& b) {', 'sort'),
+        L('            return a[0] != b[0] ? a[0] < b[0] : a[1] > b[1];', 'sort'),
+        L('        });'),
+        L('        int n = people.size();', 'sort'),
+        L('        vector<vector<int>> res(n);', 'sort'),
+        L('        for (auto& p : people) {', 'place'),
+        L('            int skip = p[1];', 'place'),
+        L('            for (int i = 0; i < n; i++)', 'place'),
+        L('                if (res[i].empty()) { if (skip-- == 0) { res[i] = p; break; } }', 'place'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[][] reconstructQueue(int[][] people) {'),
+        L('        Arrays.sort(people, (a, b) -> a[0] != b[0] ? a[0] - b[0] : b[1] - a[1]);', 'sort'),
+        L('        int n = people.length;', 'sort'),
+        L('        int[][] res = new int[n][];', 'sort'),
+        L('        for (int[] p : people) {', 'place'),
+        L('            int skip = p[1];', 'place'),
+        L('            for (int i = 0; i < n; i++)', 'place'),
+        L('                if (res[i] == null && skip-- == 0) { res[i] = p; break; }', 'place'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parts = (values.people ?? '').split(/[;|]/).map((p) => p.trim()).filter(Boolean);
+      if (parts.length === 0) return { error: 'Enter people like "7,0; 4,4".' };
+      if (parts.length > 8) return { error: 'Keep it to at most 8 people.' };
+      const people: [number, number][] = [];
+      for (const p of parts) {
+        const m = p.match(/^(\d+)\s*,\s*(\d+)$/);
+        if (!m) return { error: `Bad entry "${p}" — use "height,count".` };
+        people.push([Number(m[1]), Number(m[2])]);
+      }
+      if (people.some(([, k]) => k >= people.length)) return { error: 'A count cannot be larger than the number of other people.' };
+      const n = people.length;
+      const sorted = [...people].sort((a, b) => (a[0] !== b[0] ? a[0] - b[0] : b[1] - a[1]));
+      const res: ([number, number] | null)[] = Array(n).fill(null);
+      const steps: Step[] = [];
+      const st = (hl?: number): ArrayState => ({
+        arr: res.map((p) => (p ? `${p[0]},${p[1]}` : '·')),
+        mark: hl !== undefined ? { [hl]: 'active' } : {},
+      });
+      steps.push({ tag: 'sort', trace: ['Sort shortest first (ties: larger k first): ', A(sorted.map(([h, k]) => `[${h},${k}]`).join(' ')), '. Every empty slot will later hold someone at least as tall.'], state: st() });
+      for (const p of sorted) {
+        let skip = p[1];
+        let at = -1;
+        for (let i = 0; i < n; i++)
+          if (!res[i]) {
+            if (skip === 0) {
+              at = i;
+              break;
+            }
+            skip--;
+          }
+        if (at < 0) return { error: 'These (height, count) pairs cannot form a valid queue.' };
+        res[at] = p;
+        steps.push({ tag: 'place', trace: ['[', A(p[0]), ',', A(p[1]), '] needs ', A(p[1]), ' taller-or-equal people ahead: skip that many empty slots and take slot ', B(at), '.'], state: st(at) });
+      }
+      const out = (res as [number, number][]).map(([h, k]) => `[${h},${k}]`).join(', ');
+      steps.push({ tag: 'ret', trace: ['Queue: ', C(out), '.'], state: st() });
+      return { steps, result: out };
+    },
+    note: 'The mirror image of the tallest-first method: here the empty slots stand in for taller people still to come. Both are O(n²); a Fenwick tree can find the k-th empty slot in O(log n) for O(n log n) overall.',
+    complexity: { time: 'O(n²)', space: 'O(n)' },
+  },
 };
 
 /* ============================================================
@@ -674,6 +1087,51 @@ const reverseWords: ProblemDef = {
   },
   note: 'The double reversal is the classic in-place trick and generalises to rotating an array by k. Most of the difficulty here is not the reversal but the whitespace contract — leading, trailing and repeated spaces must all collapse to exactly one separator.',
   complexity: { time: 'O(n)', space: 'O(n) for the output' },
+  brute: {
+    label: 'Split & join',
+    technique: 'Split on spaces, drop empty pieces, reverse the list of words, and join with single spaces.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string reverseWords(string s) {'),
+        L('        stringstream in(s); vector<string> words; string w;', 'split'),
+        L('        while (in >> w) words.push_back(w);', 'split'),
+        L('        reverse(words.begin(), words.end());', 'reverse'),
+        L('        string out;', 'join'),
+        L('        for (auto& x : words) out += (out.empty() ? "" : " ") + x;', 'join'),
+        L('        return out;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String reverseWords(String s) {'),
+        L('        String[] words = s.trim().split("\\\\s+");', 'split'),
+        L('        Collections.reverse(Arrays.asList(words));', 'reverse'),
+        L('        return String.join(" ", words);', 'join', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = values.s ?? '';
+      if (s.trim().length === 0) return { error: 'Enter a sentence with at least one word.' };
+      if (s.length > 24) return { error: 'Keep it to at most 24 characters.' };
+      if (!/^[a-zA-Z ]+$/.test(s)) return { error: 'Use letters and spaces only.' };
+      const steps: Step[] = [];
+      const words = s.split(' ').filter(Boolean);
+      steps.push({ tag: 'split', trace: ['Split on spaces and drop the empty pieces: ', A(words.map((w) => `"${w}"`).join(', ')), '.'], state: { arr: words } });
+      const rev = [...words].reverse();
+      steps.push({ tag: 'reverse', trace: ['Reverse the list of words.'], state: { arr: rev, mark: Object.fromEntries(rev.map((_, i) => [i, 'active' as const])) } });
+      const result = rev.join(' ');
+      steps.push({ tag: 'join', trace: ['Join with single spaces: "', C(result), '".'], state: { arr: result.split('').map((c) => (c === ' ' ? '␣' : c)), mark: Object.fromEntries(result.split('').map((_, i) => [i, 'final' as const])) } });
+      steps.push({ tag: 'ret', trace: ['Result: "', C(result), '".'], state: { arr: rev, mark: Object.fromEntries(rev.map((_, i) => [i, 'final' as const])) } });
+      return { steps, result };
+    },
+    note: 'The shortest, most readable solution and also O(n) — but it allocates a list of word strings. The double-reversal method works on a single character buffer, which matters in languages with mutable strings.',
+    complexity: { time: 'O(n)', space: 'O(n) for the word list' },
+  },
 };
 
 /* ================= Isomorphic Strings ================= */
@@ -782,6 +1240,60 @@ const isomorphicStrings: ProblemDef = {
   },
   note: 'The reverse map is the whole point of the problem — "badc" and "baba" pass a forward-only check and are still not isomorphic. Comparing the index of first occurrence for each character is a neat one-map alternative that captures the same bijection.',
   complexity: { time: 'O(n)', space: 'O(1) — bounded alphabet' },
+  brute: {
+    label: 'Compare every pair',
+    technique: 'For every pair of positions (i, j), s[i] = s[j] must hold exactly when t[i] = t[j].',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isIsomorphic(string s, string t) {'),
+        L('        if (s.size() != t.size()) return false;', 'len'),
+        L('        for (int i = 0; i < s.size(); i++)', 'pair'),
+        L('            for (int j = i + 1; j < s.size(); j++)', 'pair'),
+        L('                if ((s[i] == s[j]) != (t[i] == t[j])) return false;', 'pair', 'bad'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isIsomorphic(String s, String t) {'),
+        L('        if (s.length() != t.length()) return false;', 'len'),
+        L('        for (int i = 0; i < s.length(); i++)', 'pair'),
+        L('            for (int j = i + 1; j < s.length(); j++)', 'pair'),
+        L('                if ((s.charAt(i) == s.charAt(j)) != (t.charAt(i) == t.charAt(j))) return false;', 'pair', 'bad'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      const t = (values.t ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,12}$/.test(s) || !/^[a-z]{1,12}$/.test(t)) return { error: 'Both strings: 1–12 lowercase letters.' };
+      const steps: Step[] = [];
+      const st = (mark: ArrayState['mark'] = {}): ArrayState => ({ arr: s.split('').map((c, k) => `${c}→${t[k] ?? '?'}`), mark });
+      if (s.length !== t.length) {
+        steps.push({ tag: 'len', trace: ['Different lengths — ', C('false'), '.'], state: st() });
+        return { steps, result: 'false' };
+      }
+      steps.push({ tag: 'pair', trace: ['No maps: check that every pair of positions agrees in both strings.'], state: st() });
+      for (let i = 0; i < s.length; i++)
+        for (let j = i + 1; j < s.length; j++) {
+          const bad = (s[i] === s[j]) !== (t[i] === t[j]);
+          if (bad) {
+            steps.push({ tag: 'bad', trace: ['Positions ', A(i), ' and ', A(j), ': s says ', F(s[i] === s[j] ? 'same' : 'different'), ' but t says ', F(t[i] === t[j] ? 'same' : 'different'), ' — ', C('false'), '.'], state: st({ [i]: 'dim', [j]: 'dim' }) });
+            return { steps, result: 'false', resultDetail: `conflict at index ${j}` };
+          }
+          if (s[i] === s[j] && steps.length < 40) steps.push({ tag: 'pair', trace: ['Positions ', A(i), ' and ', A(j), ' match in both strings.'], state: st({ [i]: 'good', [j]: 'good' }) });
+        }
+      steps.push({ tag: 'ret', trace: ['Every pair agrees — ', C('true'), '.'], state: st() });
+      return { steps, result: 'true' };
+    },
+    note: 'O(n²) pair checks with no extra memory. Two character maps (s→t and t→s) check the same one-to-one condition in a single pass.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Repeated Substring Pattern ================= */
@@ -896,6 +1408,66 @@ const repeatedSubstring: ProblemDef = {
   },
   note: 'The condition n % (n − lps[n−1]) == 0 works because n − lps[n−1] is the string\'s smallest period; the string tiles exactly when that period divides the length. The neat one-liner (s+s).substring(1, 2n−1).contains(s) is equivalent, but this version explains why.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Try every period',
+    technique: 'For each length p that divides n, check whether repeating s[0..p) n / p times rebuilds s.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool repeatedSubstringPattern(string s) {'),
+        L('        int n = s.size();', 'init'),
+        L('        for (int p = 1; p <= n / 2; p++) {', 'try'),
+        L('            if (n % p) continue;', 'try'),
+        L('            string rep;', 'try'),
+        L('            for (int k = 0; k < n / p; k++) rep += s.substr(0, p);', 'try'),
+        L('            if (rep == s) return true;', 'hit'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean repeatedSubstringPattern(String s) {'),
+        L('        int n = s.length();', 'init'),
+        L('        for (int p = 1; p <= n / 2; p++) {', 'try'),
+        L('            if (n % p != 0) continue;', 'try'),
+        L('            if (s.substring(0, p).repeat(n / p).equals(s)) return true;', 'try', 'hit'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,14}$/.test(s)) return { error: 'Use 1–14 lowercase letters.' };
+      const n = s.length;
+      const steps: Step[] = [];
+      const st = (p?: number, ok?: boolean): ArrayState => ({
+        arr: s.split(''),
+        mark: p ? Object.fromEntries(s.split('').map((_, i) => [i, i < p ? (ok ? 'final' : 'active') : ok ? 'good' : undefined]).filter(([, m]) => m)) : {},
+      });
+      steps.push({ tag: 'init', trace: ['A repeating unit must divide the length ', A(n), '. Try each such length.'], state: st() });
+      let period = 0;
+      for (let p = 1; p <= n / 2; p++) {
+        if (n % p) continue;
+        const unit = s.slice(0, p);
+        const ok = unit.repeat(n / p) === s;
+        steps.push({ tag: ok ? 'hit' : 'try', trace: ['"', A(unit), '" × ', A(n / p), ok ? [' = s — a match!'].join('') : ' ≠ s.'], state: st(p, ok) });
+        if (ok) {
+          period = p;
+          break;
+        }
+      }
+      const ok = period > 0;
+      steps.push({ tag: 'ret', trace: ['Answer: ', C(String(ok)), '.'], state: st(period || undefined, ok) });
+      return { steps, result: ok ? 'true' : 'false', resultDetail: ok ? `"${s.slice(0, period)}" × ${n / period}` : undefined };
+    },
+    note: 'Each candidate period costs O(n) to verify, and there are up to d(n) divisors, so this is O(n · d(n)). The KMP failure function reads the smallest period straight off lps[n − 1] in O(n).',
+    complexity: { time: 'O(n · d(n))', space: 'O(n)' },
+  },
 };
 
 /* ================= Add Binary ================= */
@@ -1008,6 +1580,52 @@ const addBinary: ProblemDef = {
   },
   note: 'Keeping the carry in the loop condition handles the case where the result is one digit longer than either input, with no special case afterwards. Converting to integers first would be shorter but breaks immediately on the long inputs the problem allows — string arithmetic is the point.',
   complexity: { time: 'O(max(m, n))', space: 'O(max(m, n))' },
+  brute: {
+    label: 'Convert, add, convert back',
+    technique: 'Parse both strings as integers, add them, and write the sum back in base 2.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string addBinary(string a, string b) {'),
+        L('        unsigned long long x = stoull(a, nullptr, 2), y = stoull(b, nullptr, 2);', 'parse'),
+        L('        unsigned long long sum = x + y;', 'add'),
+        L('        if (sum == 0) return "0";', 'ret'),
+        L('        string out;', 'back'),
+        L('        while (sum) { out += char(\'0\' + sum % 2); sum /= 2; }', 'back'),
+        L('        reverse(out.begin(), out.end());', 'back'),
+        L('        return out;  // overflows past 64 bits!', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String addBinary(String a, String b) {'),
+        L('        BigInteger x = new BigInteger(a, 2), y = new BigInteger(b, 2);', 'parse'),
+        L('        BigInteger sum = x.add(y);', 'add'),
+        L('        return sum.toString(2);', 'back', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = (values.a ?? '').trim();
+      const b = (values.b ?? '').trim();
+      if (!/^[01]{1,12}$/.test(a) || !/^[01]{1,12}$/.test(b)) return { error: 'Both inputs: 1–12 binary digits (0 and 1 only).' };
+      const x = parseInt(a, 2);
+      const y = parseInt(b, 2);
+      const sum = x + y;
+      const res = sum.toString(2);
+      const steps: Step[] = [];
+      steps.push({ tag: 'parse', trace: ['Read "', A(a), '" as ', B(x), ' and "', A(b), '" as ', B(y), ' (base 10).'], state: { arr: [a, b], aggs: [{ label: 'values', value: `${x} + ${y}`, c: 'a' }] } });
+      steps.push({ tag: 'add', trace: ['Add them: ', B(sum), '.'], state: { arr: [String(sum)], aggs: [{ label: 'sum', value: String(sum), c: 'b' }] } });
+      steps.push({ tag: 'back', trace: ['Write ', A(sum), ' in base 2: ', C(res), '.'], state: { arr: res.split(''), mark: Object.fromEntries(res.split('').map((_, i) => [i, 'final' as const])) } });
+      steps.push({ tag: 'ret', trace: ['Result: ', C(res), '.'], state: { arr: res.split(''), mark: Object.fromEntries(res.split('').map((_, i) => [i, 'final' as const])) } });
+      return { steps, result: res };
+    },
+    note: 'Fine for short inputs, but LeetCode strings can be 10⁴ digits long — far beyond 64-bit integers, so C++ overflows and Java needs BigInteger. Column addition with a carry handles any length in O(n).',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Longest Happy Prefix ================= */
@@ -1112,6 +1730,66 @@ const longestHappyPrefix: ProblemDef = {
   },
   note: 'The fallback chain is what makes this O(n): on a mismatch, lps[len−1] is the length of the next candidate prefix, so no character is ever re-examined from scratch. Rolling hashes solve it too, but carry collision risk that this exact method does not.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Try every length',
+    technique: 'From the longest proper length down, compare the prefix and suffix of that length directly.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string longestPrefix(string s) {'),
+        L('        int n = s.size();', 'init'),
+        L('        for (int len = n - 1; len > 0; len--)', 'try'),
+        L('            if (s.compare(0, len, s, n - len, len) == 0)', 'try', 'hit'),
+        L('                return s.substr(0, len);', 'hit'),
+        L('        return "";', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String longestPrefix(String s) {'),
+        L('        int n = s.length();', 'init'),
+        L('        for (int len = n - 1; len > 0; len--)', 'try'),
+        L('            if (s.substring(0, len).equals(s.substring(n - len)))', 'try', 'hit'),
+        L('                return s.substring(0, len);', 'hit'),
+        L('        return "";', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,14}$/.test(s)) return { error: 'Use 1–14 lowercase letters.' };
+      const n = s.length;
+      const steps: Step[] = [];
+      let compares = 0;
+      const st = (len: number, ok: boolean): ArrayState => ({
+        arr: s.split(''),
+        mark: Object.fromEntries(s.split('').map((_, i) => [i, i < len ? (ok ? 'final' : 'active') : i >= n - len ? (ok ? 'final' : 'src') : undefined]).filter(([, m]) => m)),
+        aggs: [{ label: 'characters compared', value: String(compares), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['Try every proper length from ', A(n - 1), ' down; the first prefix that equals the suffix wins.'], state: st(0, false) });
+      let ans = '';
+      for (let len = n - 1; len > 0; len--) {
+        const pre = s.slice(0, len);
+        const suf = s.slice(n - len);
+        let k = 0;
+        while (k < len && pre[k] === suf[k]) k++;
+        compares += Math.min(k + 1, len);
+        if (pre === suf) {
+          ans = pre;
+          steps.push({ tag: 'hit', trace: ['Length ', A(len), ': "', B(pre), '" = "', B(suf), '" — found.'], state: st(len, true) });
+          break;
+        }
+        steps.push({ tag: 'try', trace: ['Length ', A(len), ': "', F(pre), '" ≠ "', F(suf), '".'], state: st(len, false) });
+      }
+      steps.push({ tag: 'ret', trace: ['Longest happy prefix: "', C(ans), '".'], state: st(ans.length, !!ans) });
+      return { steps, result: ans || '""', resultDetail: `length ${ans.length}` };
+    },
+    note: 'Up to n lengths, each compared in O(n), so O(n²) in the worst case (e.g. "aaaa…ab"). The KMP failure function computes this exact value — lps[n − 1] — in one linear pass.',
+    complexity: { time: 'O(n²)', space: 'O(n)' },
+  },
 };
 
 /* ============================================================
@@ -1258,6 +1936,91 @@ const intervalIntersections: ProblemDef = {
   },
   note: 'Advancing whichever interval ends first is safe because that interval is finished with everything remaining in the other list — its end is below every later start. Each pointer moves at most n times, giving one clean linear pass instead of an O(m·n) pairwise comparison.',
   complexity: { time: 'O(m + n)', space: 'O(1) beyond output' },
+  brute: {
+    label: 'Check every pair',
+    technique: 'Intersect every interval of A with every interval of B and keep the non-empty overlaps.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> intervalIntersection(vector<vector<int>>& a, vector<vector<int>>& b) {'),
+        L('        vector<vector<int>> res;', 'init'),
+        L('        for (auto& x : a)', 'pair'),
+        L('            for (auto& y : b) {', 'pair'),
+        L('                int lo = max(x[0], y[0]), hi = min(x[1], y[1]);', 'pair'),
+        L('                if (lo <= hi) res.push_back({lo, hi});', 'hit'),
+        L('            }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[][] intervalIntersection(int[][] a, int[][] b) {'),
+        L('        List<int[]> res = new ArrayList<>();', 'init'),
+        L('        for (int[] x : a)', 'pair'),
+        L('            for (int[] y : b) {', 'pair'),
+        L('                int lo = Math.max(x[0], y[0]), hi = Math.min(x[1], y[1]);', 'pair'),
+        L('                if (lo <= hi) res.add(new int[]{lo, hi});', 'hit'),
+        L('            }'),
+        L('        return res.toArray(new int[0][]);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parse = (raw: string, label: string): [number, number][] | string => {
+        const parts = (raw ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+        if (parts.length === 0) return `${label} is empty — enter intervals like "0-2, 5-10".`;
+        if (parts.length > 6) return `Keep ${label} to at most 6 intervals.`;
+        const out: [number, number][] = [];
+        for (const p of parts) {
+          const m = p.match(/^(-?\d+)\s*[-–:]\s*(-?\d+)$/);
+          if (!m) return `Bad interval "${p}" in ${label} — use "start-end".`;
+          const s = Number(m[1]);
+          const e = Number(m[2]);
+          if (e < s) return `Interval "${p}" ends before it starts.`;
+          out.push([s, e]);
+        }
+        for (let k = 1; k < out.length; k++) if (out[k][0] < out[k - 1][1]) return `${label} must be sorted and disjoint.`;
+        return out;
+      };
+      const listA = parse(values.a, 'List A');
+      if (typeof listA === 'string') return { error: listA };
+      const listB = parse(values.b, 'List B');
+      if (typeof listB === 'string') return { error: listB };
+      const lo = Math.min(listA[0][0], listB[0][0]);
+      const hi = Math.max(listA[listA.length - 1][1], listB[listB.length - 1][1]);
+      const steps: Step[] = [];
+      const res: [number, number][] = [];
+      const view = (i?: number, j?: number): IntervalsState => ({
+        intervals: [
+          ...listA.map(([s, e], k) => ({ s, e, label: `A${k}`, mark: k === i ? ('active' as const) : undefined })),
+          ...listB.map(([s, e], k) => ({ s, e, label: `B${k}`, mark: k === j ? ('active' as const) : undefined })),
+          ...res.map(([s, e]) => ({ s, e, label: 'overlap', mark: 'final' as const })),
+        ],
+        domain: [lo, hi],
+        aggs: [{ label: 'pairs checked', value: `${i === undefined ? 0 : i * listB.length + (j ?? 0) + 1} / ${listA.length * listB.length}`, c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['No two pointers: intersect all ', A(listA.length * listB.length), ' pairs.'], state: view() });
+      listA.forEach(([as, ae], i) =>
+        listB.forEach(([bs, be], j) => {
+          const s = Math.max(as, bs);
+          const e = Math.min(ae, be);
+          if (s <= e) {
+            res.push([s, e]);
+            steps.push({ tag: 'hit', trace: ['A', A(i), ' ∩ B', A(j), ' = [', B(s), ',', B(e), '].'], state: view(i, j) });
+          } else if (steps.length < 40) {
+            steps.push({ tag: 'pair', trace: ['A', A(i), ' and B', A(j), ' do not overlap.'], state: view(i, j) });
+          }
+        }),
+      );
+      steps.push({ tag: 'ret', trace: res.length ? ['Intersections: ', C(res.map((p) => `[${p[0]},${p[1]}]`).join(', ')), '.'] : ['No overlaps.'], state: view() });
+      return { steps, result: res.length ? res.map((p) => `[${p[0]},${p[1]}]`).join(', ') : 'none' };
+    },
+    note: 'Every pair is examined, so the cost is O(m·n) even though most pairs are far apart. Because both lists are sorted and disjoint, two pointers that advance whichever interval ends first visit each interval once.',
+    complexity: { time: 'O(m·n)', space: 'O(1) beyond output' },
+  },
 };
 
 export const greedyStrings2: ProblemDef[] = [
