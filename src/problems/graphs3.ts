@@ -154,6 +154,96 @@ const floodFill: ProblemDef = {
   },
   note: 'Overwriting the colour is what doubles as the visited marker, so no separate seen array is needed — but only because the new colour differs from the old. That single guard is the entire trick to the problem; without it the recursion never terminates.',
   complexity: { time: 'O(R·C)', space: 'O(R·C) recursion' },
+  brute: {
+    label: 'BFS with a queue',
+    technique: 'Paint breadth-first: recolour the start pixel, then repeatedly dequeue a pixel and enqueue its same-coloured neighbours.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> floodFill(vector<vector<int>>& g, int sr, int sc, int color) {'),
+        L('        int old = g[sr][sc];', 'init'),
+        L('        if (old == color) return g;', 'guard'),
+        L('        queue<pair<int,int>> q; q.push({sr, sc}); g[sr][sc] = color;', 'paint'),
+        L('        while (!q.empty()) {', 'paint'),
+        L('            auto [r, c] = q.front(); q.pop();', 'paint'),
+        L('            for (auto [dr, dc] : {pair{1,0}, {-1,0}, {0,1}, {0,-1}}) {', 'paint'),
+        L('                int nr = r + dr, nc = c + dc;', 'paint'),
+        L('                if (nr >= 0 && nc >= 0 && nr < g.size() && nc < g[0].size() && g[nr][nc] == old)', 'paint'),
+        L('                    { g[nr][nc] = color; q.push({nr, nc}); }', 'paint'),
+        L('            }'),
+        L('        }'),
+        L('        return g;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[][] floodFill(int[][] g, int sr, int sc, int color) {'),
+        L('        int old = g[sr][sc];', 'init'),
+        L('        if (old == color) return g;', 'guard'),
+        L('        Deque<int[]> q = new ArrayDeque<>(); q.add(new int[]{sr, sc}); g[sr][sc] = color;', 'paint'),
+        L('        int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};', 'paint'),
+        L('        while (!q.isEmpty()) {', 'paint'),
+        L('            int[] p = q.poll();', 'paint'),
+        L('            for (int[] d : dirs) {', 'paint'),
+        L('                int nr = p[0] + d[0], nc = p[1] + d[1];', 'paint'),
+        L('                if (nr >= 0 && nc >= 0 && nr < g.length && nc < g[0].length && g[nr][nc] == old)', 'paint'),
+        L('                    { g[nr][nc] = color; q.add(new int[]{nr, nc}); }', 'paint'),
+        L('            }'),
+        L('        }'),
+        L('        return g;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g0 = numGrid(values.grid);
+      if (typeof g0 === 'string') return { error: g0 };
+      const g = g0.map((r) => [...r]);
+      const R = g.length;
+      const Cn = g[0].length;
+      const sr = Number(values.sr);
+      const sc = Number(values.sc);
+      if (!Number.isInteger(sr) || sr < 0 || sr >= R) return { error: `Start row must be between 0 and ${R - 1}.` };
+      if (!Number.isInteger(sc) || sc < 0 || sc >= Cn) return { error: `Start column must be between 0 and ${Cn - 1}.` };
+      const color = Number(values.color);
+      if (!Number.isInteger(color)) return { error: 'New colour must be an integer.' };
+      const old = g[sr][sc];
+      const painted = new Set<string>();
+      const steps: Step[] = [];
+      const view = (active?: string, queued: string[] = []): MatrixState => ({
+        grid: g.map((r) => [...r]),
+        ...labels(R, Cn),
+        mark: { ...Object.fromEntries([...painted].map((k) => [k, 'good' as const])), ...Object.fromEntries(queued.map((k) => [k, 'win' as const])), ...(active ? { [active]: 'active' as const } : {}) },
+      });
+      steps.push({ tag: 'init', trace: ['Start pixel colour is ', A(old), '. Spread level by level with a queue.'], state: view(`${sr},${sc}`) });
+      if (old === color) {
+        steps.push({ tag: 'guard', trace: ['Already colour ', F(color), ' — nothing to do.'], state: view() });
+        return { steps, result: g.map((r) => r.join('')).join(';') };
+      }
+      g[sr][sc] = color;
+      painted.add(`${sr},${sc}`);
+      const q: [number, number][] = [[sr, sc]];
+      while (q.length && steps.length < MAX_STEPS) {
+        const [r, c] = q.shift()!;
+        for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr >= 0 && nc >= 0 && nr < R && nc < Cn && g[nr][nc] === old) {
+            g[nr][nc] = color;
+            painted.add(`${nr},${nc}`);
+            q.push([nr, nc]);
+          }
+        }
+        steps.push({ tag: 'paint', trace: ['Dequeue (', A(r), ',', A(c), ') and paint its matching neighbours — ', A(q.length), ' pixel(s) waiting.'], state: view(`${r},${c}`, q.map(([a, b]) => `${a},${b}`)) });
+      }
+      steps.push({ tag: 'ret', trace: ['Done — ', C(painted.size), ' pixel(s) repainted.'], state: view() });
+      return { steps, result: g.map((r) => r.join('')).join(';'), resultDetail: `${painted.size} pixels changed` };
+    },
+    note: 'Same O(R·C) work as the recursive DFS, painting pixels in rings around the start instead of along one deep path. The queue avoids stack overflow on large regions.',
+    complexity: { time: 'O(R·C)', space: 'O(R·C) queue' },
+  },
 };
 
 /* ================= 01 Matrix ================= */
@@ -295,6 +385,83 @@ const zeroOneMatrix: ProblemDef = {
   },
   note: 'Multi-source BFS works because the queue stays sorted by distance no matter how many starting points there are — the first time a cell is reached is via the nearest source. Marking distance at enqueue time rather than dequeue time is what stops a cell being queued twice.',
   complexity: { time: 'O(R·C)', space: 'O(R·C)' },
+  brute: {
+    label: 'Measure against every 0',
+    technique: 'For every 1-cell, compute the Manhattan distance to every 0-cell and keep the smallest.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> updateMatrix(vector<vector<int>>& m) {'),
+        L('        int R = m.size(), C = m[0].size();', 'init'),
+        L('        vector<vector<int>> d(R, vector<int>(C, 0));', 'init'),
+        L('        for (int r = 0; r < R; r++) for (int c = 0; c < C; c++) if (m[r][c] == 1) {', 'cell'),
+        L('            int best = INT_MAX;', 'cell'),
+        L('            for (int zr = 0; zr < R; zr++) for (int zc = 0; zc < C; zc++)', 'cell'),
+        L('                if (m[zr][zc] == 0) best = min(best, abs(r - zr) + abs(c - zc));', 'cell'),
+        L('            d[r][c] = best;', 'cell'),
+        L('        }'),
+        L('        return d;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[][] updateMatrix(int[][] m) {'),
+        L('        int R = m.length, C = m[0].length;', 'init'),
+        L('        int[][] d = new int[R][C];', 'init'),
+        L('        for (int r = 0; r < R; r++) for (int c = 0; c < C; c++) if (m[r][c] == 1) {', 'cell'),
+        L('            int best = Integer.MAX_VALUE;', 'cell'),
+        L('            for (int zr = 0; zr < R; zr++) for (int zc = 0; zc < C; zc++)', 'cell'),
+        L('                if (m[zr][zc] == 0) best = Math.min(best, Math.abs(r - zr) + Math.abs(c - zc));', 'cell'),
+        L('            d[r][c] = best;', 'cell'),
+        L('        }'),
+        L('        return d;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const m = numGrid(values.grid, 5, 5);
+      if (typeof m === 'string') return { error: m };
+      if (!m.every((r) => r.every((v) => v === 0 || v === 1))) return { error: 'Use only 0 and 1.' };
+      if (!m.some((r) => r.some((v) => v === 0))) return { error: 'The grid needs at least one 0.' };
+      const R = m.length;
+      const Cn = m[0].length;
+      const zeros: [number, number][] = [];
+      m.forEach((row, r) => row.forEach((v, c) => v === 0 && zeros.push([r, c])));
+      const d: number[][] = m.map((r) => r.map((v) => (v === 0 ? 0 : -1)));
+      let checks = 0;
+      const steps: Step[] = [];
+      const view = (active?: [number, number], near?: [number, number]): MatrixState => ({
+        grid: d.map((r) => r.map((v) => (v === -1 ? '?' : v))),
+        ...labels(R, Cn),
+        mark: { ...(near ? { [`${near[0]},${near[1]}`]: 'good' as const } : {}), ...(active ? { [`${active[0]},${active[1]}`]: 'active' as const } : {}) },
+        aggs: [{ label: 'distance checks', value: String(checks), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['0-cells are already distance 0. Every 1-cell will be compared with all ', A(zeros.length), ' zeros.'], state: view() });
+      for (let r = 0; r < R; r++)
+        for (let c = 0; c < Cn; c++) {
+          if (m[r][c] !== 1) continue;
+          let best = Infinity;
+          let near: [number, number] = zeros[0];
+          for (const [zr, zc] of zeros) {
+            checks++;
+            const dd = Math.abs(r - zr) + Math.abs(c - zc);
+            if (dd < best) {
+              best = dd;
+              near = [zr, zc];
+            }
+          }
+          d[r][c] = best;
+          steps.push({ tag: 'cell', trace: ['(', A(r), ',', A(c), '): nearest 0 is at (', B(near[0]), ',', B(near[1]), '), distance ', B(best), '.'], state: view([r, c], near) });
+        }
+      steps.push({ tag: 'ret', trace: ['All distances filled after ', A(checks), ' checks.'], state: view() });
+      return { steps, result: d.map((r) => r.join(',')).join(';') };
+    },
+    note: 'Every 1 is compared with every 0, which is O((R·C)²) in the worst case. Multi-source BFS from all zeros at once reaches each cell exactly once, at its shortest distance.',
+    complexity: { time: 'O((R·C)²)', space: 'O(1) extra' },
+  },
 };
 
 /* ================= Shortest Path in Binary Matrix ================= */
@@ -435,6 +602,101 @@ const shortestPathBinary: ProblemDef = {
   },
   note: 'BFS is the right tool precisely because every move costs the same — with varying costs you would need Dijkstra. Marking a cell blocked the moment it is enqueued, not when dequeued, keeps the queue linear in grid size; the lazier version can queue the same cell many times over.',
   complexity: { time: 'O(n²)', space: 'O(n²)' },
+  brute: {
+    label: 'Relax until stable',
+    technique: 'Start with distance 1 at the top-left and keep sweeping the grid, lowering each cell to 1 + its best neighbour, until nothing changes.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int shortestPathBinaryMatrix(vector<vector<int>>& g) {'),
+        L('        int n = g.size();', 'init'),
+        L('        if (g[0][0] || g[n-1][n-1]) return -1;', 'blocked'),
+        L('        vector<vector<int>> d(n, vector<int>(n, INT_MAX)); d[0][0] = 1;', 'init'),
+        L('        for (bool changed = true; changed; ) {', 'sweep'),
+        L('            changed = false;', 'sweep'),
+        L('            for (int r = 0; r < n; r++) for (int c = 0; c < n; c++) if (!g[r][c])', 'sweep'),
+        L('                for (int dr = -1; dr <= 1; dr++) for (int dc = -1; dc <= 1; dc++) {', 'sweep'),
+        L('                    int pr = r + dr, pc = c + dc;', 'sweep'),
+        L('                    if (pr >= 0 && pc >= 0 && pr < n && pc < n && d[pr][pc] != INT_MAX && d[pr][pc] + 1 < d[r][c])', 'sweep'),
+        L('                        { d[r][c] = d[pr][pc] + 1; changed = true; }', 'sweep'),
+        L('                }'),
+        L('        }'),
+        L('        return d[n-1][n-1] == INT_MAX ? -1 : d[n-1][n-1];', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int shortestPathBinaryMatrix(int[][] g) {'),
+        L('        int n = g.length;', 'init'),
+        L('        if (g[0][0] == 1 || g[n-1][n-1] == 1) return -1;', 'blocked'),
+        L('        int[][] d = new int[n][n];', 'init'),
+        L('        for (int[] row : d) Arrays.fill(row, Integer.MAX_VALUE);', 'init'),
+        L('        d[0][0] = 1;', 'init'),
+        L('        for (boolean changed = true; changed; ) {', 'sweep'),
+        L('            changed = false;', 'sweep'),
+        L('            for (int r = 0; r < n; r++) for (int c = 0; c < n; c++) if (g[r][c] == 0)', 'sweep'),
+        L('                for (int dr = -1; dr <= 1; dr++) for (int dc = -1; dc <= 1; dc++) {', 'sweep'),
+        L('                    int pr = r + dr, pc = c + dc;', 'sweep'),
+        L('                    if (pr >= 0 && pc >= 0 && pr < n && pc < n && d[pr][pc] != Integer.MAX_VALUE && d[pr][pc] + 1 < d[r][c])', 'sweep'),
+        L('                        { d[r][c] = d[pr][pc] + 1; changed = true; }', 'sweep'),
+        L('                }'),
+        L('        }'),
+        L('        return d[n-1][n-1] == Integer.MAX_VALUE ? -1 : d[n-1][n-1];', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = numGrid(values.grid, 6, 6);
+      if (typeof g === 'string') return { error: g };
+      const n = g.length;
+      if (!g.every((r) => r.length === n)) return { error: 'The grid must be square.' };
+      if (!g.every((r) => r.every((v) => v === 0 || v === 1))) return { error: 'Use only 0 and 1.' };
+      const d = g.map((r) => r.map(() => Infinity));
+      const steps: Step[] = [];
+      let sweeps = 0;
+      const view = (changed: string[] = []): MatrixState => ({
+        grid: g.map((row, r) => row.map((v, c) => (v === 1 ? '█' : d[r][c] === Infinity ? '·' : d[r][c]))),
+        ...labels(n, n),
+        mark: Object.fromEntries(changed.map((k) => [k, 'active' as const])),
+        aggs: [{ label: 'full sweeps', value: String(sweeps), c: 'a' }],
+      });
+      if (g[0][0] === 1 || g[n - 1][n - 1] === 1) {
+        steps.push({ tag: 'blocked', trace: ['Start or end is blocked — ', C('-1'), '.'], state: view() });
+        return { steps, result: '-1' };
+      }
+      d[0][0] = 1;
+      steps.push({ tag: 'init', trace: ['No queue: set the start to 1 and sweep the whole grid repeatedly, improving any cell that a neighbour can beat.'], state: view(['0,0']) });
+      let changed = true;
+      while (changed && sweeps < 40) {
+        changed = false;
+        sweeps++;
+        const improved: string[] = [];
+        for (let r = 0; r < n; r++)
+          for (let c = 0; c < n; c++) {
+            if (g[r][c]) continue;
+            for (let dr = -1; dr <= 1; dr++)
+              for (let dc = -1; dc <= 1; dc++) {
+                const pr = r + dr;
+                const pc = c + dc;
+                if (pr >= 0 && pc >= 0 && pr < n && pc < n && d[pr][pc] + 1 < d[r][c]) {
+                  d[r][c] = d[pr][pc] + 1;
+                  changed = true;
+                  improved.push(`${r},${c}`);
+                }
+              }
+          }
+        steps.push({ tag: 'sweep', trace: ['Sweep ', A(sweeps), ': ', changed ? [improved.length, ' cell(s) improved.'].join('') : 'nothing changed — distances are final.'], state: view(improved) });
+      }
+      const answer = d[n - 1][n - 1] === Infinity ? -1 : d[n - 1][n - 1];
+      steps.push({ tag: 'ret', trace: answer === -1 ? ['The bottom-right cell was never reached — ', C('-1'), '.'] : ['Shortest clear path visits ', C(answer), ' cell(s).'], state: view() });
+      return { steps, result: String(answer) };
+    },
+    note: 'Each sweep costs O(n²·8), and a winding path may need O(n²) sweeps before the distances settle — O(n⁴) overall. BFS reaches every cell once, in order of distance, so the first arrival is final.',
+    complexity: { time: 'O(n⁴)', space: 'O(n²)' },
+  },
 };
 
 /* ================= Path With Minimum Effort ================= */
@@ -587,6 +849,85 @@ const minimumEffort: ProblemDef = {
   },
   note: 'The proof Dijkstra needs is that extending a path never lowers its cost — true for max just as for sum, which is why the same greedy settling order is safe. Binary-searching the answer and running a plain BFS per guess is the other standard route, at O(R·C·log(maxHeight)).',
   complexity: { time: 'O(R·C·log(R·C))', space: 'O(R·C)' },
+  brute: {
+    label: 'Binary search + BFS',
+    technique: 'Guess an effort limit and BFS using only steps within it; binary search for the smallest limit that still reaches the corner.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    bool reachable(vector<vector<int>>& h, int limit);  // BFS using steps with |Δh| ≤ limit'),
+        L('public:'),
+        L('    int minimumEffortPath(vector<vector<int>>& h) {'),
+        L('        int lo = 0, hi = 1e6;', 'init'),
+        L('        while (lo < hi) {', 'try'),
+        L('            int mid = (lo + hi) / 2;', 'try'),
+        L('            if (reachable(h, mid)) hi = mid;', 'try', 'yes'),
+        L('            else lo = mid + 1;', 'no'),
+        L('        }'),
+        L('        return lo;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    boolean reachable(int[][] h, int limit) { /* BFS using steps with |Δh| ≤ limit */ }'),
+        L('    public int minimumEffortPath(int[][] h) {'),
+        L('        int lo = 0, hi = 1_000_000;', 'init'),
+        L('        while (lo < hi) {', 'try'),
+        L('            int mid = (lo + hi) / 2;', 'try'),
+        L('            if (reachable(h, mid)) hi = mid;', 'try', 'yes'),
+        L('            else lo = mid + 1;', 'no'),
+        L('        }'),
+        L('        return lo;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const h = numGrid(values.grid, 4, 4);
+      if (typeof h === 'string') return { error: h };
+      const R = h.length;
+      const Cn = h[0].length;
+      const steps: Step[] = [];
+      const reach = (limit: number) => {
+        const seen = new Set(['0,0']);
+        const q: [number, number][] = [[0, 0]];
+        while (q.length) {
+          const [r, c] = q.shift()!;
+          for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nr = r + dr;
+            const nc = c + dc;
+            if (nr >= 0 && nc >= 0 && nr < R && nc < Cn && !seen.has(`${nr},${nc}`) && Math.abs(h[nr][nc] - h[r][c]) <= limit) {
+              seen.add(`${nr},${nc}`);
+              q.push([nr, nc]);
+            }
+          }
+        }
+        return seen;
+      };
+      const view = (seen: Set<string>, ok: boolean, lo: number, hi: number): MatrixState => ({
+        grid: h,
+        ...labels(R, Cn),
+        mark: { ...Object.fromEntries([...seen].map((k) => [k, 'good' as const])), [`${R - 1},${Cn - 1}`]: ok ? ('final' as const) : ('dim' as const) },
+        aggs: [{ label: 'effort range', value: `[${lo}, ${hi}]`, c: 'a' }],
+      });
+      let lo = 0;
+      let hi = Math.max(...h.flat()) - Math.min(...h.flat());
+      steps.push({ tag: 'init', trace: ['The answer lies between 0 and the biggest height difference, ', A(hi), '. Binary search it, testing each guess with a BFS.'], state: view(new Set(['0,0']), false, lo, hi) });
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        const seen = reach(mid);
+        const ok = seen.has(`${R - 1},${Cn - 1}`);
+        steps.push({ tag: ok ? 'yes' : 'no', trace: ['Limit ', A(mid), ': BFS reaches ', A(seen.size), ' cell(s) — the corner is ', ok ? B('reachable, try lower') : F('not reachable, go higher'), '.'], state: view(seen, ok, lo, hi) });
+        if (ok) hi = mid;
+        else lo = mid + 1;
+      }
+      steps.push({ tag: 'ret', trace: ['Smallest workable effort: ', C(lo), '.'], state: view(reach(lo), true, lo, lo) });
+      return { steps, result: String(lo) };
+    },
+    note: 'Each guess costs one O(R·C) BFS and there are log(max height) guesses, so O(R·C · log H). It works because reachability only improves as the limit grows; Dijkstra on the max-step cost gets there directly.',
+    complexity: { time: 'O(R·C · log H)', space: 'O(R·C)' },
+  },
 };
 
 /* ================= Making A Large Island ================= */
@@ -753,6 +1094,94 @@ const makingLargeIsland: ProblemDef = {
   },
   note: 'Reusing 1 as a label would be ambiguous, which is why ids start at 2 — a cell value above 1 now means "belongs to island #value". The set around each zero is essential: a U-shaped island can touch the same gap twice, and adding its size twice inflates the answer.',
   complexity: { time: 'O(n²)', space: 'O(n²)' },
+  brute: {
+    label: 'Flip each 0 and re-measure',
+    technique: 'For every 0-cell, pretend to flip it to 1 and flood fill from it to measure the island it would join.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int largestIsland(vector<vector<int>>& g) {'),
+        L('        int n = g.size(), best = 0; bool anyZero = false;', 'label'),
+        L('        for (int r = 0; r < n; r++) for (int c = 0; c < n; c++) if (g[r][c] == 0) {', 'try'),
+        L('            anyZero = true;', 'try'),
+        L('            g[r][c] = 1;', 'try'),
+        L('            best = max(best, floodSize(g, r, c));  // fresh DFS each time', 'try'),
+        L('            g[r][c] = 0;', 'try'),
+        L('        }'),
+        L('        return anyZero ? best : n * n;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int largestIsland(int[][] g) {'),
+        L('        int n = g.length, best = 0; boolean anyZero = false;', 'label'),
+        L('        for (int r = 0; r < n; r++) for (int c = 0; c < n; c++) if (g[r][c] == 0) {', 'try'),
+        L('            anyZero = true;', 'try'),
+        L('            g[r][c] = 1;', 'try'),
+        L('            best = Math.max(best, floodSize(g, r, c));  // fresh DFS each time', 'try'),
+        L('            g[r][c] = 0;', 'try'),
+        L('        }'),
+        L('        return anyZero ? best : n * n;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g0 = numGrid(values.grid, 5, 5);
+      if (typeof g0 === 'string') return { error: g0 };
+      const n = g0.length;
+      if (!g0.every((r) => r.length === n)) return { error: 'The grid must be square.' };
+      if (!g0.every((r) => r.every((v) => v === 0 || v === 1))) return { error: 'Use only 0 and 1.' };
+      const g = g0.map((r) => [...r]);
+      let best = 0;
+      let bestCell: string | null = null;
+      let visits = 0;
+      const steps: Step[] = [];
+      const view = (flip?: string, island: string[] = []): MatrixState => ({
+        grid: g.map((r) => r.map((v) => (v === 0 ? '·' : '●'))),
+        ...labels(n, n),
+        mark: { ...Object.fromEntries(island.map((k) => [k, 'good' as const])), ...(flip ? { [flip]: 'active' as const } : {}) },
+        aggs: [
+          { label: 'best', value: String(best), c: 'c' },
+          { label: 'cells flooded in total', value: String(visits), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'label', trace: ['No island labels: try flipping each 0 and flood-fill from it to measure the result.'], state: view() });
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          if (g[r][c] !== 0) continue;
+          g[r][c] = 1;
+          const seen = new Set([`${r},${c}`]);
+          const stack: [number, number][] = [[r, c]];
+          while (stack.length) {
+            const [x, y] = stack.pop()!;
+            visits++;
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && ny >= 0 && nx < n && ny < n && g[nx][ny] === 1 && !seen.has(`${nx},${ny}`)) {
+                seen.add(`${nx},${ny}`);
+                stack.push([nx, ny]);
+              }
+            }
+          }
+          const better = seen.size > best;
+          if (better) {
+            best = seen.size;
+            bestCell = `${r},${c}`;
+          }
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'try', trace: ['Flip (', A(r), ',', A(c), '): the island through it has size ', better ? B(seen.size) : A(seen.size), better ? ' — a new best.' : '.'], state: view(`${r},${c}`, [...seen]) });
+          g[r][c] = 0;
+        }
+      if (!bestCell) best = n * n;
+      steps.push({ tag: 'ret', trace: ['Largest island achievable with one flip: ', C(best), '.'], state: view(bestCell ?? undefined) });
+      return { steps, result: String(best), resultDetail: bestCell ? `flip (${bestCell})` : 'no flip needed' };
+    },
+    note: 'Every 0 triggers a full flood fill, so the cost is O(n⁴). Labelling each island once with its size lets every 0 simply add up its distinct neighbouring islands in O(1), for O(n²) total.',
+    complexity: { time: 'O(n⁴)', space: 'O(n²)' },
+  },
 };
 
 export const graphs3: ProblemDef[] = [floodFill, zeroOneMatrix, shortestPathBinary, minimumEffort, makingLargeIsland];
