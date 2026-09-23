@@ -128,6 +128,131 @@ const nextPermutation: ProblemDef = {
   },
   note: 'Permutations in lexicographic order only change at the rightmost place they can. The pivot is that place; swapping in the smallest bigger successor bumps it minimally, and reversing the (already descending) tail resets it to its smallest arrangement. One pass each way — O(n) with no extra memory.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Generate every permutation, keep them sorted, and pick the first one larger than the input.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    set<vector<int>> perms;'),
+        L('    void gen(vector<int>& a, int i) {'),
+        L('        if (i == a.size()) { perms.insert(a); return; }', 'init'),
+        L('        for (int j = i; j < a.size(); j++) {'),
+        L('            swap(a[i], a[j]); gen(a, i + 1); swap(a[i], a[j]);', 'init'),
+        L('        }'),
+        L('    }'),
+        L('public:'),
+        L('    void nextPermutation(vector<int>& nums) {'),
+        L('        vector<int> a = nums;', 'init'),
+        L('        gen(a, 0);', 'init'),
+        L('        auto it = perms.upper_bound(nums);', 'scan', 'found'),
+        L('        nums = (it == perms.end()) ? *perms.begin() : *it;', 'found', 'wrap'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    TreeSet<List<Integer>> perms = new TreeSet<>(Solution::cmp);'),
+        L('    void gen(int[] a, int i) {'),
+        L('        if (i == a.length) { perms.add(toList(a)); return; }', 'init'),
+        L('        for (int j = i; j < a.length; j++) {'),
+        L('            swap(a, i, j); gen(a, i + 1); swap(a, i, j);', 'init'),
+        L('        }'),
+        L('    }'),
+        L('    public void nextPermutation(int[] nums) {'),
+        L('        gen(nums.clone(), 0);', 'init'),
+        L('        List<Integer> next = perms.higher(toList(nums));', 'scan', 'found'),
+        L('        if (next == null) next = perms.first();', 'wrap'),
+        L('        for (int i = 0; i < nums.length; i++) nums[i] = next.get(i);', 'found', 'wrap'),
+        L('    }'),
+        L('    // cmp: lexicographic compare; toList / swap: small helpers'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { maxLen: 7 });
+      if (typeof nums === 'string') return { error: nums };
+      const n = nums.length;
+      const cmp = (x: number[], y: number[]) => {
+        for (let k = 0; k < n; k++) if (x[k] !== y[k]) return x[k] - y[k];
+        return 0;
+      };
+      const seen = new Set<string>();
+      const perms: number[][] = [];
+      const gen = (a: number[], i: number) => {
+        if (i === n) {
+          const key = a.join(',');
+          if (!seen.has(key)) {
+            seen.add(key);
+            perms.push([...a]);
+          }
+          return;
+        }
+        for (let j = i; j < n; j++) {
+          [a[i], a[j]] = [a[j], a[i]];
+          gen(a, i + 1);
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+      };
+      gen([...nums], 0);
+      perms.sort(cmp);
+
+      const steps: Step[] = [];
+      const st = (arr: number[], mark: ArrayState['mark'], idx: number): ArrayState => ({
+        arr,
+        mark,
+        aggs: [
+          { label: 'permutation', value: `#${idx + 1} of ${perms.length}`, c: 'a' },
+          { label: 'input', value: `[${nums.join(', ')}]`, c: 'b' },
+        ],
+      });
+      steps.push({
+        tag: 'init',
+        trace: ['Generate all ', A(perms.length), ' distinct permutations and sort them in dictionary order.'],
+        state: st(perms[0], {}, 0),
+      });
+      let idx = 0;
+      const SHOW = 12;
+      while (idx < perms.length && cmp(perms[idx], nums) <= 0) {
+        if (idx < SHOW || cmp(perms[idx], nums) === 0) {
+          const same = cmp(perms[idx], nums) === 0;
+          steps.push({
+            tag: 'scan',
+            trace: same
+              ? ['Permutation #', A(idx + 1), ' is the input itself — the answer is the one right after it.']
+              : ['Permutation #', A(idx + 1), ' ', F(`[${perms[idx].join(', ')}]`), ' is not larger than the input — skip.'],
+            state: st(perms[idx], Object.fromEntries(perms[idx].map((_, k) => [k, same ? 'good' : 'dim'])), idx),
+          });
+        } else if (idx === SHOW) {
+          steps.push({
+            tag: 'scan',
+            trace: ['… skipping ahead through the smaller permutations …'],
+            state: st(perms[idx], {}, idx),
+          });
+        }
+        idx++;
+      }
+      let res: number[];
+      if (idx < perms.length) {
+        res = perms[idx];
+        steps.push({
+          tag: 'found',
+          trace: ['Permutation #', A(idx + 1), ' is the first one larger than the input: ', C(`[${res.join(', ')}]`), '.'],
+          state: st(res, Object.fromEntries(res.map((_, k) => [k, 'final'])), idx),
+        });
+      } else {
+        res = perms[0];
+        steps.push({
+          tag: 'wrap',
+          trace: ['The input is the largest permutation — wrap around to the smallest: ', C(`[${res.join(', ')}]`), '.'],
+          state: st(res, Object.fromEntries(res.map((_, k) => [k, 'final'])), 0),
+        });
+      }
+      return { steps, result: `[${res.join(', ')}]`, resultDetail: `${perms.length} permutations generated` };
+    },
+    note: 'Correct by definition, but there are n! permutations — already 3.6 million for n = 10. The pivot-swap-reverse method jumps straight to the answer in O(n).',
+    complexity: { time: 'O(n! · n)', space: 'O(n! · n)' },
+  },
 };
 
 /* ================= Pascal's Triangle ================= */
@@ -215,6 +340,91 @@ const pascalsTriangle: ProblemDef = {
   },
   note: 'The recurrence C(n,k) = C(n−1,k−1) + C(n−1,k) is just a choice: either the new element is in your subset or it is not. Because each row only reads the row above it, the whole triangle costs O(n²) — the same as its own size, so it is optimal.',
   complexity: { time: 'O(n²)', space: 'O(n²)' },
+  brute: {
+    label: 'Binomial formula',
+    technique: 'Compute each entry directly as C(row, col), updating it along the row with one multiply and one divide.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> generate(int numRows) {'),
+        L('        vector<vector<int>> tri;'),
+        L('        for (int r = 0; r < numRows; r++) {', 'row'),
+        L('            vector<int> row;', 'row'),
+        L('            long long val = 1;', 'row'),
+        L('            for (int c = 0; c <= r; c++) {', 'entry'),
+        L('                row.push_back(val);', 'entry'),
+        L('                val = val * (r - c) / (c + 1);', 'entry'),
+        L('            }'),
+        L('            tri.push_back(row);', 'push'),
+        L('        }'),
+        L('        return tri;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<Integer>> generate(int numRows) {'),
+        L('        List<List<Integer>> tri = new ArrayList<>();'),
+        L('        for (int r = 0; r < numRows; r++) {', 'row'),
+        L('            List<Integer> row = new ArrayList<>();', 'row'),
+        L('            long val = 1;', 'row'),
+        L('            for (int c = 0; c <= r; c++) {', 'entry'),
+        L('                row.add((int) val);', 'entry'),
+        L('                val = val * (r - c) / (c + 1);', 'entry'),
+        L('            }'),
+        L('            tri.add(row);', 'push'),
+        L('        }'),
+        L('        return tri;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const n = parseInt1(values.n, 'Number of rows', { min: 1, max: 9 });
+      if (typeof n === 'string') return { error: n };
+      const tri: number[][] = [];
+      const steps: Step[] = [];
+      const view = (mark: Record<string, 'active' | 'good' | 'final' | 'src'> = {}): MatrixState => ({
+        grid: [...Array(n)].map((_, r) => [...Array(n)].map((_, c) => (tri[r] && c < tri[r].length ? tri[r][c] : ''))),
+        rowLabels: [...Array(n)].map((_, i) => `row ${i}`),
+        mark,
+      });
+
+      for (let r = 0; r < n; r++) {
+        const row: number[] = [];
+        tri.push(row);
+        steps.push({
+          tag: 'row',
+          trace: ['Row ', A(r), ': start with ', B('C(r, 0) = 1'), ' and walk right using C(r, c+1) = C(r, c) × (r − c) / (c + 1).'],
+          state: view(),
+        });
+        let val = 1;
+        for (let c = 0; c <= r; c++) {
+          row.push(val);
+          steps.push({
+            tag: 'entry',
+            trace: ['C(', A(r), ', ', A(c), ') = ', B(val), c < r ? ['; next = ', val, ' × ', r - c, ' / ', c + 1, ' = ', (val * (r - c)) / (c + 1), '.'].join('') : '.'],
+            state: view({ [`${r},${c}`]: 'active' }),
+          });
+          val = (val * (r - c)) / (c + 1);
+        }
+        steps.push({
+          tag: 'push',
+          trace: ['Row ', B(r), ' complete: [', B(row.join(', ')), '] — no row above was read.'],
+          state: view(Object.fromEntries(row.map((_, c) => [`${r},${c}`, 'good' as const]))),
+        });
+      }
+      steps.push({
+        tag: 'ret',
+        trace: [C(n), ' rows built straight from the binomial formula.'],
+        state: view(Object.fromEntries(tri.flatMap((row, ri) => row.map((_, ci) => [`${ri},${ci}`, 'final' as const])))),
+      });
+      return { steps, result: `${n} rows`, resultDetail: `last row [${tri[n - 1].join(', ')}]` };
+    },
+    note: 'Each row can be built on its own from the binomial coefficient, which is handy when you need only row k. For the full triangle both methods are O(n²); the sum-of-two-above version avoids multiplication and division entirely.',
+    complexity: { time: 'O(n²)', space: 'O(n²)' },
+  },
 };
 
 /* ================= Majority Element II ================= */
@@ -347,6 +557,77 @@ const majorityII: ProblemDef = {
   },
   note: 'Cancelling one vote from each candidate discards three distinct values at a time. Any value appearing more than n/3 times cannot be fully cancelled that way, so it must survive in a slot — but surviving is not proof of majority, which is exactly why the second counting pass is mandatory.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Hash map count',
+    technique: 'Count every value in a hash map, then keep those whose count exceeds n / 3.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> majorityElement(vector<int>& nums) {'),
+        L('        unordered_map<int, int> count;', 'init'),
+        L('        for (int x : nums) count[x]++;', 'tally'),
+        L('        vector<int> res;'),
+        L('        for (auto& [v, c] : count)', 'check'),
+        L('            if (c > nums.size() / 3) res.push_back(v);', 'check'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<Integer> majorityElement(int[] nums) {'),
+        L('        Map<Integer, Integer> count = new HashMap<>();', 'init'),
+        L('        for (int x : nums) count.merge(x, 1, Integer::sum);', 'tally'),
+        L('        List<Integer> res = new ArrayList<>();'),
+        L('        for (var e : count.entrySet())', 'check'),
+        L('            if (e.getValue() > nums.length / 3) res.add(e.getKey());', 'check'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { maxLen: 16 });
+      if (typeof nums === 'string') return { error: nums };
+      const steps: Step[] = [];
+      const count = new Map<number, number>();
+      const bar = Math.floor(nums.length / 3);
+      const fmt = () => (count.size ? `{ ${[...count.entries()].map(([v, c]) => `${v}→${c}`).join(', ')} }` : '{}');
+      const st = (i: number, mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: nums,
+        ptrs: i < nums.length ? [{ name: 'x', i, c: 'a' }] : [],
+        mark,
+        aggs: [
+          { label: 'count', value: fmt(), c: 'b' },
+          { label: 'need >', value: String(bar), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Tally every value; afterwards keep any value seen more than ', C(`n/3 = ${bar}`), ' times.'], state: st(nums.length) });
+      for (let i = 0; i < nums.length; i++) {
+        count.set(nums[i], (count.get(nums[i]) ?? 0) + 1);
+        steps.push({ tag: 'tally', trace: ['Seen ', A(nums[i]), ' — count ', A(count.get(nums[i])!), '.'], state: st(i, { [i]: 'active' }) });
+      }
+      const res: number[] = [];
+      for (const [v, c] of count) {
+        const ok = c > bar;
+        if (ok) res.push(v);
+        steps.push({
+          tag: 'check',
+          trace: [A(v), ' appears ', A(c), ' times — ', ok ? B('more than n/3, keep it') : F('not enough'), '.'],
+          state: st(nums.length, Object.fromEntries(nums.map((x, i) => [i, x === v ? (ok ? 'good' : 'dim') : undefined]).filter((e) => e[1]))),
+        });
+      }
+      steps.push({
+        tag: 'ret',
+        trace: res.length ? ['Majority elements: ', C(res.join(', ')), '.'] : ['No value clears the n/3 bar — the answer is ', C('empty'), '.'],
+        state: { arr: nums, mark: Object.fromEntries(nums.map((v, i) => [i, res.includes(v) ? ('final' as const) : ('dim' as const)])) },
+      });
+      return { steps, result: res.length ? `[${res.join(', ')}]` : '[]' };
+    },
+    note: 'Counting is simple and O(n) time, but the map can hold up to n entries. Extended Boyer–Moore uses the fact that at most two values can pass n/3 to get away with four variables.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Merge Sorted Array ================= */
@@ -454,6 +735,65 @@ const mergeSortedArray: ProblemDef = {
   },
   note: 'Merging forward would need a temporary copy, because writing to index 0 destroys a value nums1 has not read yet. Going backwards inverts that: the write head is always at or ahead of both read heads, so O(1) extra space is enough.',
   complexity: { time: 'O(m + n)', space: 'O(1)' },
+  brute: {
+    label: 'Append & sort',
+    technique: 'Copy nums2 into the empty tail of nums1, then sort the whole array.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    void merge(vector<int>& a, int m, vector<int>& b, int n) {'),
+        L('        for (int j = 0; j < n; j++)', 'copy'),
+        L('            a[m + j] = b[j];', 'copy'),
+        L('        sort(a.begin(), a.end());', 'sort'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public void merge(int[] a, int m, int[] b, int n) {'),
+        L('        for (int j = 0; j < n; j++)', 'copy'),
+        L('            a[m + j] = b[j];', 'copy'),
+        L('        Arrays.sort(a);', 'sort'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const av = parseIntArray(values.a, { maxLen: 8 });
+      if (typeof av === 'string') return { error: av };
+      const bv = parseIntArray(values.b, { maxLen: 8 });
+      if (typeof bv === 'string') return { error: bv };
+      for (let i = 1; i < av.length; i++) if (av[i] < av[i - 1]) return { error: 'nums1 must be sorted ascending.' };
+      for (let i = 1; i < bv.length; i++) if (bv[i] < bv[i - 1]) return { error: 'nums2 must be sorted ascending.' };
+
+      const m = av.length;
+      const a: (number | string)[] = [...av, ...bv.map(() => '·')];
+      const steps: Step[] = [];
+      steps.push({
+        tag: 'copy',
+        trace: ['Ignore the fact that both inputs are sorted: just drop nums2 into the ', A(bv.length), ' empty slots.'],
+        state: { arr: [...a] },
+      });
+      bv.forEach((v, j) => {
+        a[m + j] = v;
+        steps.push({
+          tag: 'copy',
+          trace: ['Copy ', A(v), ' into slot ', A(m + j), '.'],
+          state: { arr: [...a], mark: { [m + j]: 'active' } },
+        });
+      });
+      const sorted = (a as number[]).slice().sort((x, y) => x - y);
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort the combined array: ', C(`[${sorted.join(', ')}]`), '.'],
+        state: { arr: sorted, mark: Object.fromEntries(sorted.map((_, x) => [x, 'final' as const])) },
+      });
+      return { steps, result: `[${sorted.join(', ')}]` };
+    },
+    note: 'Two lines and hard to get wrong, but the sort costs O((m + n) log(m + n)) and throws away the fact that both halves are already sorted. Merging from the back uses that order to finish in one linear pass.',
+    complexity: { time: 'O((m + n) log(m + n))', space: 'O(1)' },
+  },
 };
 
 /* ================= Find the Duplicate Number ================= */
@@ -574,6 +914,71 @@ const findDuplicate: ProblemDef = {
   },
   note: "Because values are confined to 1..n, following i → nums[i] never leaves the array, so the walk must eventually repeat — and the node where two arrows converge is the repeated value. Floyd's two-phase trick finds it in O(1) space without sorting or modifying the input, which is exactly what the problem forbids.",
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Hash set',
+    technique: 'Walk the array with a set of values already seen; the first value already in the set is the duplicate.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findDuplicate(vector<int>& nums) {'),
+        L('        unordered_set<int> seen;', 'init'),
+        L('        for (int x : nums) {', 'loop'),
+        L('            if (seen.count(x)) return x;', 'check', 'found'),
+        L('            seen.insert(x);', 'store'),
+        L('        }'),
+        L('        return -1;'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findDuplicate(int[] nums) {'),
+        L('        Set<Integer> seen = new HashSet<>();', 'init'),
+        L('        for (int x : nums) {', 'loop'),
+        L('            if (!seen.add(x)) return x;', 'check', 'found', 'store'),
+        L('        }'),
+        L('        return -1;'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 1, maxLen: 12 });
+      if (typeof nums === 'string') return { error: nums };
+      const n = nums.length - 1;
+      if (n < 1) return { error: 'Give at least two values.' };
+      if (!nums.every((v) => v >= 1 && v <= n)) return { error: `With ${nums.length} values, every entry must be between 1 and ${n}.` };
+      if (new Set(nums).size === nums.length) return { error: 'No value repeats — add a duplicate.' };
+
+      const steps: Step[] = [];
+      const seen = new Set<number>();
+      const st = (i: number, mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: nums,
+        ptrs: i < nums.length ? [{ name: 'i', i, c: 'a' }] : [],
+        mark,
+        aggs: [{ label: 'seen', value: `{ ${[...seen].join(', ')} }`, c: 'b' }],
+      });
+      steps.push({ tag: 'init', trace: ['Remember every value in a set ', B('seen'), '; the first repeat is the answer.'], state: st(0) });
+      let dup = -1;
+      for (let i = 0; i < nums.length; i++) {
+        if (seen.has(nums[i])) {
+          dup = nums[i];
+          steps.push({
+            tag: 'found',
+            trace: [A(nums[i]), ' is already in the set — it is the duplicate. Return ', C(dup), '.'],
+            state: st(i, { [i]: 'final', [nums.indexOf(dup)]: 'final' }),
+          });
+          break;
+        }
+        seen.add(nums[i]);
+        steps.push({ tag: 'store', trace: [A(nums[i]), ' is new — add it to the set.'], state: st(i, { [i]: 'active' }) });
+      }
+      return { steps, result: String(dup) };
+    },
+    note: 'Straightforward and O(n) time, but it uses O(n) extra memory, which the problem forbids. Floyd’s cycle detection finds the same value with two pointers and no extra space.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= First Missing Positive ================= */
@@ -692,6 +1097,59 @@ const firstMissingPositive: ProblemDef = {
   },
   note: 'With n slots you can hold at most n distinct positives, so the answer never exceeds n+1 — that bound is what makes the array big enough to index itself. Each swap sends one value to its permanent home, so despite the nested while, no value moves twice: the whole placement phase is O(n).',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Hash set',
+    technique: 'Put every value in a set, then test 1, 2, 3, … until one is missing.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int firstMissingPositive(vector<int>& nums) {'),
+        L('        unordered_set<int> seen(nums.begin(), nums.end());', 'init'),
+        L('        int k = 1;', 'init'),
+        L('        while (seen.count(k)) k++;', 'probe'),
+        L('        return k;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int firstMissingPositive(int[] nums) {'),
+        L('        Set<Integer> seen = new HashSet<>();', 'init'),
+        L('        for (int x : nums) seen.add(x);', 'init'),
+        L('        int k = 1;', 'init'),
+        L('        while (seen.contains(k)) k++;', 'probe'),
+        L('        return k;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.nums, { maxLen: 10 });
+      if (typeof a === 'string') return { error: a };
+      const seen = new Set(a);
+      const steps: Step[] = [];
+      const st = (k: number, mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: a,
+        mark,
+        aggs: [
+          { label: 'set', value: `{ ${[...seen].join(', ')} }`, c: 'b' },
+          { label: 'k', value: String(k), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Copy every value into a hash set, then probe ', A('k = 1, 2, 3, …'), '.'], state: st(1) });
+      let k = 1;
+      while (seen.has(k)) {
+        const at = a.indexOf(k);
+        steps.push({ tag: 'probe', trace: [B(k), ' is in the set — try ', A(k + 1), '.'], state: st(k, { [at]: 'good' }) });
+        k++;
+      }
+      steps.push({ tag: 'ret', trace: [C(k), ' is not in the set — it is the first missing positive.'], state: st(k) });
+      return { steps, result: String(k) };
+    },
+    note: 'Simple and linear, but the set costs O(n) extra memory, which the problem forbids. Swapping each value into slot v − 1 turns the input array itself into the set.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Reverse Pairs ================= */
@@ -814,6 +1272,67 @@ const reversePairs: ProblemDef = {
   },
   note: 'The key is that any pair (i, j) is separated by exactly one merge — the one whose split falls between them — so counting at every merge counts each pair once and only once. Sorting the halves first is what lets j sweep forward monotonically instead of restarting, turning a quadratic count into a linear one per level.',
   complexity: { time: 'O(n log n)', space: 'O(n)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Check every pair i < j directly for nums[i] > 2 · nums[j].',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int reversePairs(vector<int>& nums) {'),
+        L('        int cnt = 0, n = nums.size();', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'outer'),
+        L('            for (int j = i + 1; j < n; j++)', 'test', 'hit'),
+        L('                if (nums[i] > 2LL * nums[j]) cnt++;', 'test', 'hit'),
+        L('        return cnt;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int reversePairs(int[] nums) {'),
+        L('        int cnt = 0, n = nums.length;', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'outer'),
+        L('            for (int j = i + 1; j < n; j++)', 'test', 'hit'),
+        L('                if (nums[i] > 2L * nums[j]) cnt++;', 'test', 'hit'),
+        L('        return cnt;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.nums, { maxLen: 9 });
+      if (typeof a === 'string') return { error: a };
+      const steps: Step[] = [];
+      let cnt = 0;
+      const st = (i: number, j: number, mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: a,
+        mark,
+        ptrs: [
+          ...(i < a.length ? [{ name: 'i', i, c: 'b' as const }] : []),
+          ...(j < a.length ? [{ name: 'j', i: j, c: 'a' as const }] : []),
+        ],
+        aggs: [{ label: 'reverse pairs', value: String(cnt), c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['Test every pair ', A('i < j'), ' for ', A('nums[i] > 2·nums[j]'), '.'], state: st(0, 1) });
+      for (let i = 0; i < a.length; i++) {
+        steps.push({ tag: 'outer', trace: ['Fix ', B(a[i]), ' at index ', B(i), '.'], state: st(i, i + 1, { [i]: 'good' }) });
+        for (let j = i + 1; j < a.length; j++) {
+          const ok = a[i] > 2 * a[j];
+          if (ok) cnt++;
+          steps.push({
+            tag: ok ? 'hit' : 'test',
+            trace: [B(a[i]), ' vs 2 × ', A(a[j]), ' = ', A(2 * a[j]), ok ? [' — a reverse pair! Count ', cnt, '.'].join('') : ' — no.'],
+            state: st(i, j, { [i]: 'good', [j]: ok ? 'final' : 'dim' }),
+          });
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['All pairs checked — ', C(cnt), ' reverse pairs.'], state: st(a.length, a.length) });
+      return { steps, result: String(cnt) };
+    },
+    note: 'Every one of the n(n−1)/2 pairs is examined, so it times out on large inputs. Merge sort counts the pairs that straddle each split in linear time per level, for O(n log n) overall.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Contiguous Array ================= */
@@ -925,6 +1444,85 @@ const contiguousArray: ProblemDef = {
   },
   note: 'Rewriting 0 as −1 converts a two-counter condition into a single prefix-sum condition, which a hash map answers in O(1). Storing only the first index per balance is deliberate: a later duplicate would only ever produce a shorter window.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'For every start index, extend the end and keep counts of zeros and ones.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findMaxLength(vector<int>& nums) {'),
+        L('        int best = 0, n = nums.size();', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            int zeros = 0, ones = 0;', 'outer'),
+        L('            for (int j = i; j < n; j++) {', 'grow', 'eq'),
+        L('                (nums[j] == 0 ? zeros : ones)++;', 'grow', 'eq'),
+        L('                if (zeros == ones) best = max(best, j - i + 1);', 'eq'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findMaxLength(int[] nums) {'),
+        L('        int best = 0, n = nums.length;', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            int zeros = 0, ones = 0;', 'outer'),
+        L('            for (int j = i; j < n; j++) {', 'grow', 'eq'),
+        L('                if (nums[j] == 0) zeros++; else ones++;', 'grow', 'eq'),
+        L('                if (zeros == ones) best = Math.max(best, j - i + 1);', 'eq'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 1, maxLen: 16 });
+      if (typeof nums === 'string') return { error: nums };
+      const steps: Step[] = [];
+      let best = 0;
+      let zeros = 0;
+      let ones = 0;
+      const st = (i: number, j: number | null): ArrayState => ({
+        arr: nums,
+        window: j !== null ? [i, j] : null,
+        ptrs: i < nums.length ? [{ name: 'i', i, c: 'b' }] : [],
+        aggs: [
+          { label: 'zeros / ones', value: `${zeros} / ${ones}`, c: 'a' },
+          { label: 'best length', value: String(best), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Try every window nums[i..j] and compare its count of ', A('0s'), ' and ', A('1s'), '.'], state: st(0, null) });
+      for (let i = 0; i < nums.length; i++) {
+        zeros = 0;
+        ones = 0;
+        steps.push({ tag: 'outer', trace: ['New start index ', B(i), ' — reset both counts.'], state: st(i, null) });
+        for (let j = i; j < nums.length; j++) {
+          if (nums[j] === 0) zeros++;
+          else ones++;
+          if (zeros === ones) {
+            const improved = j - i + 1 > best;
+            if (improved) best = j - i + 1;
+            steps.push({
+              tag: 'eq',
+              trace: ['Window [', B(i), '..', A(j), '] is balanced (', A(zeros), ' each) — length ', B(j - i + 1), improved ? ', a new best.' : '.'],
+              state: st(i, j),
+            });
+          } else {
+            steps.push({ tag: 'grow', trace: ['Window [', B(i), '..', A(j), ']: ', F(`${zeros} zeros vs ${ones} ones`), '.'], state: st(i, j) });
+          }
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Longest balanced window: ', C(best), '.'], state: st(nums.length, null) });
+      return { steps, result: String(best) };
+    },
+    note: 'Correct but quadratic: every window is recounted from its start. Scoring 0 as −1 and remembering where each running balance first appeared finds the longest balanced window in one pass.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Subarray Sums Divisible by K ================= */
@@ -1021,6 +1619,80 @@ const subarrayDivK: ProblemDef = {
   },
   note: 'sum(i..j) = prefix[j] − prefix[i−1], and that difference is divisible by k exactly when the two prefixes share a remainder. Counting how many earlier prefixes carry each remainder turns a quadratic pair-search into one pass. The double modulo is not decoration — it fixes negative remainders, which is where most buggy submissions die.',
   complexity: { time: 'O(n + k)', space: 'O(k)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Fix each start, extend the end with a running sum, and test divisibility by k every time.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int subarraysDivByK(vector<int>& nums, int k) {'),
+        L('        int ans = 0, n = nums.size();', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < n; j++) {', 'add', 'hit'),
+        L('                sum += nums[j];', 'add', 'hit'),
+        L('                if (sum % k == 0) ans++;', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int subarraysDivByK(int[] nums, int k) {'),
+        L('        int ans = 0, n = nums.length;', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < n; j++) {', 'add', 'hit'),
+        L('                sum += nums[j];', 'add', 'hit'),
+        L('                if (sum % k == 0) ans++;', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { maxLen: 14 });
+      if (typeof nums === 'string') return { error: nums };
+      const k = parseInt1(values.k, 'k', { min: 2, max: 9 });
+      if (typeof k === 'string') return { error: k };
+      const steps: Step[] = [];
+      let ans = 0;
+      let sum = 0;
+      const st = (i: number, j: number | null): ArrayState => ({
+        arr: nums,
+        window: j !== null ? [i, j] : null,
+        ptrs: i < nums.length ? [{ name: 'i', i, c: 'b' }] : [],
+        aggs: [
+          { label: 'sum', value: String(sum), c: 'a' },
+          { label: 'answer', value: String(ans), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Try every subarray and check whether its sum is divisible by ', A(k), '.'], state: st(0, null) });
+      for (let i = 0; i < nums.length; i++) {
+        sum = 0;
+        steps.push({ tag: 'outer', trace: ['Start at index ', B(i), ' with sum 0.'], state: st(i, null) });
+        for (let j = i; j < nums.length; j++) {
+          sum += nums[j];
+          const ok = ((sum % k) + k) % k === 0;
+          if (ok) ans++;
+          steps.push({
+            tag: ok ? 'hit' : 'add',
+            trace: ['Sum of [', B(i), '..', A(j), '] = ', ok ? B(sum) : F(sum), ok ? [' — divisible by ', k, '. Answer ', ans, '.'].join('') : [' — not divisible by ', k, '.'].join('')],
+            state: st(i, j),
+          });
+        }
+      }
+      steps.push({ tag: 'ret', trace: [C(ans), ' subarrays have a sum divisible by ', C(k), '.'], state: st(nums.length, null) });
+      return { steps, result: String(ans) };
+    },
+    note: 'There are n(n+1)/2 subarrays and each is tested once, so this is quadratic. Counting prefix-sum remainders answers "how many earlier prefixes match?" in O(1) per index.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Largest Number ================= */
@@ -1116,6 +1788,94 @@ const largestNumber: ProblemDef = {
   },
   note: 'Sorting by a+b vs b+a is a valid comparator because that relation is transitive — a fact worth knowing, since the "obvious" alternatives (sort descending numerically, or by first digit) both fail on inputs like 3 vs 30. The trailing zero guard matters for [0, 0], which would otherwise print "00".',
   complexity: { time: 'O(n log n · L)', space: 'O(n · L)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Try every ordering of the numbers, glue each one together, and keep the largest string.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string largestNumber(vector<int>& nums) {'),
+        L('        sort(nums.begin(), nums.end());', 'init'),
+        L('        string best = "";', 'init'),
+        L('        do {', 'try'),
+        L('            string s;', 'try'),
+        L('            for (int x : nums) s += to_string(x);', 'try'),
+        L('            if (s > best) best = s;', 'better'),
+        L('        } while (next_permutation(nums.begin(), nums.end()));'),
+        L('        return best[0] == \'0\' ? "0" : best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    String best = "";'),
+        L('    public String largestNumber(int[] nums) {'),
+        L('        permute(nums, 0);', 'init'),
+        L('        return best.charAt(0) == \'0\' ? "0" : best;', 'ret'),
+        L('    }'),
+        L('    void permute(int[] a, int i) {'),
+        L('        if (i == a.length) {', 'try'),
+        L('            StringBuilder s = new StringBuilder();', 'try'),
+        L('            for (int x : a) s.append(x);', 'try'),
+        L('            if (s.toString().compareTo(best) > 0) best = s.toString();', 'better'),
+        L('            return;'),
+        L('        }'),
+        L('        for (int j = i; j < a.length; j++) {'),
+        L('            swap(a, i, j); permute(a, i + 1); swap(a, i, j);'),
+        L('        }'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 999, maxLen: 6 });
+      if (typeof nums === 'string') return { error: nums === 'Keep it to at most 6 values.' ? nums : nums };
+      const steps: Step[] = [];
+      const orders: number[][] = [];
+      const gen = (a: number[], i: number) => {
+        if (i === a.length) return void orders.push([...a]);
+        for (let j = i; j < a.length; j++) {
+          [a[i], a[j]] = [a[j], a[i]];
+          gen(a, i + 1);
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+      };
+      gen([...nums], 0);
+      let best = '';
+      let bestOrder = nums;
+      const st = (order: number[], mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: order.map(String),
+        mark,
+        aggs: [
+          { label: 'orderings', value: String(orders.length), c: 'a' },
+          { label: 'best so far', value: best || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['There are ', A(orders.length), ' orderings of these numbers — glue each one and keep the biggest.'], state: st(nums) });
+      let tried = 0;
+      for (const o of orders) {
+        const s = o.join('');
+        tried++;
+        if (s.length > best.length || s > best) {
+          best = s;
+          bestOrder = o;
+          steps.push({ tag: 'better', trace: ['Ordering #', A(tried), ' glues to ', B(s), ' — a new best.'], state: st(o, Object.fromEntries(o.map((_, i) => [i, 'good' as const]))) });
+        } else if (tried <= 8) {
+          steps.push({ tag: 'try', trace: ['Ordering #', A(tried), ' glues to ', F(s), ' — not bigger.'], state: st(o) });
+        }
+      }
+      const res = best[0] === '0' ? '0' : best;
+      steps.push({
+        tag: 'ret',
+        trace: ['Checked all ', C(orders.length), ' orderings — the largest is ', C(res), '.'],
+        state: st(bestOrder, Object.fromEntries(bestOrder.map((_, i) => [i, 'final' as const]))),
+      });
+      return { steps, result: res };
+    },
+    note: 'Guaranteed correct because it literally checks everything, but n! orderings is hopeless beyond about 10 numbers. The a+b vs b+a comparator finds the best order with a single sort.',
+    complexity: { time: 'O(n! · n · L)', space: 'O(n · L)' },
+  },
 };
 
 /* ================= Find All Duplicates in an Array ================= */
@@ -1204,6 +1964,66 @@ const findAllDuplicates: ProblemDef = {
   },
   note: 'The guarantee that values lie in 1..n is what makes the array double as its own hash set, and negation is reversible so the data is never truly destroyed. Always read through abs(x) — by the time you visit a slot, an earlier mark may have flipped its sign.',
   complexity: { time: 'O(n)', space: 'O(1) extra' },
+  brute: {
+    label: 'Count array',
+    technique: 'Tally each value in a separate array of size n + 1, then report every value counted twice.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> findDuplicates(vector<int>& nums) {'),
+        L('        vector<int> cnt(nums.size() + 1, 0), res;', 'init'),
+        L('        for (int x : nums)', 'loop', 'dup'),
+        L('            if (++cnt[x] == 2) res.push_back(x);', 'loop', 'dup'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<Integer> findDuplicates(int[] nums) {'),
+        L('        int[] cnt = new int[nums.length + 1];', 'init'),
+        L('        List<Integer> res = new ArrayList<>();', 'init'),
+        L('        for (int x : nums)', 'loop', 'dup'),
+        L('            if (++cnt[x] == 2) res.add(x);', 'loop', 'dup'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.nums, { min: 1, maxLen: 12 });
+      if (typeof a === 'string') return { error: a };
+      const n = a.length;
+      if (!a.every((v) => v >= 1 && v <= n)) return { error: `Every value must be between 1 and ${n} (the array length).` };
+      const cnt = Array(n + 1).fill(0);
+      const res: number[] = [];
+      const steps: Step[] = [];
+      const st = (i: number, mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: a,
+        mark,
+        ptrs: i < n ? [{ name: 'i', i, c: 'a' }] : [],
+        aggs: [
+          { label: 'counts', value: cnt.slice(1).map((c, v) => `${v + 1}:${c}`).join(' '), c: 'b' },
+          { label: 'duplicates', value: res.length ? res.join(', ') : '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Keep a separate counter for every value 1..', A(n), '.'], state: st(n) });
+      for (let i = 0; i < n; i++) {
+        cnt[a[i]]++;
+        if (cnt[a[i]] === 2) {
+          res.push(a[i]);
+          steps.push({ tag: 'dup', trace: ['Count of ', A(a[i]), ' reaches 2 — it is a duplicate.'], state: st(i, { [i]: 'final' }) });
+        } else {
+          steps.push({ tag: 'loop', trace: ['Count of ', A(a[i]), ' is now ', B(cnt[a[i]]), '.'], state: st(i, { [i]: 'active' }) });
+        }
+      }
+      steps.push({ tag: 'ret', trace: res.length ? ['Values appearing twice: ', C(res.join(', ')), '.'] : ['No value appears twice — ', C('empty'), '.'], state: st(n) });
+      return { steps, result: res.length ? `[${res.join(', ')}]` : '[]' };
+    },
+    note: 'Linear time and easy to follow, but the counter array is O(n) extra memory. Flipping signs inside the input stores the same "seen" bit for free.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Game of Life ================= */
@@ -1213,7 +2033,7 @@ const gameOfLife: ProblemDef = {
   category: 'Arrays & Hashing',
   difficulty: 'Medium',
   leetcode: 'https://leetcode.com/problems/game-of-life/',
-  technique: 'Encode old and new state in one cell (2 = was live, now dead; 3 = was dead, now live).',
+  technique: 'Encode both generations in one cell: bit 0 = this generation, bit 1 = the next.',
   widget: 'matrix',
   widgetTitle: 'Board (1 = live)',
   inputs: [{ key: 'grid', label: 'Board (rows ";" separated)', defaultValue: '010;001;111;000', wide: true }],
@@ -1228,6 +2048,8 @@ const gameOfLife: ProblemDef = {
       L('                int live = countLive(b, r, c);', 'count'),
       L('                if ((b[r][c] & 1) && (live < 2 || live > 3))', 'die'),
       L('                    b[r][c] = 1;   // 01 -> dies', 'die'),
+      L('                else if ((b[r][c] & 1))', 'live'),
+      L('                    b[r][c] = 3;   // 11 -> survives', 'live'),
       L('                else if (!(b[r][c] & 1) && live == 3)', 'born'),
       L('                    b[r][c] = 2;   // 10 -> born', 'born'),
       L('            }'),
@@ -1245,6 +2067,8 @@ const gameOfLife: ProblemDef = {
       L('                int live = countLive(b, r, c);', 'count'),
       L('                if ((b[r][c] & 1) == 1 && (live < 2 || live > 3))', 'die'),
       L('                    b[r][c] = 1;   // 01 -> dies', 'die'),
+      L('                else if ((b[r][c] & 1) == 1)', 'live'),
+      L('                    b[r][c] = 3;   // 11 -> survives', 'live'),
       L('                else if ((b[r][c] & 1) == 0 && live == 3)', 'born'),
       L('                    b[r][c] = 2;   // 10 -> born', 'born'),
       L('            }'),
@@ -1313,6 +2137,13 @@ const gameOfLife: ProblemDef = {
             trace: [live < 2 ? 'Under-population' : 'Over-population', ' — it ', F('dies'), '. Stored as 01: still reads live to its neighbours this round.'],
             state: view({ [`${r},${c}`]: 'dim' }),
           });
+        } else if (wasLive) {
+          b[r][c] = 3;
+          steps.push({
+            tag: 'live',
+            trace: ['Two or three live neighbours — it ', B('survives'), '. Stored as 11: live now and live next round.'],
+            state: view({ [`${r},${c}`]: 'good' }),
+          });
         } else if (!wasLive && live === 3) {
           b[r][c] = 2;
           steps.push({
@@ -1337,6 +2168,91 @@ const gameOfLife: ProblemDef = {
   },
   note: 'The trap is updating in place with a plain 0/1 board: a cell you already flipped would feed the wrong value to its later neighbours. Packing both generations into two bits of one integer keeps the read (bit 0) and the write (bit 1) independent, so the whole board updates simultaneously with no copy.',
   complexity: { time: 'O(R·C)', space: 'O(1)' },
+  brute: {
+    label: 'Copy the board',
+    technique: 'Read neighbours from an untouched copy of the board while writing the next generation into the original.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    void gameOfLife(vector<vector<int>>& b) {'),
+        L('        auto old = b;', 'copy'),
+        L('        int R = b.size(), C = b[0].size();'),
+        L('        for (int r = 0; r < R; r++)', 'scan'),
+        L('            for (int c = 0; c < C; c++) {', 'scan'),
+        L('                int live = countLive(old, r, c);', 'count'),
+        L('                if (old[r][c] && (live < 2 || live > 3)) b[r][c] = 0;', 'die'),
+        L('                else if (!old[r][c] && live == 3) b[r][c] = 1;', 'born'),
+        L('            }'),
+        L('    }', 'ret'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public void gameOfLife(int[][] b) {'),
+        L('        int R = b.length, C = b[0].length;'),
+        L('        int[][] old = new int[R][];', 'copy'),
+        L('        for (int r = 0; r < R; r++) old[r] = b[r].clone();', 'copy'),
+        L('        for (int r = 0; r < R; r++)', 'scan'),
+        L('            for (int c = 0; c < C; c++) {', 'scan'),
+        L('                int live = countLive(old, r, c);', 'count'),
+        L('                if (old[r][c] == 1 && (live < 2 || live > 3)) b[r][c] = 0;', 'die'),
+        L('                else if (old[r][c] == 0 && live == 3) b[r][c] = 1;', 'born'),
+        L('            }'),
+        L('    }', 'ret'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = (values.grid ?? '')
+        .split(/[;|]/)
+        .map((r) => r.trim())
+        .filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter a board, rows separated by ";".' };
+      const w = raw[0].length;
+      if (!raw.every((r) => r.length === w)) return { error: 'All rows must be the same length.' };
+      if (raw.length > 6 || w > 6) return { error: 'Keep the board to at most 6×6 so every cell fits on screen.' };
+      if (!raw.every((r) => /^[01]+$/.test(r))) return { error: 'Use only 0 and 1.' };
+
+      const R = raw.length;
+      const old = raw.map((r) => r.split('').map(Number));
+      const b = old.map((r) => [...r]);
+      const steps: Step[] = [];
+      const view = (mark: MatrixState['mark'] = {}): MatrixState => ({
+        grid: b.map((row) => row.map((v) => (v ? '●' : '·'))),
+        rowLabels: [...Array(R)].map((_, i) => i),
+        colLabels: [...Array(w)].map((_, i) => i),
+        mark,
+      });
+      steps.push({ tag: 'copy', trace: ['Snapshot the board into ', A('old'), '. Neighbours are always counted from the snapshot, never from cells already updated.'], state: view() });
+      for (let r = 0; r < R; r++) {
+        for (let c = 0; c < w; c++) {
+          let live = 0;
+          for (let dr = -1; dr <= 1; dr++)
+            for (let dc = -1; dc <= 1; dc++) {
+              if (!dr && !dc) continue;
+              const nr = r + dr;
+              const nc = c + dc;
+              if (nr >= 0 && nr < R && nc >= 0 && nc < w) live += old[nr][nc];
+            }
+          if (old[r][c] && (live < 2 || live > 3)) {
+            b[r][c] = 0;
+            steps.push({ tag: 'die', trace: ['(', A(r), ',', A(c), ') has ', A(live), ' live neighbours in the snapshot — it ', F('dies'), '.'], state: view({ [`${r},${c}`]: 'dim' }) });
+          } else if (!old[r][c] && live === 3) {
+            b[r][c] = 1;
+            steps.push({ tag: 'born', trace: ['(', A(r), ',', A(c), ') has exactly ', A(3), ' live neighbours — it is ', B('born'), '.'], state: view({ [`${r},${c}`]: 'good' }) });
+          } else {
+            steps.push({ tag: 'count', trace: ['(', A(r), ',', A(c), ') has ', A(live), ' live neighbours — unchanged.'], state: view({ [`${r},${c}`]: 'active' }) });
+          }
+        }
+      }
+      const out = b.map((row) => row.join('')).join(';');
+      steps.push({ tag: 'ret', trace: ['Next generation: ', C(out), '.'], state: view() });
+      return { steps, result: out };
+    },
+    note: 'The copy makes the "update everything simultaneously" rule trivial to honour, at the cost of O(R·C) extra memory. The two-bit encoding stores old and new state in the same cell instead.',
+    complexity: { time: 'O(R·C)', space: 'O(R·C)' },
+  },
 };
 
 /* ================= Sort Characters By Frequency ================= */
@@ -1423,6 +2339,82 @@ const sortByFrequency: ProblemDef = {
   },
   note: 'Any output that groups equal characters and orders groups by size is accepted, so ties need no tie-break. With a fixed alphabet you can skip the comparison sort entirely and bucket by count, which drops the whole thing to O(n).',
   complexity: { time: 'O(n + k log k)', space: 'O(k)' },
+  brute: {
+    label: 'Bucket sort',
+    technique: 'Put each character into a bucket indexed by its count, then read buckets from the highest count down.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string frequencySort(string s) {'),
+        L('        unordered_map<char, int> cnt;'),
+        L('        for (char c : s) cnt[c]++;', 'count'),
+        L('        vector<string> bucket(s.size() + 1);', 'bucket'),
+        L('        for (auto& [c, k] : cnt) bucket[k] += c;', 'bucket'),
+        L('        string res;'),
+        L('        for (int k = s.size(); k >= 1; k--)', 'build'),
+        L('            for (char c : bucket[k]) res.append(k, c);', 'build'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String frequencySort(String s) {'),
+        L('        Map<Character, Integer> cnt = new HashMap<>();'),
+        L('        for (char c : s.toCharArray()) cnt.merge(c, 1, Integer::sum);', 'count'),
+        L('        List<List<Character>> bucket = new ArrayList<>();', 'bucket'),
+        L('        for (int i = 0; i <= s.length(); i++) bucket.add(new ArrayList<>());', 'bucket'),
+        L('        for (var e : cnt.entrySet()) bucket.get(e.getValue()).add(e.getKey());', 'bucket'),
+        L('        StringBuilder res = new StringBuilder();'),
+        L('        for (int k = s.length(); k >= 1; k--)', 'build'),
+        L('            for (char c : bucket.get(k)) res.append(String.valueOf(c).repeat(k));', 'build'),
+        L('        return res.toString();', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim();
+      if (!/^[A-Za-z0-9]{1,14}$/.test(s)) return { error: 'Use 1–14 letters or digits.' };
+      const steps: Step[] = [];
+      const cnt = new Map<string, number>();
+      for (const ch of s) cnt.set(ch, (cnt.get(ch) ?? 0) + 1);
+      const counts = [...cnt.entries()].map(([c, k]) => `${c}:${k}`).join('  ');
+      steps.push({
+        tag: 'count',
+        trace: ['Count every character: ', A(counts), '.'],
+        state: { arr: s.split(''), aggs: [{ label: 'counts', value: counts, c: 'b' }] },
+      });
+      const bucket: string[][] = Array.from({ length: s.length + 1 }, () => []);
+      for (const [c, k] of cnt) bucket[k].push(c);
+      const shown = bucket.map((b, k) => (b.length ? `${k}:[${b.join('')}]` : '')).filter(Boolean).join('  ');
+      steps.push({
+        tag: 'bucket',
+        trace: ['Drop each character in the bucket for its count — no comparison sort needed: ', B(shown), '.'],
+        state: { arr: s.split(''), aggs: [{ label: 'buckets', value: shown, c: 'b' }] },
+      });
+      const out: string[] = [];
+      for (let k = s.length; k >= 1; k--) {
+        for (const c of bucket[k]) {
+          for (let i = 0; i < k; i++) out.push(c);
+          steps.push({
+            tag: 'build',
+            trace: ["Bucket ", A(k), ": emit '", A(c), "' ", A(k), ' time(s) — running result "', B(out.join('')), '".'],
+            state: { arr: [...out], mark: Object.fromEntries(out.map((_, i) => [i, 'good' as const])), aggs: [{ label: 'buckets', value: shown, c: 'b' }] },
+          });
+        }
+      }
+      steps.push({
+        tag: 'ret',
+        trace: ['Sorted by frequency: "', C(out.join('')), '".'],
+        state: { arr: out, mark: Object.fromEntries(out.map((_, i) => [i, 'final' as const])) },
+      });
+      return { steps, result: out.join('') };
+    },
+    note: 'Counts can never exceed n, so they work as bucket indices and replace the comparison sort. Walking buckets from n down to 1 emits the characters in frequency order in O(n) total.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 export const arraysHashing3: ProblemDef[] = [
