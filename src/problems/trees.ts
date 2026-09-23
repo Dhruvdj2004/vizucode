@@ -133,6 +133,86 @@ const invertTree: ProblemDef = {
   },
   note: 'Mirroring a tree is just "swap children" applied at every node — the recursion guarantees every node gets its turn exactly once. The order (swap before recursing) does not matter, because each swap is local to its node.',
   complexity: { time: 'O(n)', space: 'O(h) recursion stack' },
+  brute: {
+    label: 'BFS with a queue',
+    technique: 'Visit nodes level by level with a queue, swapping each node’s children as it is dequeued.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    TreeNode* invertTree(TreeNode* root) {'),
+        L('        if (!root) return root;', 'enter'),
+        L('        queue<TreeNode*> q; q.push(root);', 'enter'),
+        L('        while (!q.empty()) {', 'swap'),
+        L('            TreeNode* node = q.front(); q.pop();', 'swap'),
+        L('            swap(node->left, node->right);', 'swap'),
+        L('            if (node->left) q.push(node->left);', 'recl'),
+        L('            if (node->right) q.push(node->right);', 'recr'),
+        L('        }'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public TreeNode invertTree(TreeNode root) {'),
+        L('        if (root == null) return root;', 'enter'),
+        L('        Queue<TreeNode> q = new LinkedList<>(List.of(root));', 'enter'),
+        L('        while (!q.isEmpty()) {', 'swap'),
+        L('            TreeNode node = q.poll();', 'swap'),
+        L('            TreeNode t = node.left; node.left = node.right; node.right = t;', 'swap'),
+        L('            if (node.left != null) q.add(node.left);', 'recl'),
+        L('            if (node.right != null) q.add(node.right);', 'recr'),
+        L('        }'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const steps: Step[] = [];
+      const done: number[] = [];
+      let queue: TNode[] = [root];
+      const snap = (current: number | null): TreeState => ({
+        ...layoutTree(root),
+        current,
+        done: [...done],
+        queued: queue.map((n) => n.id),
+        stack: queue.map((n) => ({ text: `node ${n.val}` })),
+        stackTitle: 'Queue',
+      });
+      steps.push({ tag: 'enter', trace: ['No recursion: put the root in a queue and swap children as nodes come out.'], state: snap(null) });
+      while (queue.length && steps.length < MAX_STEPS) {
+        const node = queue.shift()!;
+        [node.left, node.right] = [node.right, node.left];
+        done.push(node.id);
+        steps.push({ tag: 'swap', trace: ['Dequeue ', A(node.val), ' and swap its children.'], state: snap(node.id) });
+        const kids = [node.left, node.right].filter((c): c is TNode => c !== null);
+        queue = [...queue, ...kids];
+        if (kids.length) steps.push({ tag: 'recl', trace: ['Enqueue ', A(kids.map((k) => k.val).join(' and ')), '.'], state: snap(node.id) });
+      }
+      const out: (number | string)[] = [];
+      const q: (TNode | null)[] = [root];
+      while (q.length) {
+        const n = q.shift()!;
+        if (!n) {
+          out.push('null');
+          continue;
+        }
+        out.push(n.val);
+        if (n.left || n.right) q.push(n.left, n.right);
+      }
+      while (out[out.length - 1] === 'null') out.pop();
+      steps.push({ tag: 'ret', trace: ['Every node swapped — mirrored tree: ', C(`[${out.join(', ')}]`), '.'], state: snap(null) });
+      return { steps, result: `[${out.join(', ')}]`, resultDetail: 'inverted tree, level order' };
+    },
+    note: 'Same O(n) work as the recursive version, since each node’s swap is independent of order. The queue holds at most one level (O(w)) instead of a call stack as deep as the tree (O(h)).',
+    complexity: { time: 'O(n)', space: 'O(w) queue' },
+  },
 };
 
 /* ================================================================
@@ -241,6 +321,81 @@ const maxDepth: ProblemDef = {
   },
   note: 'Depth composes bottom-up: a node cannot know its depth until both subtrees report theirs, which is why the "work" (the +1 and the max) happens after the recursive calls return — classic post-order. Null children contribute 0, which makes leaves depth 1 automatically.',
   complexity: { time: 'O(n)', space: 'O(h) recursion stack' },
+  brute: {
+    label: 'BFS level count',
+    technique: 'Process the tree one level at a time with a queue and count how many levels there are.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxDepth(TreeNode* root) {'),
+        L('        if (!root) return 0;', 'base'),
+        L('        queue<TreeNode*> q; q.push(root); int depth = 0;', 'enter'),
+        L('        while (!q.empty()) {', 'recl'),
+        L('            depth++;', 'recl'),
+        L('            for (int i = q.size(); i > 0; i--) {', 'recr'),
+        L('                TreeNode* n = q.front(); q.pop();', 'recr'),
+        L('                if (n->left) q.push(n->left);', 'recr'),
+        L('                if (n->right) q.push(n->right);', 'recr'),
+        L('            }'),
+        L('        }'),
+        L('        return depth;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxDepth(TreeNode root) {'),
+        L('        if (root == null) return 0;', 'base'),
+        L('        Queue<TreeNode> q = new LinkedList<>(List.of(root)); int depth = 0;', 'enter'),
+        L('        while (!q.isEmpty()) {', 'recl'),
+        L('            depth++;', 'recl'),
+        L('            for (int i = q.size(); i > 0; i--) {', 'recr'),
+        L('                TreeNode n = q.poll();', 'recr'),
+        L('                if (n.left != null) q.add(n.left);', 'recr'),
+        L('                if (n.right != null) q.add(n.right);', 'recr'),
+        L('            }'),
+        L('        }'),
+        L('        return depth;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const layout = layoutTree(root);
+      const steps: Step[] = [];
+      const badges = new Map<number, string>();
+      let queue: TNode[] = [root];
+      let depth = 0;
+      const snap = (): TreeState => ({
+        nodes: layout.nodes.map((n) => ({ ...n, badge: badges.get(n.id) })),
+        edges: layout.edges,
+        queued: queue.map((n) => n.id),
+        done: [...badges.keys()],
+        aggs: [{ label: 'levels counted', value: String(depth), c: 'c' }],
+      });
+      steps.push({ tag: 'enter', trace: ['Count levels instead of recursing: start with the root alone in the queue.'], state: snap() });
+      while (queue.length) {
+        depth++;
+        const next: TNode[] = [];
+        for (const n of queue) {
+          badges.set(n.id, `L${depth}`);
+          if (n.left) next.push(n.left);
+          if (n.right) next.push(n.right);
+        }
+        steps.push({ tag: 'recl', trace: ['Level ', A(depth), ' has ', A(queue.length), ' node(s): ', B(queue.map((n) => n.val).join(', ')), '.'], state: snap() });
+        queue = next;
+      }
+      steps.push({ tag: 'ret', trace: ['The queue ran dry after ', C(depth), ' level(s) — that is the depth.'], state: snap() });
+      return { steps, result: String(depth), resultDetail: 'maximum depth (nodes on the longest root-to-leaf path)' };
+    },
+    note: 'Also O(n), counting levels top-down instead of combining heights bottom-up. BFS uses O(w) memory for the widest level; recursion uses O(h) for the deepest path — pick the one that is smaller for your trees.',
+    complexity: { time: 'O(n)', space: 'O(w) queue' },
+  },
 };
 
 /* ================================================================
@@ -382,6 +537,83 @@ const levelOrder: ProblemDef = {
   },
   note: 'A queue naturally serves nodes in the order they were discovered, so parents always come out before their children. Freezing the queue size before the inner loop is the trick that draws the boundary between one level and the next.',
   complexity: { time: 'O(n)', space: 'O(w) — widest level' },
+  brute: {
+    label: 'DFS with a depth index',
+    technique: 'Walk the tree depth-first, appending each value to the list for its depth; lists fill in level order automatically.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void dfs(TreeNode* n, int depth, vector<vector<int>>& res) {', 'pop'),
+        L('        if (!n) return;', 'pop'),
+        L('        if (res.size() == depth) res.push_back({});', 'level'),
+        L('        res[depth].push_back(n->val);', 'commit'),
+        L('        dfs(n->left, depth + 1, res);', 'push'),
+        L('        dfs(n->right, depth + 1, res);', 'push'),
+        L('    }'),
+        L('public:'),
+        L('    vector<vector<int>> levelOrder(TreeNode* root) {'),
+        L('        vector<vector<int>> res;', 'init'),
+        L('        dfs(root, 0, res);', 'init'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void dfs(TreeNode n, int depth, List<List<Integer>> res) {', 'pop'),
+        L('        if (n == null) return;', 'pop'),
+        L('        if (res.size() == depth) res.add(new ArrayList<>());', 'level'),
+        L('        res.get(depth).add(n.val);', 'commit'),
+        L('        dfs(n.left, depth + 1, res);', 'push'),
+        L('        dfs(n.right, depth + 1, res);', 'push'),
+        L('    }'),
+        L('    public List<List<Integer>> levelOrder(TreeNode root) {'),
+        L('        List<List<Integer>> res = new ArrayList<>();', 'init'),
+        L('        dfs(root, 0, res);', 'init'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const layout = layoutTree(root);
+      const res: number[][] = [];
+      const stack: string[] = [];
+      const done: number[] = [];
+      const steps: Step[] = [];
+      const fmtRes = () => (res.length === 0 ? '[]' : `[${res.map((lv) => `[${lv.join(',')}]`).join(', ')}]`);
+      const snap = (current: number | null): TreeState => ({
+        nodes: layout.nodes,
+        edges: layout.edges,
+        current,
+        done: [...done],
+        stack: stack.map((text) => ({ text })),
+        stackTitle: 'Call stack',
+        aggs: [{ label: 'result', value: fmtRes(), c: 'b' }],
+      });
+      steps.push({ tag: 'init', trace: ['No queue: a pre-order DFS carries the depth, and each value goes to res[depth].'], state: snap(null) });
+      const dfs = (n: TNode | null, depth: number) => {
+        if (!n || steps.length > MAX_STEPS) return;
+        stack.push(`dfs(${n.val}, d=${depth})`);
+        if (res.length === depth) res.push([]);
+        res[depth].push(n.val);
+        done.push(n.id);
+        steps.push({ tag: 'commit', trace: ['Node ', A(n.val), ' at depth ', A(depth), ' → append to level ', B(depth), ': ', B(`[${res[depth].join(', ')}]`), '.'], state: snap(n.id) });
+        dfs(n.left, depth + 1);
+        dfs(n.right, depth + 1);
+        stack.pop();
+      };
+      dfs(root, 0);
+      steps.push({ tag: 'ret', trace: ['Every node placed: ', C(fmtRes()), '.'], state: snap(null) });
+      return { steps, result: fmtRes(), resultDetail: 'values grouped level by level' };
+    },
+    note: 'Visiting left before right keeps each level’s values in left-to-right order even though levels are filled out of order. Same O(n) time; memory is the tree height instead of the widest level.',
+    complexity: { time: 'O(n)', space: 'O(h) recursion' },
+  },
 };
 
 export const treeProblems = [invertTree, maxDepth, levelOrder];
