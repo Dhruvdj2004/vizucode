@@ -122,6 +122,59 @@ const binarySearch: ProblemDef = {
   },
   note: 'Because the array is sorted, one comparison against the middle element tells you which half the target must live in — so every step throws away half of the remaining candidates, giving O(log n).',
   complexity: { time: 'O(log n)', space: 'O(1)' },
+  brute: {
+    label: 'Linear scan',
+    technique: 'Check every element from left to right until one equals the target.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int search(vector<int>& nums, int target) {'),
+        L('        for (int i = 0; i < nums.size(); i++)', 'scan'),
+        L('            if (nums[i] == target) return i;', 'scan', 'found'),
+        L('        return -1;', 'notfound'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int search(int[] nums, int target) {'),
+        L('        for (int i = 0; i < nums.length; i++)', 'scan'),
+        L('            if (nums[i] == target) return i;', 'scan', 'found'),
+        L('        return -1;', 'notfound'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums);
+      if (typeof arr === 'string') return { error: arr };
+      for (let i = 1; i < arr.length; i++)
+        if (arr[i] < arr[i - 1]) return { error: 'Array must be sorted in non-decreasing order.' };
+      const target = parseInt1(values.target, 'Target');
+      if (typeof target === 'string') return { error: target };
+      const steps: Step[] = [];
+      const hi = arr.length - 1;
+      const st = (s: Partial<BinarySearchState>): BinarySearchState => ({ mode: 'array', arr, lo: 0, hi, ...s }) as BinarySearchState;
+      let found = -1;
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i] === target) {
+          found = i;
+          steps.push({ tag: 'found', trace: ['nums[', A(i), '] = ', B(arr[i]), ' — found after ', C(i + 1), ' comparisons.'], state: st({ lo: i, mid: i, finalIndex: i }) });
+          break;
+        }
+        steps.push({ tag: 'scan', trace: ['nums[', A(i), '] = ', F(arr[i]), ' ≠ ', C(target), ' — move one step right.'], state: st({ lo: i, mid: i }) });
+      }
+      if (found === -1) steps.push({ tag: 'notfound', trace: ['Checked all ', A(arr.length), ' elements — return ', C('-1'), '.'], state: st({ lo: arr.length, finalIndex: null }) });
+      return {
+        steps,
+        result: found === -1 ? '-1' : `index ${found}`,
+        resultDetail: found === -1 ? 'Target not present.' : `nums[${found}] = ${target}`,
+      };
+    },
+    note: 'Works on any array, sorted or not, but looks at up to n elements. Binary search uses the sorted order to discard half the remaining range with each comparison.',
+    complexity: { time: 'O(n)', space: 'O(1)' },
+  },
 };
 
 /* ================================================================
@@ -264,6 +317,67 @@ const koko: ProblemDef = {
   },
   note: 'Feasibility is monotone: if Koko can finish at speed k, she can finish at every speed above k. That yes/no boundary is exactly what binary search finds — we search the space of answers, never the array itself.',
   complexity: { time: 'O(n · log max(piles))', space: 'O(1)' },
+  brute: {
+    label: 'Try every speed',
+    technique: 'Try speeds 1, 2, 3, … in order and return the first one that finishes within h hours.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int minEatingSpeed(vector<int>& piles, int h) {'),
+        L('        for (int k = 1; ; k++) {', 'mid'),
+        L('            long hours = 0;', 'check'),
+        L('            for (int p : piles) hours += (p + k - 1) / k;', 'check'),
+        L('            if (hours <= h) return k;', 'check', 'ret'),
+        L('        }'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int minEatingSpeed(int[] piles, int h) {'),
+        L('        for (int k = 1; ; k++) {', 'mid'),
+        L('            long hours = 0;', 'check'),
+        L('            for (int p : piles) hours += (p + k - 1) / k;', 'check'),
+        L('            if (hours <= h) return k;', 'check', 'ret'),
+        L('        }'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const piles = parseIntArray(values.piles, { min: 1 });
+      if (typeof piles === 'string') return { error: piles };
+      const h = parseInt1(values.h, 'Hours', { min: 1 });
+      if (typeof h === 'string') return { error: h };
+      if (h < piles.length) return { error: `Hours must be ≥ number of piles (${piles.length}) or no speed works.` };
+      const maxPile = Math.max(...piles);
+      const domain: [number, number] = [1, maxPile];
+      const steps: Step[] = [];
+      const st = (s: Partial<BinarySearchState>): BinarySearchState =>
+        ({ mode: 'answer', domain, domainLabel: 'bananas / hour', lo: 1, hi: maxPile, ...s }) as BinarySearchState;
+      let k = 1;
+      for (; k <= maxPile; k++) {
+        const hours = piles.reduce((acc, p) => acc + Math.ceil(p / k), 0);
+        const ok = hours <= h;
+        steps.push({
+          tag: ok ? 'ret' : 'check',
+          trace: ['Speed ', A(k), ': ', A(hours), ' hours — ', ok ? B(`${hours} ≤ ${h}, the first speed that works.`) : F(`${hours} > ${h}, too slow.`)],
+          state: st({
+            lo: k,
+            mid: k,
+            best: ok ? k : null,
+            probe: { text: `hours(k=${k}) = ${hours}`, verdict: ok ? 'yes' : 'no', verdictText: ok ? `${hours} ≤ ${h} h ✓` : `${hours} > ${h} h ✗` },
+          }),
+        });
+        if (ok) break;
+      }
+      steps.push({ tag: 'ret', trace: ['Tried ', A(k), ' speeds — the slowest feasible speed is ', C(k), '.'], state: st({ lo: k, hi: k, best: k }) });
+      return { steps, result: String(k), resultDetail: 'minimum eating speed (bananas / hour)' };
+    },
+    note: 'Each check costs O(n), and in the worst case every speed up to the biggest pile is tried. Because feasibility only ever flips from "no" to "yes" once, binary search finds that flip in log(max pile) checks.',
+    complexity: { time: 'O(n · max(piles))', space: 'O(1)' },
+  },
 };
 
 /* ================================================================
@@ -426,6 +540,93 @@ const shipPackages: ProblemDef = {
   },
   note: 'Once a capacity works, every larger capacity also works — the answer space splits cleanly into "too small" and "big enough". Binary search homes in on that boundary, and the greedy day-packing check is the cheapest possible feasibility test.',
   complexity: { time: 'O(n · log Σweights)', space: 'O(1)' },
+  brute: {
+    label: 'Try every capacity',
+    technique: 'Start at the heaviest package and raise the capacity by 1 until the packages fit in the given days.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int shipWithinDays(vector<int>& weights, int days) {'),
+        L('        int cap = *max_element(weights.begin(), weights.end());', 'init'),
+        L('        for (; ; cap++) {', 'mid'),
+        L('            int d = 1, load = 0;', 'check'),
+        L('            for (int w : weights) {', 'check'),
+        L('                if (load + w > cap) { d++; load = 0; }', 'check'),
+        L('                load += w;', 'check'),
+        L('            }'),
+        L('            if (d <= days) return cap;', 'check', 'ret'),
+        L('        }'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int shipWithinDays(int[] weights, int days) {'),
+        L('        int cap = 0;', 'init'),
+        L('        for (int w : weights) cap = Math.max(cap, w);', 'init'),
+        L('        for (; ; cap++) {', 'mid'),
+        L('            int d = 1, load = 0;', 'check'),
+        L('            for (int w : weights) {', 'check'),
+        L('                if (load + w > cap) { d++; load = 0; }', 'check'),
+        L('                load += w;', 'check'),
+        L('            }'),
+        L('            if (d <= days) return cap;', 'check', 'ret'),
+        L('        }'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const w = parseIntArray(values.weights, { min: 1 });
+      if (typeof w === 'string') return { error: w };
+      const days = parseInt1(values.days, 'Days', { min: 1 });
+      if (typeof days === 'string') return { error: days };
+      const minCap = Math.max(...w);
+      const maxCap = w.reduce((a, b) => a + b, 0);
+      const domain: [number, number] = [minCap, maxCap];
+      const steps: Step[] = [];
+      const st = (s: Partial<BinarySearchState>): BinarySearchState =>
+        ({ mode: 'answer', domain, domainLabel: 'ship capacity', lo: minCap, hi: maxCap, ...s }) as BinarySearchState;
+      const daysNeeded = (cap: number) => {
+        let d = 1;
+        let load = 0;
+        for (const x of w) {
+          if (load + x > cap) {
+            d++;
+            load = 0;
+          }
+          load += x;
+        }
+        return d;
+      };
+      steps.push({ tag: 'init', trace: ['Start at the smallest capacity that can carry every package: ', A(minCap), '.'], state: st({}) });
+      let cap = minCap;
+      let tries = 0;
+      for (; cap <= maxCap; cap++) {
+        tries++;
+        const need = daysNeeded(cap);
+        const ok = need <= days;
+        if (ok || tries <= 30) {
+          steps.push({
+            tag: ok ? 'ret' : 'check',
+            trace: ['Capacity ', A(cap), ' needs ', A(need), ' days — ', ok ? B(`fits in ${days}.`) : F(`more than ${days}, try ${cap + 1}.`)],
+            state: st({
+              lo: cap,
+              mid: cap,
+              best: ok ? cap : null,
+              probe: { text: `daysNeeded(cap=${cap}) = ${need}`, verdict: ok ? 'yes' : 'no', verdictText: ok ? `${need} ≤ ${days} days ✓` : `${need} > ${days} days ✗` },
+            }),
+          });
+        }
+        if (ok) break;
+      }
+      steps.push({ tag: 'ret', trace: ['Tried ', A(tries), ' capacities — the least that works is ', C(cap), '.'], state: st({ lo: cap, hi: cap, best: cap }) });
+      return { steps, result: String(cap), resultDetail: 'minimum ship capacity' };
+    },
+    note: 'The number of capacities tried can be as large as the total weight, each costing an O(n) packing pass. Binary search over the same range needs only log(Σ weights) packing passes.',
+    complexity: { time: 'O(n · Σweights)', space: 'O(1)' },
+  },
 };
 
 /* ================================================================
@@ -522,6 +723,54 @@ const findMinRotated: ProblemDef = {
   },
   note: 'Comparing mid against the last element always tells you which side of the rotation point you are on: greater means the "cliff" is to the right, otherwise mid itself may be the minimum. Note hi = mid (not mid − 1) — mid is never safely discardable on that branch.',
   complexity: { time: 'O(log n)', space: 'O(1)' },
+  brute: {
+    label: 'Linear scan',
+    technique: 'Walk the whole array and keep the smallest value seen.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findMin(vector<int>& nums) {'),
+        L('        int best = nums[0];', 'init'),
+        L('        for (int x : nums) best = min(best, x);', 'scan'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findMin(int[] nums) {'),
+        L('        int best = nums[0];', 'init'),
+        L('        for (int x : nums) best = Math.min(best, x);', 'scan'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums);
+      if (typeof arr === 'string') return { error: arr };
+      if (new Set(arr).size !== arr.length) return { error: 'Values must be distinct (as in the original problem).' };
+      const steps: Step[] = [];
+      const hi = arr.length - 1;
+      const st = (s: Partial<BinarySearchState>): BinarySearchState => ({ mode: 'array', arr, lo: 0, hi, ...s }) as BinarySearchState;
+      let bi = 0;
+      steps.push({ tag: 'init', trace: ['Ignore the rotation: start with ', A(arr[0]), ' as the smallest so far.'], state: st({ mid: 0 }) });
+      for (let i = 1; i < arr.length; i++) {
+        const better = arr[i] < arr[bi];
+        if (better) bi = i;
+        steps.push({
+          tag: 'scan',
+          trace: ['nums[', A(i), '] = ', better ? B(arr[i]) : F(arr[i]), better ? ' — a new minimum.' : [' is not smaller than ', arr[bi], '.'].join('')],
+          state: st({ lo: i, mid: i }),
+        });
+      }
+      steps.push({ tag: 'ret', trace: ['Scanned all ', A(arr.length), ' values — the minimum is ', C(arr[bi]), '.'], state: st({ lo: bi, hi: bi, finalIndex: bi }) });
+      return { steps, result: String(arr[bi]), resultDetail: `found at index ${bi}` };
+    },
+    note: 'Always correct, but it reads every element and ignores the fact that both halves of a rotated array are sorted. Comparing mid with the last element finds the rotation point in O(log n).',
+    complexity: { time: 'O(n)', space: 'O(1)' },
+  },
 };
 
 export const binarySearchProblems = [binarySearch, koko, shipPackages, findMinRotated];

@@ -128,6 +128,82 @@ const search2D: ProblemDef = {
   },
   note: 'The sorted-rows + sorted-row-starts property means row-major order is globally sorted, so index arithmetic (mid / C, mid % C) turns a 2D search into one ordinary binary search over R·C virtual slots — log(R·C), not log R + log C.',
   complexity: { time: 'O(log R·C)', space: 'O(1)' },
+  brute: {
+    label: 'Staircase search',
+    technique: 'Start at the top-right corner: too big means move left, too small means move down.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool searchMatrix(vector<vector<int>>& m, int target) {'),
+        L('        int r = 0, c = m[0].size() - 1;', 'init'),
+        L('        while (r < m.size() && c >= 0) {', 'probe'),
+        L('            if (m[r][c] == target) return true;', 'probe', 'found'),
+        L('            if (m[r][c] > target) c--;', 'left'),
+        L('            else r++;', 'down'),
+        L('        }'),
+        L('        return false;', 'notfound'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean searchMatrix(int[][] m, int target) {'),
+        L('        int r = 0, c = m[0].length - 1;', 'init'),
+        L('        while (r < m.length && c >= 0) {', 'probe'),
+        L('            if (m[r][c] == target) return true;', 'probe', 'found'),
+        L('            if (m[r][c] > target) c--;', 'left'),
+        L('            else r++;', 'down'),
+        L('        }'),
+        L('        return false;', 'notfound'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = parseNumGrid(values.matrix, 8, 8);
+      if (typeof g === 'string') return { error: g };
+      const flat = g.flat();
+      for (let i = 1; i < flat.length; i++) if (flat[i] <= flat[i - 1]) return { error: "Matrix must be sorted: each row ascending, each row's first > previous row's last." };
+      const target = parseInt1(values.target, 'Target');
+      if (typeof target === 'string') return { error: target };
+      const R = g.length;
+      const Cn = g[0].length;
+      const steps: Step[] = [];
+      const gone: MatrixState['mark'] = {};
+      const st = (extra?: MatrixState['mark']): MatrixState => ({
+        grid: g,
+        rowLabels: [...Array(R)].map((_, i) => i),
+        colLabels: [...Array(Cn)].map((_, i) => i),
+        mark: { ...gone, ...extra },
+      });
+      let r = 0;
+      let c = Cn - 1;
+      steps.push({ tag: 'init', trace: ['Start at the top-right cell: everything left of it is smaller, everything below it is larger.'], state: st({ [`${r},${c}`]: 'active' }) });
+      let found = false;
+      while (r < R && c >= 0) {
+        const v = g[r][c];
+        if (v === target) {
+          found = true;
+          steps.push({ tag: 'found', trace: ['(', A(r), ',', A(c), ') holds ', B(v), ' — found. Return ', C('true'), '.'], state: st({ [`${r},${c}`]: 'final' }) });
+          break;
+        }
+        if (v > target) {
+          for (let rr = r; rr < R; rr++) gone[`${rr},${c}`] = 'dim';
+          steps.push({ tag: 'left', trace: [F(v), ' > ', C(target), ' — the rest of column ', A(c), ' is even larger. Move left.'], state: st({ [`${r},${c}`]: 'active' }) });
+          c--;
+        } else {
+          for (let cc = 0; cc <= c; cc++) gone[`${r},${cc}`] = 'dim';
+          steps.push({ tag: 'down', trace: [F(v), ' < ', C(target), ' — the rest of row ', A(r), ' is even smaller. Move down.'], state: st({ [`${r},${c}`]: 'active' }) });
+          r++;
+        }
+      }
+      if (!found) steps.push({ tag: 'notfound', trace: ['Walked off the grid — return ', C('false'), '.'], state: st() });
+      return { steps, result: String(found), resultDetail: found ? undefined : 'target absent' };
+    },
+    note: 'Each step removes a whole row or column, so it takes at most R + C steps. It only needs rows and columns to be sorted, which makes it the go-to for Search a 2D Matrix II; here the stronger row-major ordering lets binary search reach O(log(R·C)).',
+    complexity: { time: 'O(R + C)', space: 'O(1)' },
+  },
 };
 
 /* ================= 43. Search in Rotated Sorted Array ================= */
@@ -254,6 +330,54 @@ const searchRotated: ProblemDef = {
   },
   note: 'A rotation has exactly one "cliff", so any midpoint splits the range into one clean sorted half and one half containing the cliff. Range-checking the target against the sorted half is decidable in O(1) — which is all binary search ever needed.',
   complexity: { time: 'O(log n)', space: 'O(1)' },
+  brute: {
+    label: 'Linear scan',
+    technique: 'Check every element from left to right, ignoring the rotation.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int search(vector<int>& nums, int target) {'),
+        L('        for (int i = 0; i < nums.size(); i++)', 'scan'),
+        L('            if (nums[i] == target) return i;', 'scan', 'found'),
+        L('        return -1;', 'notfound'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int search(int[] nums, int target) {'),
+        L('        for (int i = 0; i < nums.length; i++)', 'scan'),
+        L('            if (nums[i] == target) return i;', 'scan', 'found'),
+        L('        return -1;', 'notfound'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums);
+      if (typeof arr === 'string') return { error: arr };
+      if (new Set(arr).size !== arr.length) return { error: 'Values must be distinct.' };
+      const target = parseInt1(values.target, 'Target');
+      if (typeof target === 'string') return { error: target };
+      const steps: Step[] = [];
+      const hi = arr.length - 1;
+      const st = (s: Partial<BinarySearchState>): BinarySearchState => ({ mode: 'array', arr, lo: 0, hi, ...s }) as BinarySearchState;
+      let found = -1;
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i] === target) {
+          found = i;
+          steps.push({ tag: 'found', trace: ['nums[', A(i), '] = ', B(arr[i]), ' — found after ', C(i + 1), ' comparisons.'], state: st({ lo: i, mid: i, finalIndex: i }) });
+          break;
+        }
+        steps.push({ tag: 'scan', trace: ['nums[', A(i), '] = ', F(arr[i]), ' ≠ ', C(target), '.'], state: st({ lo: i, mid: i }) });
+      }
+      if (found === -1) steps.push({ tag: 'notfound', trace: ['Not in the array — return ', C('-1'), '.'], state: st({ lo: arr.length, finalIndex: null }) });
+      return { steps, result: found === -1 ? '-1' : `index ${found}`, resultDetail: found === -1 ? undefined : `nums[${found}] = ${target}` };
+    },
+    note: 'Simple and always correct, but O(n). At every mid of a rotated array at least one half is sorted, which lets binary search decide which half can hold the target.',
+    complexity: { time: 'O(n)', space: 'O(1)' },
+  },
 };
 
 /* ================= 44. Find First and Last Position ================= */
@@ -370,6 +494,72 @@ const firstLastPos: ProblemDef = {
   },
   note: 'The only change from vanilla binary search is refusing to stop on a hit: biasing the shrink direction turns the same O(log n) loop into a boundary-finder. Two biased runs bracket the whole run of duplicates.',
   complexity: { time: 'O(log n)', space: 'O(1)' },
+  brute: {
+    label: 'Linear scan',
+    technique: 'Scan from the left for the first match and from the right for the last match.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> searchRange(vector<int>& nums, int target) {'),
+        L('        int first = -1, last = -1;', 'init'),
+        L('        for (int i = 0; i < nums.size(); i++)', 'first'),
+        L('            if (nums[i] == target) { first = i; break; }', 'first'),
+        L('        for (int i = nums.size() - 1; i >= 0; i--)', 'last'),
+        L('            if (nums[i] == target) { last = i; break; }', 'last'),
+        L('        return {first, last};', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] searchRange(int[] nums, int target) {'),
+        L('        int first = -1, last = -1;', 'init'),
+        L('        for (int i = 0; i < nums.length; i++)', 'first'),
+        L('            if (nums[i] == target) { first = i; break; }', 'first'),
+        L('        for (int i = nums.length - 1; i >= 0; i--)', 'last'),
+        L('            if (nums[i] == target) { last = i; break; }', 'last'),
+        L('        return new int[]{first, last};', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums);
+      if (typeof arr === 'string') return { error: arr };
+      for (let i = 1; i < arr.length; i++) if (arr[i] < arr[i - 1]) return { error: 'Array must be sorted.' };
+      const target = parseInt1(values.target, 'Target');
+      if (typeof target === 'string') return { error: target };
+      const steps: Step[] = [];
+      const hi = arr.length - 1;
+      const st = (s: Partial<BinarySearchState>): BinarySearchState => ({ mode: 'array', arr, lo: 0, hi, ...s }) as BinarySearchState;
+      steps.push({ tag: 'init', trace: ['Two plain scans: one from the left for the ', A('first'), ' match, one from the right for the ', A('last'), '.'], state: st({}) });
+      let first = -1;
+      for (let i = 0; i < arr.length; i++) {
+        const hit = arr[i] === target;
+        steps.push({ tag: 'first', trace: ['Left scan: nums[', A(i), '] = ', hit ? B(arr[i]) : F(arr[i]), hit ? ' — first occurrence.' : '.'], state: st({ lo: i, mid: i }) });
+        if (hit) {
+          first = i;
+          break;
+        }
+      }
+      let last = -1;
+      if (first !== -1) {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          const hit = arr[i] === target;
+          steps.push({ tag: 'last', trace: ['Right scan: nums[', A(i), '] = ', hit ? B(arr[i]) : F(arr[i]), hit ? ' — last occurrence.' : '.'], state: st({ hi: i, mid: i }) });
+          if (hit) {
+            last = i;
+            break;
+          }
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Range: ', C(`[${first}, ${last}]`), '.'], state: st({ lo: Math.max(first, 0), hi: Math.max(last, 0), finalIndex: first === -1 ? null : first }) });
+      return { steps, result: `[${first}, ${last}]`, resultDetail: first === -1 ? 'target absent' : `${last - first + 1} occurrence(s)` };
+    },
+    note: 'Two linear scans cost O(n) — and if the target fills most of the array, both scans are short, but a missing target forces a full pass. Two boundary binary searches guarantee O(log n).',
+    complexity: { time: 'O(n)', space: 'O(1)' },
+  },
 };
 
 /* ================= 45. Median of Two Sorted Arrays ================= */
@@ -532,6 +722,83 @@ const medianTwoSorted: ProblemDef = {
   },
   note: 'The median is a partition statement: half the values on each side, every left value ≤ every right value. Fixing the cut in one array forces the cut in the other, and the validity test is just 2 comparisons — so binary searching the shorter array\'s cut gives O(log min(m,n)), with no merging at all.',
   complexity: { time: 'O(log min(m,n))', space: 'O(1)' },
+  brute: {
+    label: 'Merge',
+    technique: 'Merge the two sorted arrays like in merge sort, then read the middle element(s).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    double findMedianSortedArrays(vector<int>& a, vector<int>& b) {'),
+        L('        vector<int> m;', 'init'),
+        L('        int i = 0, j = 0;', 'init'),
+        L('        while (i < a.size() || j < b.size()) {', 'take'),
+        L('            if (j == b.size() || (i < a.size() && a[i] <= b[j])) m.push_back(a[i++]);', 'take'),
+        L('            else m.push_back(b[j++]);', 'take'),
+        L('        }'),
+        L('        int n = m.size();', 'ret'),
+        L('        return n % 2 ? m[n / 2] : (m[n / 2 - 1] + m[n / 2]) / 2.0;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public double findMedianSortedArrays(int[] a, int[] b) {'),
+        L('        int[] m = new int[a.length + b.length];', 'init'),
+        L('        int i = 0, j = 0, k = 0;', 'init'),
+        L('        while (i < a.length || j < b.length) {', 'take'),
+        L('            if (j == b.length || (i < a.length && a[i] <= b[j])) m[k++] = a[i++];', 'take'),
+        L('            else m[k++] = b[j++];', 'take'),
+        L('        }'),
+        L('        int n = m.length;', 'ret'),
+        L('        return n % 2 == 1 ? m[n / 2] : (m[n / 2 - 1] + m[n / 2]) / 2.0;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.nums1, { maxLen: 10 });
+      if (typeof a === 'string') return { error: a };
+      const b = parseIntArray(values.nums2, { maxLen: 10 });
+      if (typeof b === 'string') return { error: b };
+      for (const arr of [a, b]) for (let i = 1; i < arr.length; i++) if (arr[i] < arr[i - 1]) return { error: 'Both arrays must be sorted.' };
+      const steps: Step[] = [];
+      const merged: number[] = [];
+      let i = 0;
+      let j = 0;
+      const view = (hl: 'a' | 'b' | null): ListState => ({
+        chains: [
+          { label: 'nums1', items: a.map((v, k) => ({ v, mark: k < i ? ('dim' as const) : undefined })), broken: true },
+          { label: 'nums2', items: b.map((v, k) => ({ v, mark: k < j ? ('dim' as const) : undefined })), broken: true },
+          { label: 'merged', items: merged.map((v, k) => ({ v, mark: k === merged.length - 1 && hl ? ('active' as const) : undefined })), broken: true },
+        ],
+        ptrs: [
+          ...(i < a.length ? [{ name: 'i', chain: 0, i, c: 'a' as const }] : []),
+          ...(j < b.length ? [{ name: 'j', chain: 1, i: j, c: 'b' as const }] : []),
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Merge both arrays into one sorted list of ', A(a.length + b.length), ' values.'], state: view(null) });
+      while (i < a.length || j < b.length) {
+        const fromA = j === b.length || (i < a.length && a[i] <= b[j]);
+        const v = fromA ? a[i++] : b[j++];
+        merged.push(v);
+        steps.push({ tag: 'take', trace: ['Take the smaller front value ', A(v), ' from ', A(fromA ? 'nums1' : 'nums2'), '.'], state: view(fromA ? 'a' : 'b') });
+      }
+      const n = merged.length;
+      const med = n % 2 ? merged[(n - 1) / 2] : (merged[n / 2 - 1] + merged[n / 2]) / 2;
+      const mid = n % 2 ? [(n - 1) / 2] : [n / 2 - 1, n / 2];
+      steps.push({
+        tag: 'ret',
+        trace: n % 2 ? ['Odd length ', A(n), ' — the middle value is ', C(med), '.'] : ['Even length ', A(n), ' — average of ', B(merged[mid[0]]), ' and ', B(merged[mid[1]]), ' = ', C(med), '.'],
+        state: {
+          chains: [{ label: 'merged', items: merged.map((v, k) => ({ v, mark: mid.includes(k) ? ('final' as const) : undefined })), broken: true }],
+        },
+      });
+      return { steps, result: String(med), resultDetail: n % 2 ? 'odd total — median is the middle value' : 'even total — average of the two middle values' };
+    },
+    note: 'Easy to reason about, but it touches all m + n values and needs O(m + n) memory, missing the problem’s O(log(m + n)) requirement. Binary-searching the partition of the shorter array needs only a handful of comparisons.',
+    complexity: { time: 'O(m + n)', space: 'O(m + n)' },
+  },
 };
 
 export const binarySearch2 = [search2D, searchRotated, firstLastPos, medianTwoSorted];
