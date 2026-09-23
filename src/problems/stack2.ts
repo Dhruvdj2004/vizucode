@@ -112,6 +112,74 @@ const nextGreaterII: ProblemDef = {
   },
   note: 'The stack always holds indices in decreasing value order, so a new value answers a whole run of them at once — each index is pushed and popped once, giving O(n) despite the nested loop. Pushing only during the first pass is what stops the second sweep from creating duplicate work.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Circular scan',
+    technique: 'For each index, walk forward around the circle (up to n − 1 steps) until a larger value appears.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> nextGreaterElements(vector<int>& a) {'),
+        L('        int n = a.size();', 'init'),
+        L('        vector<int> res(n, -1);', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'scan'),
+        L('            for (int k = 1; k < n; k++)', 'scan'),
+        L('                if (a[(i + k) % n] > a[i]) { res[i] = a[(i + k) % n]; break; }', 'scan'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] nextGreaterElements(int[] a) {'),
+        L('        int n = a.length;', 'init'),
+        L('        int[] res = new int[n]; Arrays.fill(res, -1);', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'scan'),
+        L('            for (int k = 1; k < n; k++)', 'scan'),
+        L('                if (a[(i + k) % n] > a[i]) { res[i] = a[(i + k) % n]; break; }', 'scan'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.nums, { maxLen: 9 });
+      if (typeof a === 'string') return { error: a };
+      const n = a.length;
+      const res = a.map(() => -1);
+      let looks = 0;
+      const steps: Step[] = [];
+      const st = (i?: number, j?: number): StackState => ({
+        array: {
+          arr: a,
+          ptrs: [...(i !== undefined ? [{ name: 'i', i, c: 'a' as const }] : []), ...(j !== undefined ? [{ name: 'next', i: j, c: 'b' as const }] : [])],
+        },
+        stack: [],
+        stackLabel: 'no stack',
+        aggs: [
+          { label: 'answers', value: `[${res.join(', ')}]`, c: 'c' },
+          { label: 'values looked at', value: String(looks), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['For every index, walk around the circle until something bigger shows up.'], state: st() });
+      for (let i = 0; i < n; i++) {
+        let hit: number | undefined;
+        for (let k = 1; k < n; k++) {
+          looks++;
+          if (a[(i + k) % n] > a[i]) {
+            res[i] = a[(i + k) % n];
+            hit = (i + k) % n;
+            break;
+          }
+        }
+        steps.push({ tag: 'scan', trace: ['Index ', A(i), ' (', A(a[i]), '): ', hit !== undefined ? ['next greater is ', res[i], ' at index ', hit].join('') : 'nothing larger anywhere', ' → ', B(res[i]), '.'], state: st(i, hit) });
+      }
+      steps.push({ tag: 'ret', trace: ['Answer: ', C(`[${res.join(', ')}]`), '.'], state: st() });
+      return { steps, result: `[${res.join(', ')}]` };
+    },
+    note: 'Each index may walk almost the whole circle, so this is O(n²). A decreasing stack swept over the array twice settles every index as soon as its next greater value arrives.',
+    complexity: { time: 'O(n²)', space: 'O(1) beyond output' },
+  },
 };
 
 /* ================= Implement Queue using Stacks ================= */
@@ -231,6 +299,89 @@ const queueUsingStacks: ProblemDef = {
   },
   note: 'Only refilling out when it is empty is what makes this amortised O(1): each element is moved across exactly once in its lifetime, so a costly pour is always paid for by the cheap pops that follow. Pouring on every pop would be correct but O(n) each time.',
   complexity: { time: 'O(1) amortised per op', space: 'O(n)' },
+  brute: {
+    label: 'Costly push',
+    technique: 'Keep one stack always in queue order: every push empties it into a helper, drops the new value at the bottom, and pours everything back.',
+    code: {
+      cpp: [
+        L('class MyQueue {'),
+        L('    stack<int> s, tmp;  // s.top() is always the front'),
+        L('public:'),
+        L('    void push(int x) {'),
+        L('        while (!s.empty()) { tmp.push(s.top()); s.pop(); }', 'pour'),
+        L('        s.push(x);', 'push'),
+        L('        while (!tmp.empty()) { s.push(tmp.top()); tmp.pop(); }', 'pour'),
+        L('    }'),
+        L('    int pop() { int v = s.top(); s.pop(); return v; }', 'pop'),
+        L('    int peek() { return s.top(); }', 'peek'),
+        L('};'),
+      ],
+      java: [
+        L('class MyQueue {'),
+        L('    Deque<Integer> s = new ArrayDeque<>(), tmp = new ArrayDeque<>();  // s.peek() is the front'),
+        L('    public void push(int x) {'),
+        L('        while (!s.isEmpty()) tmp.push(s.pop());', 'pour'),
+        L('        s.push(x);', 'push'),
+        L('        while (!tmp.isEmpty()) s.push(tmp.pop());', 'pour'),
+        L('    }'),
+        L('    public int pop() { return s.pop(); }', 'pop'),
+        L('    public int peek() { return s.peek(); }', 'peek'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = (values.ops ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter at least one operation.' };
+      if (raw.length > 12) return { error: 'Keep it to at most 12 operations.' };
+      const s: number[] = [];
+      const tmp: number[] = [];
+      const results: string[] = [];
+      let moves = 0;
+      const steps: Step[] = [];
+      const st = (): StackState => ({
+        stack: s.map((v) => ({ v, c: 'b' as const })),
+        stackLabel: 'main — front of the queue on top',
+        stack2: tmp.map((v) => ({ v, c: 'a' as const })),
+        stack2Label: 'helper',
+        aggs: [
+          { label: 'element moves', value: String(moves), c: 'a' },
+          { label: 'returned', value: results.join(', ') || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'push', trace: ['Keep the main stack in queue order at all times, so pop and peek are trivial — pushing pays the price.'], state: st() });
+      for (const op of raw) {
+        const [name, arg] = op.split(/\s+/);
+        const cmd = name.toLowerCase();
+        if (cmd === 'push') {
+          const v = Number(arg);
+          if (!Number.isInteger(v)) return { error: `"${op}" needs an integer, e.g. "push 5".` };
+          while (s.length) {
+            tmp.push(s.pop()!);
+            moves++;
+          }
+          steps.push({ tag: 'pour', trace: ['push(', A(v), '): move all ', A(tmp.length), ' value(s) to the helper first.'], state: st() });
+          s.push(v);
+          steps.push({ tag: 'push', trace: ['Put ', A(v), ' at the bottom — it is the newest, so it belongs at the back of the queue.'], state: st() });
+          while (tmp.length) {
+            s.push(tmp.pop()!);
+            moves++;
+          }
+          steps.push({ tag: 'pour', trace: ['Pour everything back on top of it. The front of the queue is on top again.'], state: st() });
+        } else if (cmd === 'pop' || cmd === 'peek') {
+          if (!s.length) return { error: `"${op}" on an empty queue.` };
+          const top = s[s.length - 1];
+          if (cmd === 'pop') s.pop();
+          results.push(String(top));
+          steps.push({ tag: cmd, trace: [cmd, '() → ', C(top), ' — O(1), it is already on top.'], state: st() });
+        } else {
+          return { error: `Unknown operation "${op}". Use push <n>, pop or peek.` };
+        }
+      }
+      return { steps, result: results.join(', ') || 'no values returned', resultDetail: `${raw.length} operations` };
+    },
+    note: 'Every push moves the whole queue twice, so pushes are O(n). The in/out design pours only when the out-stack runs dry, which is O(1) amortised per operation.',
+    complexity: { time: 'O(n) push, O(1) pop/peek', space: 'O(n)' },
+  },
 };
 
 /* ================= Implement Stack using Queues ================= */
@@ -330,6 +481,91 @@ const stackUsingQueues: ProblemDef = {
   },
   note: 'This makes push O(n) and pop O(1); you can flip the trade-off by rotating during pop instead. Unlike the queue-from-stacks version, there is no amortisation to hide behind — every push genuinely costs a full rotation, which is why one queue is enough and a second buys you nothing.',
   complexity: { time: 'O(n) push, O(1) pop/top', space: 'O(n)' },
+  brute: {
+    label: 'Two queues, costly pop',
+    technique: 'Push is a plain enqueue; pop moves all but the last element into a second queue, takes the last one, and swaps the queues.',
+    code: {
+      cpp: [
+        L('class MyStack {'),
+        L('    queue<int> q, other;'),
+        L('public:'),
+        L('    void push(int x) { q.push(x); }', 'push'),
+        L('    int pop() {'),
+        L('        while (q.size() > 1) { other.push(q.front()); q.pop(); }', 'rotate'),
+        L('        int v = q.front(); q.pop();', 'pop'),
+        L('        swap(q, other);', 'pop'),
+        L('        return v;', 'pop'),
+        L('    }'),
+        L('    int top() { int v = pop(); push(v); return v; }', 'top'),
+        L('};'),
+      ],
+      java: [
+        L('class MyStack {'),
+        L('    Queue<Integer> q = new ArrayDeque<>(), other = new ArrayDeque<>();'),
+        L('    public void push(int x) { q.add(x); }', 'push'),
+        L('    public int pop() {'),
+        L('        while (q.size() > 1) other.add(q.remove());', 'rotate'),
+        L('        int v = q.remove();', 'pop'),
+        L('        Queue<Integer> t = q; q = other; other = t;', 'pop'),
+        L('        return v;', 'pop'),
+        L('    }'),
+        L('    public int top() { int v = pop(); push(v); return v; }', 'top'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = (values.ops ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter at least one operation.' };
+      if (raw.length > 10) return { error: 'Keep it to at most 10 operations.' };
+      let q: number[] = [];
+      let other: number[] = [];
+      const results: string[] = [];
+      let moves = 0;
+      const steps: Step[] = [];
+      const st = (): StackState => ({
+        stack: [...q].reverse().map((v) => ({ v, c: 'b' as const })),
+        stackLabel: 'queue q — front at the top',
+        stack2: [...other].reverse().map((v) => ({ v, c: 'a' as const })),
+        stack2Label: 'queue other',
+        aggs: [
+          { label: 'element moves', value: String(moves), c: 'a' },
+          { label: 'returned', value: results.join(', ') || '—', c: 'c' },
+        ],
+      });
+      const popLast = (): number => {
+        while (q.length > 1) {
+          other.push(q.shift()!);
+          moves++;
+        }
+        steps.push({ tag: 'rotate', trace: ['Move all but the last element into the other queue.'], state: st() });
+        const v = q.shift()!;
+        [q, other] = [other, q];
+        return v;
+      };
+      steps.push({ tag: 'push', trace: ['Push is a plain enqueue; the newest element is at the back, so pop has to dig it out.'], state: st() });
+      for (const op of raw) {
+        const [name, arg] = op.split(/\s+/);
+        const cmd = name.toLowerCase();
+        if (cmd === 'push') {
+          const v = Number(arg);
+          if (!Number.isInteger(v)) return { error: `"${op}" needs an integer, e.g. "push 5".` };
+          q.push(v);
+          steps.push({ tag: 'push', trace: ['push(', A(v), ') — enqueue at the back, O(1).'], state: st() });
+        } else if (cmd === 'pop' || cmd === 'top') {
+          if (!q.length) return { error: `"${op}" on an empty stack.` };
+          const v = popLast();
+          if (cmd === 'top') q.push(v);
+          results.push(String(v));
+          steps.push({ tag: cmd, trace: [cmd, '() → ', C(v), cmd === 'top' ? ' (and put it back).' : '.'], state: st() });
+        } else {
+          return { error: `Unknown operation "${op}". Use push <n>, pop or top.` };
+        }
+      }
+      return { steps, result: results.join(', ') || 'no values returned', resultDetail: `${raw.length} operations` };
+    },
+    note: 'The mirror image of the rotate-on-push design: push is O(1) but every pop or top moves n − 1 elements. Which side should pay depends on whether pushes or pops dominate.',
+    complexity: { time: 'O(1) push, O(n) pop/top', space: 'O(n)' },
+  },
 };
 
 /* ================= Asteroid Collision ================= */
@@ -449,6 +685,86 @@ const asteroidCollision: ProblemDef = {
   },
   note: 'The stack top is exactly the only asteroid an incoming left-mover can meet first, which is why one pass suffices. The three-way size comparison must be exhaustive — the equal case destroys both, and treating it like either inequality is the bug that fails on inputs such as [8, -8].',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Resolve until stable',
+    technique: 'Repeatedly find the first right-mover immediately followed by a left-mover, resolve that crash, and rescan.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> asteroidCollision(vector<int>& a) {'),
+        L('        bool changed = true;', 'push'),
+        L('        while (changed) {', 'scan'),
+        L('            changed = false;', 'scan'),
+        L('            for (int i = 0; i + 1 < a.size(); i++)', 'scan'),
+        L('                if (a[i] > 0 && a[i + 1] < 0) {', 'crash'),
+        L('                    int l = a[i], r = -a[i + 1];', 'crash'),
+        L('                    if (l == r) a.erase(a.begin() + i, a.begin() + i + 2);', 'crash'),
+        L('                    else a.erase(a.begin() + (l > r ? i + 1 : i));', 'crash'),
+        L('                    changed = true; break;', 'crash'),
+        L('                }'),
+        L('        }'),
+        L('        return a;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] asteroidCollision(int[] arr) {'),
+        L('        List<Integer> a = new ArrayList<>(); for (int x : arr) a.add(x);', 'push'),
+        L('        boolean changed = true;', 'push'),
+        L('        while (changed) {', 'scan'),
+        L('            changed = false;', 'scan'),
+        L('            for (int i = 0; i + 1 < a.size(); i++)', 'scan'),
+        L('                if (a.get(i) > 0 && a.get(i + 1) < 0) {', 'crash'),
+        L('                    int l = a.get(i), r = -a.get(i + 1);', 'crash'),
+        L('                    if (l == r) { a.remove(i + 1); a.remove(i); }', 'crash'),
+        L('                    else a.remove(l > r ? i + 1 : i);', 'crash'),
+        L('                    changed = true; break;', 'crash'),
+        L('                }'),
+        L('        }'),
+        L('        return a.stream().mapToInt(x -> x).toArray();', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a0 = parseIntArray(values.nums, { maxLen: 12 });
+      if (typeof a0 === 'string') return { error: a0 };
+      if (a0.some((v) => v === 0)) return { error: 'Asteroid sizes cannot be 0 (they must move left or right).' };
+      const a = [...a0];
+      let scans = 0;
+      const steps: Step[] = [];
+      const fmt = (v: number) => (v > 0 ? `${v}→` : `←${-v}`);
+      const st = (hl?: number): StackState => ({
+        array: { arr: a.length ? a.map(fmt) : ['∅'], mark: hl !== undefined ? { [hl]: 'active', [hl + 1]: 'active' } : {} },
+        stack: [],
+        stackLabel: 'no stack — the row itself is rewritten',
+        aggs: [{ label: 'rescans', value: String(scans), c: 'a' }],
+      });
+      steps.push({ tag: 'push', trace: ['Only a right-mover (→) directly before a left-mover (←) can collide. Find one, resolve it, and start over.'], state: st() });
+      let changed = true;
+      while (changed) {
+        changed = false;
+        scans++;
+        for (let i = 0; i + 1 < a.length; i++) {
+          if (a[i] > 0 && a[i + 1] < 0) {
+            const l = a[i];
+            const r = -a[i + 1];
+            steps.push({ tag: 'crash', trace: [A(fmt(a[i])), ' meets ', A(fmt(a[i + 1])), ': ', l === r ? F('both explode') : l > r ? [fmt(a[i + 1]), ' explodes'].join('') : [fmt(a[i]), ' explodes'].join(''), '.'], state: st(i) });
+            if (l === r) a.splice(i, 2);
+            else a.splice(l > r ? i + 1 : i, 1);
+            changed = true;
+            break;
+          }
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['No more collisions — survivors ', C(`[${a.join(', ')}]`), ' after ', A(scans), ' scans.'], state: st() });
+      return { steps, result: `[${a.join(', ')}]` };
+    },
+    note: 'Each crash triggers a fresh scan from the left, so a long chain of collisions costs O(n²). The stack resolves each incoming left-mover against the survivors right where it lands.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Sum of Subarray Minimums ================= */
@@ -566,6 +882,70 @@ const sumSubarrayMins: ProblemDef = {
   },
   note: 'Flipping the question from "iterate subarrays" to "count each element\'s reign" is what collapses O(n²) into O(n). The asymmetric comparison — >= on one side, > on the other — is deliberate: with duplicate values it makes exactly one of the equal elements own each subarray, so nothing is double counted.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Every subarray',
+    technique: 'For each start, extend right while tracking the running minimum, and add it for every subarray.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int sumSubarrayMins(vector<int>& a) {'),
+        L('        const long MOD = 1e9 + 7; long ans = 0;', 'loop'),
+        L('        for (int i = 0; i < a.size(); i++) {', 'start'),
+        L('            int mn = INT_MAX;', 'start'),
+        L('            for (int j = i; j < a.size(); j++) {', 'add'),
+        L('                mn = min(mn, a[j]);', 'add'),
+        L('                ans = (ans + mn) % MOD;', 'add'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int sumSubarrayMins(int[] a) {'),
+        L('        final long MOD = 1_000_000_007L; long ans = 0;', 'loop'),
+        L('        for (int i = 0; i < a.length; i++) {', 'start'),
+        L('            int mn = Integer.MAX_VALUE;', 'start'),
+        L('            for (int j = i; j < a.length; j++) {', 'add'),
+        L('                mn = Math.min(mn, a[j]);', 'add'),
+        L('                ans = (ans + mn) % MOD;', 'add'),
+        L('            }'),
+        L('        }'),
+        L('        return (int) ans;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.nums, { min: 1, maxLen: 8 });
+      if (typeof a === 'string') return { error: a };
+      const n = a.length;
+      let ans = 0;
+      const steps: Step[] = [];
+      const st = (i?: number, j?: number, mn?: number): StackState => ({
+        array: { arr: a, mark: i !== undefined && j !== undefined ? Object.fromEntries([...Array(j - i + 1)].map((_, k) => [i + k, a[i + k] === mn ? ('good' as const) : ('active' as const)])) : {} },
+        stack: [],
+        stackLabel: 'no stack',
+        aggs: [{ label: 'running sum', value: String(ans), c: 'c' }],
+      });
+      steps.push({ tag: 'loop', trace: ['Visit all ', A((n * (n + 1)) / 2), ' subarrays and add each one’s minimum.'], state: st() });
+      for (let i = 0; i < n; i++) {
+        let mn = Infinity;
+        steps.push({ tag: 'start', trace: ['Start at index ', A(i), '.'], state: st() });
+        for (let j = i; j < n; j++) {
+          mn = Math.min(mn, a[j]);
+          ans += mn;
+          steps.push({ tag: 'add', trace: ['[', A(i), '..', A(j), '] has minimum ', B(mn), ' → sum ', C(ans), '.'], state: st(i, j, mn) });
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Sum of subarray minimums: ', C(ans), '.'], state: st() });
+      return { steps, result: String(ans) };
+    },
+    note: 'All n(n+1)/2 subarrays are visited — O(n²). Flipping the question to "how many subarrays is a[i] the minimum of?" lets monotonic stacks count each element’s contribution in O(n).',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Remove K Digits ================= */
@@ -685,6 +1065,79 @@ const removeKDigits: ProblemDef = {
   },
   note: 'Greedy works because a digit in a higher place always outweighs everything to its right — so removing the first descent is never worse than any other choice. The two clean-ups matter: leftover k is spent at the tail (where digits are already ascending), and leading zeros must be stripped or the result is not a number.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'k greedy passes',
+    technique: 'Repeat k times: scan left to right and delete the first digit that is larger than the digit after it (or the last digit).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string removeKdigits(string num, int k) {'),
+        L('        while (k--) {', 'pass'),
+        L('            int i = 0;', 'pass'),
+        L('            while (i + 1 < num.size() && num[i] <= num[i + 1]) i++;', 'pass'),
+        L('            num.erase(i, 1);', 'pop'),
+        L('        }'),
+        L('        int z = 0;', 'zeros'),
+        L('        while (z < num.size() && num[z] == \'0\') z++;', 'zeros'),
+        L('        num = num.substr(z);', 'zeros'),
+        L('        return num.empty() ? "0" : num;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String removeKdigits(String num, int k) {'),
+        L('        StringBuilder s = new StringBuilder(num);'),
+        L('        while (k-- > 0) {', 'pass'),
+        L('            int i = 0;', 'pass'),
+        L('            while (i + 1 < s.length() && s.charAt(i) <= s.charAt(i + 1)) i++;', 'pass'),
+        L('            s.deleteCharAt(i);', 'pop'),
+        L('        }'),
+        L('        int z = 0;', 'zeros'),
+        L('        while (z < s.length() && s.charAt(z) == \'0\') z++;', 'zeros'),
+        L('        String out = s.substring(z);', 'zeros'),
+        L('        return out.isEmpty() ? "0" : out;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const num = (values.num ?? '').trim();
+      if (!/^[0-9]{1,12}$/.test(num)) return { error: 'Enter 1–12 digits.' };
+      const k = parseInt1(values.k, 'k', { min: 0 });
+      if (typeof k === 'string') return { error: k };
+      if (k > num.length) return { error: `k cannot exceed the number of digits (${num.length}).` };
+      let d = num.split('');
+      let scanned = 0;
+      const steps: Step[] = [];
+      const st = (hl?: number): StackState => ({
+        array: { arr: d.length ? d : ['∅'], mark: hl !== undefined ? { [hl]: 'dim' } : {} },
+        stack: [],
+        stackLabel: 'no stack — one deletion per pass',
+        aggs: [{ label: 'digits scanned', value: String(scanned), c: 'a' }],
+      });
+      steps.push({ tag: 'pass', trace: ['Each pass removes the first digit that is bigger than its right neighbour — the first "peak".'], state: st() });
+      for (let pass = 0; pass < k; pass++) {
+        let i = 0;
+        while (i + 1 < d.length && d[i] <= d[i + 1]) i++;
+        scanned += i + 1;
+        steps.push({ tag: 'pop', trace: ['Pass ', A(pass + 1), ': the first peak is ', F(d[i]), ' at index ', A(i), ' — delete it.'], state: st(i) });
+        d.splice(i, 1);
+      }
+      let z = 0;
+      while (z < d.length && d[z] === '0') z++;
+      if (z > 0) {
+        d = d.slice(z);
+        steps.push({ tag: 'zeros', trace: ['Strip ', F(z), ' leading zero(s).'], state: st() });
+      }
+      const out = d.join('') || '0';
+      steps.push({ tag: 'ret', trace: ['Smallest number: ', C(out), ' (', A(scanned), ' digits scanned).'], state: st() });
+      return { steps, result: out };
+    },
+    note: 'The greedy choice is the same, but each pass restarts its scan from the left, costing O(k·n). The increasing stack remembers where the last pass stopped, so the whole thing is one O(n) sweep.',
+    complexity: { time: 'O(k · n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Maximal Rectangle ================= */
@@ -819,6 +1272,94 @@ const maximalRectangle: ProblemDef = {
   },
   note: 'The reduction is the entire insight: every candidate rectangle is counted exactly once, at the row forming its bottom edge. The heights array updates in O(1) per cell because a 1 extends the bar above and a 0 kills it, so the total cost is R histogram solves at O(C) each.',
   complexity: { time: 'O(R·C)', space: 'O(C)' },
+  brute: {
+    label: 'Grow from every corner',
+    technique: 'For every top-left cell, extend downwards row by row, shrinking the width to the shortest run of 1s seen so far.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maximalRectangle(vector<vector<char>>& g) {'),
+        L('        int R = g.size(), C = g[0].size(), best = 0;', 'init'),
+        L('        for (int r0 = 0; r0 < R; r0++)', 'corner'),
+        L('            for (int c0 = 0; c0 < C; c0++) {', 'corner'),
+        L('                int width = C;', 'corner'),
+        L('                for (int r1 = r0; r1 < R; r1++) {', 'grow'),
+        L('                    int run = 0;', 'grow'),
+        L('                    while (c0 + run < C && g[r1][c0 + run] == \'1\') run++;', 'grow'),
+        L('                    width = min(width, run);', 'grow'),
+        L('                    if (!width) break;', 'grow'),
+        L('                    best = max(best, width * (r1 - r0 + 1));', 'grow'),
+        L('                }'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maximalRectangle(char[][] g) {'),
+        L('        int R = g.length, C = g[0].length, best = 0;', 'init'),
+        L('        for (int r0 = 0; r0 < R; r0++)', 'corner'),
+        L('            for (int c0 = 0; c0 < C; c0++) {', 'corner'),
+        L('                int width = C;', 'corner'),
+        L('                for (int r1 = r0; r1 < R; r1++) {', 'grow'),
+        L('                    int run = 0;', 'grow'),
+        L('                    while (c0 + run < C && g[r1][c0 + run] == \'1\') run++;', 'grow'),
+        L('                    width = Math.min(width, run);', 'grow'),
+        L('                    if (width == 0) break;', 'grow'),
+        L('                    best = Math.max(best, width * (r1 - r0 + 1));', 'grow'),
+        L('                }'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const rows = (values.grid ?? '')
+        .split(/[;|]/)
+        .map((r) => r.trim())
+        .filter(Boolean);
+      if (rows.length === 0) return { error: 'Enter a grid, rows separated by ";".' };
+      const w = rows[0].length;
+      if (!rows.every((r) => r.length === w)) return { error: 'All rows must be the same length.' };
+      if (rows.length > 6 || w > 7) return { error: 'Keep the grid to at most 6 rows × 7 columns.' };
+      if (!rows.every((r) => /^[01]+$/.test(r))) return { error: 'Use only 0 and 1.' };
+      const R = rows.length;
+      const g = rows.map((r) => r.split('').map(Number));
+      let best = 0;
+      let bestBox: { r0: number; r1: number; c0: number; c1: number } | null = null;
+      const steps: Step[] = [];
+      const view = (box?: { r0: number; r1: number; c0: number; c1: number }, m: 'active' | 'final' = 'active'): MatrixState => {
+        const mark: MatrixState['mark'] = {};
+        if (box) for (let r = box.r0; r <= box.r1; r++) for (let c = box.c0; c <= box.c1; c++) mark[`${r},${c}`] = m;
+        return { grid: g, rowLabels: [...Array(R)].map((_, i) => i), colLabels: [...Array(w)].map((_, i) => i), mark, aggs: [{ label: 'best area', value: String(best), c: 'c' }] };
+      };
+      steps.push({ tag: 'init', trace: ['Treat every 1-cell as a possible top-left corner and grow a rectangle downwards from it.'], state: view() });
+      for (let r0 = 0; r0 < R; r0++)
+        for (let c0 = 0; c0 < w; c0++) {
+          if (!g[r0][c0]) continue;
+          let width = w;
+          for (let r1 = r0; r1 < R; r1++) {
+            let run = 0;
+            while (c0 + run < w && g[r1][c0 + run] === 1) run++;
+            width = Math.min(width, run);
+            if (!width) break;
+            const area = width * (r1 - r0 + 1);
+            if (area > best) {
+              best = area;
+              bestBox = { r0, r1, c0, c1: c0 + width - 1 };
+              steps.push({ tag: 'grow', trace: ['Corner (', A(r0), ',', A(c0), ') down to row ', A(r1), ': width ', A(width), ' × height ', A(r1 - r0 + 1), ' = ', B(area), ' — best so far.'], state: view(bestBox) });
+            }
+          }
+        }
+      steps.push({ tag: 'ret', trace: ['Largest all-ones rectangle: ', C(best), '.'], state: view(bestBox ?? undefined, 'final') });
+      return { steps, result: String(best), resultDetail: bestBox ? `rows ${bestBox.r0}…${bestBox.r1}, cols ${bestBox.c0}…${bestBox.c1}` : undefined };
+    },
+    note: 'Every corner re-measures the runs below it, costing about O(R²·C²). Building a histogram of column heights per row and running the stack-based histogram solution makes it O(R·C).',
+    complexity: { time: 'O(R² · C²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Online Stock Span ================= */
@@ -912,6 +1453,66 @@ const stockSpan: ProblemDef = {
   },
   note: 'Storing the span alongside the price is what makes this online: a popped entry hands over its entire history in one addition, so no day is ever re-examined. Each price is pushed and popped at most once, giving O(1) amortised per call even though a single call can pop many entries.',
   complexity: { time: 'O(1) amortised per call', space: 'O(n)' },
+  brute: {
+    label: 'Walk back each day',
+    technique: 'For each new price, walk backwards through the history while prices are at most today’s.',
+    code: {
+      cpp: [
+        L('class StockSpanner {'),
+        L('    vector<int> hist;', 'init'),
+        L('public:'),
+        L('    int next(int price) {'),
+        L('        hist.push_back(price);', 'span'),
+        L('        int span = 0;', 'span'),
+        L('        for (int i = hist.size() - 1; i >= 0 && hist[i] <= price; i--) span++;', 'span'),
+        L('        return span;', 'span', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class StockSpanner {'),
+        L('    List<Integer> hist = new ArrayList<>();', 'init'),
+        L('    public int next(int price) {'),
+        L('        hist.add(price);', 'span'),
+        L('        int span = 0;', 'span'),
+        L('        for (int i = hist.size() - 1; i >= 0 && hist.get(i) <= price; i--) span++;', 'span'),
+        L('        return span;', 'span', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const prices = parseIntArray(values.nums, { min: 1, maxLen: 12 });
+      if (typeof prices === 'string') return { error: prices };
+      const spans: number[] = [];
+      let looks = 0;
+      const steps: Step[] = [];
+      const st = (i?: number, from?: number): StackState => ({
+        array: {
+          arr: prices,
+          mark: i !== undefined && from !== undefined ? { ...Object.fromEntries([...Array(i - from + 1)].map((_, k) => [from + k, 'good' as const])), [i]: 'active' as const } : {},
+        },
+        stack: [],
+        stackLabel: 'no stack — full history kept',
+        aggs: [
+          { label: 'spans', value: `[${spans.join(', ')}]`, c: 'c' },
+          { label: 'prices looked back at', value: String(looks), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Keep every past price; each day walks back until it meets a higher one.'], state: st() });
+      prices.forEach((p, i) => {
+        let span = 0;
+        for (let j = i; j >= 0 && prices[j] <= p; j--) span++;
+        looks += span;
+        spans.push(span);
+        steps.push({ tag: 'span', trace: ['Day ', A(i), ' (price ', A(p), '): the previous ', B(span - 1), ' day(s) were not higher → span ', B(span), '.'], state: st(i, i - span + 1) });
+      });
+      steps.push({ tag: 'ret', trace: ['Spans: ', C(`[${spans.join(', ')}]`), '.'], state: st() });
+      return { steps, result: `[${spans.join(', ')}]` };
+    },
+    note: 'A long rising trend makes every day walk all the way back, so n calls cost O(n²). The monotonic stack folds dominated days into a single entry with their span, making each call O(1) amortised.',
+    complexity: { time: 'O(n) per call', space: 'O(n)' },
+  },
 };
 
 /* ================= Basic Calculator II ================= */
@@ -1038,6 +1639,86 @@ const basicCalculatorII: ProblemDef = {
   },
   note: 'Storing subtraction as a negative term turns the final pass into a plain sum, removing any need to track operators a second time. Note that the operator is applied one character late — you can only act on "3+2" once you see the character after the 2 — which is why the loop also fires on the last index.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Two passes',
+    technique: 'First pass: evaluate every × and ÷ left to right into a list of terms. Second pass: add and subtract the terms.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int calculate(string s) {'),
+        L('        vector<long> nums; vector<char> ops;  // tokenise', 'tok'),
+        L('        /* ... fill nums and ops from s ... */', 'tok'),
+        L('        vector<long> terms = {nums[0]}; vector<char> addOps;', 'mul'),
+        L('        for (int i = 0; i < ops.size(); i++) {', 'mul'),
+        L('            if (ops[i] == \'*\') terms.back() *= nums[i + 1];', 'mul'),
+        L('            else if (ops[i] == \'/\') terms.back() /= nums[i + 1];', 'mul'),
+        L('            else { terms.push_back(nums[i + 1]); addOps.push_back(ops[i]); }', 'mul'),
+        L('        }'),
+        L('        long res = terms[0];', 'sum'),
+        L('        for (int i = 0; i < addOps.size(); i++)', 'sum'),
+        L('            res += addOps[i] == \'+\' ? terms[i + 1] : -terms[i + 1];', 'sum'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int calculate(String s) {'),
+        L('        List<Long> nums = new ArrayList<>(); List<Character> ops = new ArrayList<>();  // tokenise', 'tok'),
+        L('        /* ... fill nums and ops from s ... */', 'tok'),
+        L('        List<Long> terms = new ArrayList<>(List.of(nums.get(0))); List<Character> addOps = new ArrayList<>();', 'mul'),
+        L('        for (int i = 0; i < ops.size(); i++) {', 'mul'),
+        L('            char op = ops.get(i); long v = nums.get(i + 1); int last = terms.size() - 1;', 'mul'),
+        L('            if (op == \'*\') terms.set(last, terms.get(last) * v);', 'mul'),
+        L('            else if (op == \'/\') terms.set(last, terms.get(last) / v);', 'mul'),
+        L('            else { terms.add(v); addOps.add(op); }', 'mul'),
+        L('        }'),
+        L('        long res = terms.get(0);', 'sum'),
+        L('        for (int i = 0; i < addOps.size(); i++) res += addOps.get(i) == \'+\' ? terms.get(i + 1) : -terms.get(i + 1);', 'sum'),
+        L('        return (int) res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const expr = (values.expr ?? '').replace(/\s+/g, '');
+      if (!/^\d+([+\-*/]\d+)*$/.test(expr)) return { error: 'Use digits and + − * / only, e.g. 3+2*2-6/3.' };
+      if (expr.length > 20) return { error: 'Keep the expression to at most 20 characters.' };
+      const nums = expr.split(/[+\-*/]/).map(Number);
+      const ops = expr.replace(/\d+/g, '').split('');
+      for (let i = 0; i < ops.length; i++) if (ops[i] === '/' && nums[i + 1] === 0) return { error: 'Division by zero.' };
+      const steps: Step[] = [];
+      const terms = [nums[0]];
+      const addOps: string[] = [];
+      const st = (label: string): StackState => ({
+        array: { arr: expr.split('') },
+        stack: terms.map((v, i) => ({ v: i === 0 ? String(v) : `${addOps[i - 1]} ${v}`, c: 'b' as const })),
+        stackLabel: label,
+      });
+      steps.push({ tag: 'tok', trace: ['Tokenise: numbers ', A(nums.join(', ')), ' and operators ', A(ops.join(' ') || '—'), '.'], state: st('terms after pass 1') });
+      for (let i = 0; i < ops.length; i++) {
+        const op = ops[i];
+        const v = nums[i + 1];
+        if (op === '*' || op === '/') {
+          const before = terms[terms.length - 1];
+          terms[terms.length - 1] = op === '*' ? before * v : Math.trunc(before / v);
+          steps.push({ tag: 'mul', trace: ['Pass 1: ', A(`${before} ${op} ${v}`), ' = ', B(terms[terms.length - 1]), ' — folded into the current term.'], state: st('terms after pass 1') });
+        } else {
+          terms.push(v);
+          addOps.push(op);
+          steps.push({ tag: 'mul', trace: ['Pass 1: "', A(op), '" starts a new term ', B(v), '.'], state: st('terms after pass 1') });
+        }
+      }
+      let res = terms[0];
+      for (let i = 0; i < addOps.length; i++) res += addOps[i] === '+' ? terms[i + 1] : -terms[i + 1];
+      steps.push({ tag: 'sum', trace: ['Pass 2: add up the terms left to right → ', B(res), '.'], state: st('terms, combined in pass 2') });
+      steps.push({ tag: 'ret', trace: ['Result: ', C(res), '.'], state: st('done') });
+      return { steps, result: String(res) };
+    },
+    note: 'Same O(n) time, but it tokenises first and stores every term before a second pass. The single-pass stack version folds × and ÷ as it reads, keeping only signed terms on the stack.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Longest Valid Parentheses ================= */
@@ -1150,6 +1831,110 @@ const longestValidParens: ProblemDef = {
   },
   note: 'Storing indices rather than characters is what lets a single subtraction recover the length, including runs that merge across earlier matches — "()(())" measures 6 in one step. The −1 sentinel removes the empty-stack special case for the very first valid run.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Two counters (O(1) space)',
+    technique: 'Scan left to right counting "(" and ")"; equal counts mark a valid run, too many ")" resets. Repeat right to left to catch runs with extra "(".',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int longestValidParentheses(string s) {'),
+        L('        int best = 0, open = 0, close = 0;', 'init'),
+        L('        for (char c : s) {', 'ltr'),
+        L('            c == \'(\' ? open++ : close++;', 'ltr'),
+        L('            if (open == close) best = max(best, 2 * close);', 'ltr'),
+        L('            else if (close > open) open = close = 0;', 'ltr'),
+        L('        }'),
+        L('        open = close = 0;', 'rtl'),
+        L('        for (int i = s.size() - 1; i >= 0; i--) {', 'rtl'),
+        L('            s[i] == \'(\' ? open++ : close++;', 'rtl'),
+        L('            if (open == close) best = max(best, 2 * open);', 'rtl'),
+        L('            else if (open > close) open = close = 0;', 'rtl'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int longestValidParentheses(String s) {'),
+        L('        int best = 0, open = 0, close = 0;', 'init'),
+        L('        for (char c : s.toCharArray()) {', 'ltr'),
+        L('            if (c == \'(\') open++; else close++;', 'ltr'),
+        L('            if (open == close) best = Math.max(best, 2 * close);', 'ltr'),
+        L('            else if (close > open) open = close = 0;', 'ltr'),
+        L('        }'),
+        L('        open = close = 0;', 'rtl'),
+        L('        for (int i = s.length() - 1; i >= 0; i--) {', 'rtl'),
+        L('            if (s.charAt(i) == \'(\') open++; else close++;', 'rtl'),
+        L('            if (open == close) best = Math.max(best, 2 * open);', 'rtl'),
+        L('            else if (open > close) open = close = 0;', 'rtl'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim();
+      if (!/^[()]{1,18}$/.test(s)) return { error: 'Use 1–18 characters, only ( and ).' };
+      const ch = s.split('');
+      const n = ch.length;
+      let best = 0;
+      let bestRange: [number, number] | null = null;
+      let open = 0;
+      let close = 0;
+      const steps: Step[] = [];
+      const st = (i: number, dir: string, run?: [number, number]): StackState => ({
+        array: { arr: ch, mark: { ...(run ? Object.fromEntries([...Array(run[1] - run[0] + 1)].map((_, k) => [run[0] + k, 'good' as const])) : {}), ...(i >= 0 && i < n ? { [i]: 'active' as const } : {}) } },
+        stack: [],
+        stackLabel: 'no stack — just two counters',
+        aggs: [
+          { label: `open / close (${dir})`, value: `${open} / ${close}`, c: 'a' },
+          { label: 'best length', value: String(best), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Count opens and closes while scanning. Equal counts close a valid run; the wrong kind of excess resets.'], state: st(-1, '→') });
+      let start = 0;
+      for (let i = 0; i < n; i++) {
+        if (ch[i] === '(') open++;
+        else close++;
+        if (open === close) {
+          if (2 * close > best) {
+            best = 2 * close;
+            bestRange = [i - best + 1, i];
+          }
+          steps.push({ tag: 'ltr', trace: ['→ Counts balance at ', A(open), ' each — valid run of length ', B(2 * close), '.'], state: st(i, '→', [i - 2 * close + 1, i]) });
+        } else if (close > open) {
+          open = close = 0;
+          start = i + 1;
+          steps.push({ tag: 'ltr', trace: ['→ More ")" than "(" — nothing through here can be valid. Reset.'], state: st(i, '→') });
+        } else {
+          steps.push({ tag: 'ltr', trace: ['→ ', A(open), ' open, ', A(close), ' close — keep going.'], state: st(i, '→', open > 0 ? [start, i] : undefined) });
+        }
+      }
+      open = close = 0;
+      steps.push({ tag: 'rtl', trace: ['Now scan right to left — this catches runs that the first pass missed because of an unmatched "(" on their left.'], state: st(n, '←') });
+      for (let i = n - 1; i >= 0; i--) {
+        if (ch[i] === '(') open++;
+        else close++;
+        if (open === close) {
+          if (2 * open > best) {
+            best = 2 * open;
+            bestRange = [i, i + best - 1];
+          }
+          steps.push({ tag: 'rtl', trace: ['← Counts balance — valid run of length ', B(2 * open), '.'], state: st(i, '←', [i, i + 2 * open - 1]) });
+        } else if (open > close) {
+          open = close = 0;
+          steps.push({ tag: 'rtl', trace: ['← More "(" than ")" — reset.'], state: st(i, '←') });
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Longest valid run: ', C(best), '.'], state: st(-1, '←', bestRange ?? undefined) });
+      return { steps, result: String(best), resultDetail: bestRange ? `indices ${bestRange[0]}…${bestRange[1]}` : undefined };
+    },
+    note: 'Better on memory: the same O(n) time, but only two integers instead of a stack of indices. The second, right-to-left pass is what handles strings like "(()" where the left-to-right counts never balance.',
+    complexity: { time: 'O(n)', space: 'O(1)' },
+  },
 };
 
 export const stack2: ProblemDef[] = [
