@@ -1,5 +1,5 @@
 // Arrays & Hashing, part 1.
-import type { ArrayState, ProblemDef, Step } from '../lib/types';
+import type { ArrayState, ListState, ProblemDef, Step } from '../lib/types';
 import { parseInt1, parseIntArray } from '../lib/parse';
 import { A, B, C, F, L } from '../lib/trace';
 
@@ -104,6 +104,105 @@ const twoSum: ProblemDef = {
   },
   note: 'Instead of asking "which pair sums to target?" (O(n²)), each element asks "has my complement already walked past?" — a hash map answers that in O(1), and every pair is still considered exactly once.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Try every pair (i, j) with two nested loops until one sums to the target.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> twoSum(vector<int>& nums, int target) {'),
+        L('        int n = nums.size();', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            for (int j = i + 1; j < n; j++) {', 'inner'),
+        L('                if (nums[i] + nums[j] == target)', 'test', 'found'),
+        L('                    return {i, j};', 'found'),
+        L('            }'),
+        L('        }'),
+        L('        return {};', 'none'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] twoSum(int[] nums, int target) {'),
+        L('        int n = nums.length;', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            for (int j = i + 1; j < n; j++) {', 'inner'),
+        L('                if (nums[i] + nums[j] == target)', 'test', 'found'),
+        L('                    return new int[]{i, j};', 'found'),
+        L('            }'),
+        L('        }'),
+        L('        return new int[]{};', 'none'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums);
+      if (typeof arr === 'string') return { error: arr };
+      const target = parseInt1(values.target, 'Target');
+      if (typeof target === 'string') return { error: target };
+
+      const steps: Step[] = [];
+      const st = (i: number, j: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr,
+        ptrs: [
+          ...(i < arr.length ? [{ name: 'i', i, c: 'b' as const }] : []),
+          ...(j < arr.length ? [{ name: 'j', i: j, c: 'a' as const }] : []),
+        ],
+        aggs: [{ label: 'target', value: String(target), c: 'c' }],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['No cleverness: test ', A('every pair'), ' (i, j) with i < j until one sums to ', C(target), '.'],
+        state: st(0, 1),
+      });
+      let ans: [number, number] | null = null;
+      let tried = 0;
+      outer: for (let i = 0; i < arr.length; i++) {
+        steps.push({
+          tag: 'outer',
+          trace: ['Fix ', B(arr[i]), ' at index ', B(i), ' and pair it against everything to its right.'],
+          state: st(i, i + 1, { mark: { [i]: 'good' } }),
+        });
+        for (let j = i + 1; j < arr.length; j++) {
+          tried++;
+          const sum = arr[i] + arr[j];
+          if (sum === target) {
+            ans = [i, j];
+            steps.push({
+              tag: 'found',
+              trace: [B(arr[i]), ' + ', A(arr[j]), ' = ', C(sum), ' — match after ', C(tried), ' pair checks. Return ', C(`[${i}, ${j}]`), '.'],
+              state: st(i, j, { mark: { [i]: 'final', [j]: 'final' } }),
+            });
+            break outer;
+          }
+          steps.push({
+            tag: 'test',
+            trace: [B(arr[i]), ' + ', A(arr[j]), ' = ', F(sum), ' ≠ ', C(target), ' — try the next j.'],
+            state: st(i, j, { mark: { [i]: 'good', [j]: 'active' } }),
+          });
+        }
+      }
+      if (!ans) {
+        steps.push({
+          tag: 'none',
+          trace: ['All ', C(tried), ' pairs checked — none sums to ', C(target), '.'],
+          state: st(arr.length, arr.length),
+        });
+      }
+      return {
+        steps,
+        result: ans ? `[${ans[0]}, ${ans[1]}]` : 'no pair',
+        resultDetail: ans ? `nums[${ans[0]}] + nums[${ans[1]}] = ${target}` : undefined,
+      };
+    },
+    note: 'Correct but wasteful: each element is compared with every later element, so the work grows with n². The hash-map solution replaces the inner loop with a single O(1) lookup for the complement.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= 2. Contains Duplicate ================= */
@@ -185,6 +284,81 @@ const containsDuplicate: ProblemDef = {
   },
   note: 'A set gives O(1) membership checks, so "have I seen this before?" costs nothing per element — the sort-based alternative costs O(n log n) and rearranges the input.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Sorting',
+    technique: 'Sort a copy of the array — any duplicates must then sit next to each other.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool containsDuplicate(vector<int>& nums) {'),
+        L('        sort(nums.begin(), nums.end());', 'sort'),
+        L('        for (int i = 1; i < nums.size(); i++) {', 'loop'),
+        L('            if (nums[i] == nums[i - 1])', 'check', 'dup'),
+        L('                return true;', 'dup'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean containsDuplicate(int[] nums) {'),
+        L('        Arrays.sort(nums);', 'sort'),
+        L('        for (int i = 1; i < nums.length; i++) {', 'loop'),
+        L('            if (nums[i] == nums[i - 1])', 'check', 'dup'),
+        L('                return true;', 'dup'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const input = parseIntArray(values.nums);
+      if (typeof input === 'string') return { error: input };
+      const arr = [...input].sort((a, b) => a - b);
+      const steps: Step[] = [];
+      const st = (i: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr,
+        ptrs: i > 0 && i < arr.length ? [{ name: 'i-1', i: i - 1, c: 'b' }, { name: 'i', i, c: 'a' }] : [],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort the array — equal values are now ', A('neighbours'), '.'],
+        state: { arr },
+      });
+      let dupAt = -1;
+      for (let i = 1; i < arr.length; i++) {
+        if (arr[i] === arr[i - 1]) {
+          dupAt = i;
+          steps.push({
+            tag: 'dup',
+            trace: [A(arr[i]), ' equals its left neighbour — duplicate found. Return ', C('true'), '.'],
+            state: st(i, { mark: { [i]: 'final', [i - 1]: 'final' } }),
+          });
+          break;
+        }
+        steps.push({
+          tag: 'check',
+          trace: ['Compare ', B(arr[i - 1]), ' and ', A(arr[i]), ' — different, keep going.'],
+          state: st(i, { mark: { [i - 1]: 'good', [i]: 'active' } }),
+        });
+      }
+      if (dupAt < 0) {
+        steps.push({ tag: 'ret', trace: ['No neighbours match — return ', C('false'), '.'], state: { arr } });
+      }
+      return {
+        steps,
+        result: dupAt < 0 ? 'false' : 'true',
+        resultDetail: dupAt < 0 ? 'all values distinct' : `${arr[dupAt]} appears twice`,
+      };
+    },
+    note: 'No extra memory, but sorting costs O(n log n) and reorders the input. The hash set finishes in O(n) at the price of O(n) space — a classic time-versus-space trade.',
+    complexity: { time: 'O(n log n)', space: 'O(1)' },
+  },
 };
 
 /* ================= 3. Valid Anagram ================= */
@@ -285,6 +459,98 @@ const validAnagram: ProblemDef = {
   },
   note: 'Equal length plus "no letter ever goes negative" forces every count to end at exactly zero — so one array of 26 tallies replaces sorting both strings.',
   complexity: { time: 'O(n)', space: 'O(1) — 26 counters' },
+  brute: {
+    label: 'Sorting',
+    technique: 'Sort both strings — anagrams become identical, so compare them position by position.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isAnagram(string s, string t) {'),
+        L('        if (s.size() != t.size()) return false;', 'len'),
+        L('        sort(s.begin(), s.end());', 'sort'),
+        L('        sort(t.begin(), t.end());', 'sort'),
+        L('        for (int i = 0; i < s.size(); i++) {', 'loop'),
+        L('            if (s[i] != t[i])', 'cmp', 'diff'),
+        L('                return false;', 'diff'),
+        L('        }'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isAnagram(String s, String t) {'),
+        L('        if (s.length() != t.length()) return false;', 'len'),
+        L('        char[] a = s.toCharArray(), b = t.toCharArray();', 'sort'),
+        L('        Arrays.sort(a);', 'sort'),
+        L('        Arrays.sort(b);', 'sort'),
+        L('        for (int i = 0; i < a.length; i++) {', 'loop'),
+        L('            if (a[i] != b[i])', 'cmp', 'diff'),
+        L('                return false;', 'diff'),
+        L('        }'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      const t = (values.t ?? '').trim().toLowerCase();
+      if (!s || !t) return { error: 'Enter both strings.' };
+      if (!/^[a-z]+$/.test(s + t)) return { error: 'Lowercase letters a–z only.' };
+      if (s.length > 12 || t.length > 12) return { error: 'Keep each string to at most 12 characters.' };
+
+      const steps: Step[] = [];
+      const grid = (a: string, b: string) => [a.split(''), b.split('')];
+      const st = (a: string, b: string, mark: Record<string, 'active' | 'good' | 'final' | 'dim'> = {}) => ({
+        grid: grid(a, b),
+        rowLabels: ['s', 't'],
+        colLabels: Array.from({ length: Math.max(a.length, b.length) }, (_, i) => i),
+        mark,
+      });
+
+      if (s.length !== t.length) {
+        steps.push({
+          tag: 'len',
+          trace: ['Lengths differ (', F(s.length), ' vs ', F(t.length), ') — they cannot be anagrams. Return ', C('false'), '.'],
+          state: st(s, t),
+        });
+        return { steps, result: 'false', resultDetail: 'different lengths' };
+      }
+      const ss = s.split('').sort().join('');
+      const ts = t.split('').sort().join('');
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort both strings: ', A(`"${s}" → "${ss}"`), ' and ', A(`"${t}" → "${ts}"`), '.'],
+        state: st(ss, ts),
+      });
+      let bad = -1;
+      for (let i = 0; i < ss.length; i++) {
+        if (ss[i] !== ts[i]) {
+          bad = i;
+          steps.push({
+            tag: 'diff',
+            trace: ["Position ", F(i), ": '", F(ss[i]), "' ≠ '", F(ts[i]), "' — the sorted strings differ. Return ", C('false'), '.'],
+            state: st(ss, ts, { [`0,${i}`]: 'dim', [`1,${i}`]: 'dim' }),
+          });
+          break;
+        }
+        steps.push({
+          tag: 'cmp',
+          trace: ['Position ', A(i), ": '", B(ss[i]), "' = '", B(ts[i]), "' — match."],
+          state: st(ss, ts, { [`0,${i}`]: 'good', [`1,${i}`]: 'good' }),
+        });
+      }
+      const ok = bad < 0;
+      if (ok) {
+        steps.push({ tag: 'ret', trace: ['Sorted strings are identical — return ', C('true'), '.'], state: st(ss, ts) });
+      }
+      return { steps, result: String(ok), resultDetail: ok ? 'sorted strings are equal' : `first mismatch at position ${bad}` };
+    },
+    note: 'Sorting puts every letter in a canonical order, so two strings are anagrams exactly when their sorted forms are equal. Simple, but O(n log n) — the counting solution needs only one linear pass.',
+    complexity: { time: 'O(n log n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 4. Group Anagrams ================= */
@@ -382,6 +648,125 @@ const groupAnagrams: ProblemDef = {
   },
   note: 'Anagrams are exactly the words that become identical when their letters are sorted — so the sorted word is a perfect hash key: no pairwise comparisons, one map insert per word.',
   complexity: { time: 'O(n · k log k)', space: 'O(n · k)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Compare each word against the first word of every existing group; start a new group if none match.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<string>> groupAnagrams(vector<string>& strs) {'),
+        L('        vector<vector<string>> groups;', 'init'),
+        L('        for (string& s : strs) {', 'loop'),
+        L('            bool placed = false;', 'loop'),
+        L('            for (auto& g : groups) {', 'scan'),
+        L('                if (isAnagram(s, g[0])) {', 'scan', 'match'),
+        L('                    g.push_back(s);', 'match'),
+        L('                    placed = true;', 'match'),
+        L('                    break;', 'match'),
+        L('                }'),
+        L('            }'),
+        L('            if (!placed) groups.push_back({s});', 'new'),
+        L('        }'),
+        L('        return groups;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<String>> groupAnagrams(String[] strs) {'),
+        L('        List<List<String>> groups = new ArrayList<>();', 'init'),
+        L('        for (String s : strs) {', 'loop'),
+        L('            boolean placed = false;', 'loop'),
+        L('            for (List<String> g : groups) {', 'scan'),
+        L('                if (isAnagram(s, g.get(0))) {', 'scan', 'match'),
+        L('                    g.add(s);', 'match'),
+        L('                    placed = true;', 'match'),
+        L('                    break;', 'match'),
+        L('                }'),
+        L('            }'),
+        L('            if (!placed) groups.add(new ArrayList<>(List.of(s)));', 'new'),
+        L('        }'),
+        L('        return groups;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const words = (values.strs ?? '')
+        .split(',')
+        .map((w) => w.trim().toLowerCase())
+        .filter(Boolean);
+      if (words.length === 0) return { error: 'Enter at least one word.' };
+      if (words.length > 12) return { error: 'Keep it to at most 12 words.' };
+      if (!words.every((w) => /^[a-z]+$/.test(w))) return { error: 'Lowercase letters a–z only.' };
+
+      const steps: Step[] = [];
+      const groups: string[][] = [];
+      const canon = (w: string) => w.split('').sort().join('');
+      const view = (activeGroup = -1, activeWord?: string, cmpGroup = -1): ListState => ({
+        chains: groups.map((g, gi) => ({
+          label: `group ${gi + 1}`,
+          items: g.map((w, wi) => ({
+            v: w,
+            mark: gi === activeGroup && w === activeWord && wi === g.length - 1 ? ('active' as const) : gi === cmpGroup && wi === 0 ? ('src' as const) : undefined,
+          })),
+          broken: true,
+        })),
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['No hash key: every word is ', A('compared'), ' with the head word of each group already built.'],
+        state: view(),
+      });
+      let comparisons = 0;
+      for (const w of words) {
+        steps.push({ tag: 'loop', trace: ['Next word: "', A(w), '". Where does it belong?'], state: view() });
+        let placed = false;
+        for (let gi = 0; gi < groups.length; gi++) {
+          comparisons++;
+          const head = groups[gi][0];
+          const same = canon(w) === canon(head);
+          steps.push({
+            tag: 'scan',
+            trace: ['Compare "', A(w), '" with group ', A(gi + 1), ' head "', A(head), '" — ', same ? B('anagrams') : F('not anagrams'), '.'],
+            state: view(-1, undefined, gi),
+          });
+          if (same) {
+            groups[gi].push(w);
+            placed = true;
+            steps.push({
+              tag: 'match',
+              trace: ['Match — add "', B(w), '" to group ', B(gi + 1), '.'],
+              state: view(gi, w),
+            });
+            break;
+          }
+        }
+        if (!placed) {
+          groups.push([w]);
+          steps.push({
+            tag: 'new',
+            trace: ['No group matched — "', A(w), '" starts group ', A(groups.length), '.'],
+            state: view(groups.length - 1, w),
+          });
+        }
+      }
+      steps.push({
+        tag: 'ret',
+        trace: ['Done — ', C(groups.length), ' group(s) after ', C(comparisons), ' anagram comparisons.'],
+        state: view(),
+      });
+      return {
+        steps,
+        result: `[${groups.map((g) => `[${g.join(', ')}]`).join(', ')}]`,
+        resultDetail: `${groups.length} groups, ${comparisons} comparisons`,
+      };
+    },
+    note: 'Each word may be checked against every group, and every check itself re-sorts letters, so the cost climbs as the number of groups grows. Hashing by the sorted key files each word in one lookup.',
+    complexity: { time: 'O(n² · k log k)', space: 'O(n · k)' },
+  },
 };
 
 /* ================= 5. Top K Frequent Elements ================= */
@@ -510,6 +895,96 @@ const topKFrequent: ProblemDef = {
   },
   note: 'Frequencies are bounded by n, so they can be used directly as bucket indices — sweeping buckets from n downward yields the top-k in strict O(n), beating both sorting and a heap.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Sort by frequency',
+    technique: 'Count each value, sort the (value, count) pairs by count descending, and take the first k.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> topKFrequent(vector<int>& nums, int k) {'),
+        L('        unordered_map<int, int> freq;', 'count'),
+        L('        for (int x : nums) freq[x]++;', 'count'),
+        L('        vector<pair<int, int>> pairs(freq.begin(), freq.end());', 'sort'),
+        L('        sort(pairs.begin(), pairs.end(),', 'sort'),
+        L('             [](auto& a, auto& b) { return a.second > b.second; });', 'sort'),
+        L('        vector<int> res;', 'collect'),
+        L('        for (int i = 0; i < k; i++)', 'collect'),
+        L('            res.push_back(pairs[i].first);', 'collect'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] topKFrequent(int[] nums, int k) {'),
+        L('        Map<Integer, Integer> freq = new HashMap<>();', 'count'),
+        L('        for (int x : nums) freq.merge(x, 1, Integer::sum);', 'count'),
+        L('        List<Map.Entry<Integer, Integer>> pairs = new ArrayList<>(freq.entrySet());', 'sort'),
+        L('        pairs.sort((a, b) -> b.getValue() - a.getValue());', 'sort'),
+        L('        int[] res = new int[k];', 'collect'),
+        L('        for (int i = 0; i < k; i++)', 'collect'),
+        L('            res[i] = pairs.get(i).getKey();', 'collect'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums);
+      if (typeof arr === 'string') return { error: arr };
+      const k = parseInt1(values.k, 'k', { min: 1 });
+      if (typeof k === 'string') return { error: k };
+      const freq = new Map<number, number>();
+      for (const x of arr) freq.set(x, (freq.get(x) ?? 0) + 1);
+      if (k > freq.size) return { error: `k must be ≤ number of distinct values (${freq.size}).` };
+
+      const steps: Step[] = [];
+      const fmt = (pairs: [number, number][]) => pairs.map(([v, f]) => `${v}×${f}`);
+      const view = (pairs: [number, number][], takenCount = 0, active = -1): ListState => ({
+        chains: [
+          {
+            label: 'pairs',
+            items: fmt(pairs).map((v, i) => ({
+              v,
+              mark: i < takenCount ? ('final' as const) : i === active ? ('active' as const) : undefined,
+            })),
+            broken: true,
+          },
+        ],
+        aggs: [{ label: 'picked', value: `[${pairs.slice(0, takenCount).map((p) => p[0]).join(', ')}]`, c: 'c' }],
+      });
+
+      const pairs = [...freq.entries()] as [number, number][];
+      steps.push({
+        tag: 'count',
+        trace: ['Count occurrences: ', ...pairs.flatMap(([v, f], i) => (i > 0 ? [', ', A(`${v}×${f}`)] : [A(`${v}×${f}`)])), '.'],
+        state: view(pairs),
+      });
+      const sorted = [...pairs].sort((a, b) => b[1] - a[1]);
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort the pairs by count, ', A('highest first'), ' — an O(m log m) step over the m distinct values.'],
+        state: view(sorted),
+      });
+      for (let i = 0; i < k; i++) {
+        steps.push({
+          tag: 'collect',
+          trace: ['Take pair ', C(`${sorted[i][0]}×${sorted[i][1]}`), ' — ', A(`${i + 1}/${k}`), ' collected.'],
+          state: view(sorted, i + 1),
+        });
+      }
+      const res = sorted.slice(0, k).map((p) => p[0]);
+      steps.push({
+        tag: 'ret',
+        trace: ['Done — the ', C(k), ' most frequent: ', C(`[${res.join(', ')}]`), '.'],
+        state: view(sorted, k),
+      });
+      return { steps, result: `[${res.join(', ')}]`, resultDetail: `top ${k} by frequency` };
+    },
+    note: 'Sorting orders every distinct value even though only the top k matter, costing O(m log m). Bucket sort exploits the fact that counts never exceed n to skip the comparison sort entirely.',
+    complexity: { time: 'O(n log n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 6. Product of Array Except Self ================= */
@@ -613,6 +1088,92 @@ const productExceptSelf: ProblemDef = {
   },
   note: '"Everything except me" factors into "everything to my left" × "everything to my right" — and both of those are runnning products you can carry through a sweep. Writing prefixes into the answer array first makes the whole thing O(1) extra space.',
   complexity: { time: 'O(n)', space: 'O(1) beyond output' },
+  brute: {
+    label: 'Brute force',
+    technique: 'For every index, multiply all the other elements together with an inner loop.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> productExceptSelf(vector<int>& nums) {'),
+        L('        int n = nums.size();', 'init'),
+        L('        vector<int> res(n, 1);', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            for (int j = 0; j < n; j++) {', 'inner'),
+        L('                if (j != i)', 'inner'),
+        L('                    res[i] *= nums[j];', 'mul'),
+        L('            }'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] productExceptSelf(int[] nums) {'),
+        L('        int n = nums.length;', 'init'),
+        L('        int[] res = new int[n];', 'init'),
+        L('        Arrays.fill(res, 1);', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'outer'),
+        L('            for (int j = 0; j < n; j++) {', 'inner'),
+        L('                if (j != i)', 'inner'),
+        L('                    res[i] *= nums[j];', 'mul'),
+        L('            }'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums, { min: -20, max: 20, maxLen: 10 });
+      if (typeof arr === 'string') return { error: arr };
+      const n = arr.length;
+      if (n < 2) return { error: 'Need at least two numbers.' };
+
+      const steps: Step[] = [];
+      const res: (number | string)[] = Array(n).fill('');
+      const st = (i: number | null, extra?: Partial<ArrayState>): ArrayState => ({
+        arr: res.map((v, j) => `${arr[j]}｜${v === '' ? '·' : v}`),
+        ptrs: i !== null ? [{ name: 'i', i, c: 'a' }] : [],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Each box shows ', A('input｜output'), '. For every position, multiply ', A('all the others'), ' from scratch.'],
+        state: st(null),
+      });
+      let mults = 0;
+      for (let i = 0; i < n; i++) {
+        steps.push({
+          tag: 'outer',
+          trace: ['Position ', A(i), ': skip ', F(arr[i]), ' and multiply the remaining ', A(n - 1), ' numbers.'],
+          state: st(i, { mark: { [i]: 'dim' } }),
+        });
+        let p = 1;
+        for (let j = 0; j < n; j++) {
+          if (j === i) continue;
+          p *= arr[j];
+          mults++;
+        }
+        res[i] = p;
+        steps.push({
+          tag: 'mul',
+          trace: ['Product of everything except index ', A(i), ' = ', B(p), '.'],
+          state: st(i, { mark: { [i]: 'good' } }),
+        });
+      }
+      steps.push({
+        tag: 'ret',
+        trace: ['Done: ', C(`[${res.join(', ')}]`), ' — but it took ', C(mults), ' multiplications.'],
+        state: st(null, { mark: Object.fromEntries(res.map((_, i) => [i, 'final'])) }),
+      });
+      return { steps, result: `[${res.join(', ')}]`, resultDetail: `${mults} multiplications` };
+    },
+    note: 'Every output re-multiplies almost the whole array, so the work is n × (n − 1). The prefix/suffix solution notices that neighbouring answers share most of their product and reuses it.',
+    complexity: { time: 'O(n²)', space: 'O(1) beyond output' },
+  },
 };
 
 /* ================= 11. Majority Element ================= */
@@ -693,6 +1254,87 @@ const majorityElement: ProblemDef = {
   },
   note: 'Pair up every mismatched vote and both sides lose one — but the majority element has more than n/2 copies, so it can absorb every cancellation and still be the last candidate standing. That is why no hash map or sort is needed.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Hash map count',
+    technique: 'Count every value in a hash map and return the first one whose count exceeds n / 2.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int majorityElement(vector<int>& nums) {'),
+        L('        unordered_map<int, int> count;', 'init'),
+        L('        for (int x : nums) {', 'loop'),
+        L('            count[x]++;', 'tally'),
+        L('            if (count[x] > nums.size() / 2)', 'check', 'found'),
+        L('                return x;', 'found'),
+        L('        }'),
+        L('        return -1;', 'none'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int majorityElement(int[] nums) {'),
+        L('        Map<Integer, Integer> count = new HashMap<>();', 'init'),
+        L('        for (int x : nums) {', 'loop'),
+        L('            count.merge(x, 1, Integer::sum);', 'tally'),
+        L('            if (count.get(x) > nums.length / 2)', 'check', 'found'),
+        L('                return x;', 'found'),
+        L('        }'),
+        L('        return -1;', 'none'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums);
+      if (typeof arr === 'string') return { error: arr };
+      const steps: Step[] = [];
+      const count = new Map<number, number>();
+      const half = Math.floor(arr.length / 2);
+      const fmt = () => (count.size === 0 ? '{}' : `{ ${[...count.entries()].map(([v, c]) => `${v}→${c}`).join(', ')} }`);
+      const st = (i: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr,
+        ptrs: i < arr.length ? [{ name: 'i', i, c: 'a' }] : [],
+        aggs: [
+          { label: 'count', value: fmt(), c: 'b' },
+          { label: 'need >', value: String(half), c: 'c' },
+        ],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Tally every value in a hash map; the majority is the first count that passes ', C(`n/2 = ${half}`), '.'],
+        state: st(0),
+      });
+      let ans: number | null = null;
+      for (let i = 0; i < arr.length; i++) {
+        const x = arr[i];
+        count.set(x, (count.get(x) ?? 0) + 1);
+        steps.push({
+          tag: 'tally',
+          trace: ['Seen ', A(x), ' — its count is now ', A(count.get(x)!), '.'],
+          state: st(i, { mark: { [i]: 'active' } }),
+        });
+        if (count.get(x)! > half) {
+          ans = x;
+          steps.push({
+            tag: 'found',
+            trace: [B(x), ' has ', B(count.get(x)!), ' > ', C(half), ' votes — it is the majority. Return ', C(x), '.'],
+            state: st(i, { mark: { [i]: 'final' } }),
+          });
+          break;
+        }
+      }
+      if (ans === null) {
+        steps.push({ tag: 'none', trace: ['No value exceeds n/2 — return ', C(-1), '.'], state: st(arr.length) });
+      }
+      return { steps, result: String(ans ?? -1), resultDetail: 'hash-map counting' };
+    },
+    note: 'Easy to reason about and still O(n) time, but the map costs O(n) extra space. Boyer–Moore gets the same answer with two variables by letting mismatched votes cancel.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 12. Rotate Array ================= */
@@ -782,6 +1424,75 @@ const rotateArray: ProblemDef = {
   },
   note: 'Reversing the whole array puts both halves in the right *place* but the wrong *order* — and a reversal of each half is exactly the fix. Three O(n) flips, zero extra memory.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Extra array',
+    technique: 'Copy every element to its rotated position (i + k) % n in a second array, then copy back.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    void rotate(vector<int>& nums, int k) {'),
+        L('        int n = nums.size();', 'init'),
+        L('        vector<int> tmp(n);', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'place'),
+        L('            tmp[(i + k) % n] = nums[i];', 'place'),
+        L('        nums = tmp;', 'copy'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public void rotate(int[] nums, int k) {'),
+        L('        int n = nums.length;', 'init'),
+        L('        int[] tmp = new int[n];', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'place'),
+        L('            tmp[(i + k) % n] = nums[i];', 'place'),
+        L('        System.arraycopy(tmp, 0, nums, 0, n);', 'copy'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const input = parseIntArray(values.nums);
+      if (typeof input === 'string') return { error: input };
+      const kRaw = parseInt1(values.k, 'k', { min: 0 });
+      if (typeof kRaw === 'string') return { error: kRaw };
+      const n = input.length;
+      const k = kRaw % n;
+
+      const steps: Step[] = [];
+      const tmp: (number | string)[] = Array(n).fill('·');
+      const st = (i: number | null, extra?: Partial<ArrayState>): ArrayState => ({
+        arr: [...input],
+        ptrs: i !== null ? [{ name: 'i', i, c: 'a' }] : [],
+        aggs: [{ label: 'tmp', value: `[${tmp.join(', ')}]`, c: 'b' }],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Rotating right by ', A(k), ' means the element at ', A('i'), ' lands at ', A('(i + k) % n'), ' in a spare array ', B('tmp'), '.'],
+        state: st(null),
+      });
+      for (let i = 0; i < n; i++) {
+        const dest = (i + k) % n;
+        tmp[dest] = input[i];
+        steps.push({
+          tag: 'place',
+          trace: ['nums[', A(i), '] = ', A(input[i]), ' goes to tmp[', B(dest), '].'],
+          state: st(i, { mark: { [i]: 'active' } }),
+        });
+      }
+      steps.push({
+        tag: 'copy',
+        trace: ['Copy tmp back into nums: ', C(`[${tmp.join(', ')}]`), ' — rotation complete.'],
+        state: { arr: [...tmp], mark: Object.fromEntries(tmp.map((_, i) => [i, 'final'])) },
+      });
+      return { steps, result: `[${tmp.join(', ')}]`, resultDetail: `rotated right by ${k}, using O(n) extra space` };
+    },
+    note: 'Direct and easy to get right, and still O(n) time — but it needs a full second array. The three-reversal trick reaches the same result in place with O(1) extra memory.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 export const arraysHashing1 = [twoSum, containsDuplicate, validAnagram, groupAnagrams, topKFrequent, productExceptSelf, majorityElement, rotateArray];
