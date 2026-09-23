@@ -89,6 +89,54 @@ const middleOfList: ProblemDef = {
   },
   note: 'Counting the length first and walking n/2 nodes also works, but needs two passes — and in a real interview the follow-up is usually a stream you can only read once. With an even length this returns the second middle, which is exactly what the problem asks for.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Count, then walk',
+    technique: 'First pass counts the nodes; second pass walks ⌊n/2⌋ steps from the head.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    ListNode* middleNode(ListNode* head) {'),
+        L('        int n = 0;', 'init'),
+        L('        for (ListNode* p = head; p; p = p->next) n++;', 'count'),
+        L('        ListNode* p = head;', 'walk'),
+        L('        for (int i = 0; i < n / 2; i++) p = p->next;', 'walk'),
+        L('        return p;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public ListNode middleNode(ListNode head) {'),
+        L('        int n = 0;', 'init'),
+        L('        for (ListNode p = head; p != null; p = p.next) n++;', 'count'),
+        L('        ListNode p = head;', 'walk'),
+        L('        for (int i = 0; i < n / 2; i++) p = p.next;', 'walk'),
+        L('        return p;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const vals = parseIntArray(values.list, { maxLen: 12 });
+      if (typeof vals === 'string') return { error: vals };
+      const n = vals.length;
+      const steps: Step[] = [];
+      const st = (p: number | null, m: 'good' | 'active' = 'active'): ListState => ({
+        chains: [{ label: 'head', items: vals.map((v, i) => ({ v, mark: i === p ? m : undefined })) }],
+        ptrs: p !== null && p < n ? [{ name: 'p', chain: 0, i: p, c: 'a' }] : [],
+      });
+      steps.push({ tag: 'init', trace: ['Pass 1: count the nodes.'], state: st(null) });
+      for (let i = 0; i < n; i++) steps.push({ tag: 'count', trace: ['Count node ', A(vals[i]), ' → ', A(i + 1), '.'], state: st(i, 'good') });
+      const mid = Math.floor(n / 2);
+      steps.push({ tag: 'walk', trace: ['n = ', B(n), ' — the middle is ', A(mid), ' step(s) from the head.'], state: st(0) });
+      for (let i = 1; i <= mid; i++) steps.push({ tag: 'walk', trace: ['Pass 2: step to ', A(vals[i]), '.'], state: st(i) });
+      steps.push({ tag: 'ret', trace: ['Middle node: ', C(vals[mid]), '.'], state: st(mid) });
+      return { steps, result: String(vals[mid]), resultDetail: `index ${mid} of ${n}` };
+    },
+    note: 'Correct and O(1) space, but it walks the list one and a half times. Slow/fast pointers find the middle in a single pass.',
+    complexity: { time: 'O(n), two passes', space: 'O(1)' },
+  },
 };
 
 /* ================= Linked List Cycle II ================= */
@@ -235,6 +283,67 @@ const cycleII: ProblemDef = {
   },
   note: 'The proof is short arithmetic: if the entrance is L nodes from the head and the pointers meet k nodes into the cycle, then slow travelled L+k and fast 2(L+k), so the extra L+k is a whole number of laps — meaning k nodes past the meeting point is L nodes from the head. That is why phase two works at equal speed.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Hash set of nodes',
+    technique: 'Walk from the head remembering every node; the first node seen twice is where the cycle begins.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    ListNode* detectCycle(ListNode* head) {'),
+        L('        unordered_set<ListNode*> seen;', 'init'),
+        L('        for (ListNode* p = head; p; p = p->next) {', 'walk'),
+        L('            if (seen.count(p)) return p;', 'found'),
+        L('            seen.insert(p);', 'walk'),
+        L('        }'),
+        L('        return nullptr;', 'none'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('public class Solution {'),
+        L('    public ListNode detectCycle(ListNode head) {'),
+        L('        Set<ListNode> seen = new HashSet<>();', 'init'),
+        L('        for (ListNode p = head; p != null; p = p.next) {', 'walk'),
+        L('            if (!seen.add(p)) return p;', 'found', 'walk'),
+        L('        }'),
+        L('        return null;', 'none'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const vals = parseIntArray(values.list, { maxLen: 10 });
+      if (typeof vals === 'string') return { error: vals };
+      const pos = parseInt1(values.pos, 'Link-back index', { min: -1 });
+      if (typeof pos === 'string') return { error: pos };
+      if (pos >= vals.length) return { error: `Link-back index must be < ${vals.length} (or −1 for no cycle).` };
+      const n = vals.length;
+      const next = (i: number) => (i + 1 < n ? i + 1 : pos >= 0 ? pos : -1);
+      const seen = new Set<number>();
+      const steps: Step[] = [];
+      const st = (p: number, m?: 'final'): ListState => ({
+        chains: [{ label: pos >= 0 ? `list (tail → index ${pos})` : 'list', items: vals.map((v, i) => ({ v, mark: i === p && m ? m : seen.has(i) ? ('good' as const) : undefined })) }],
+        ptrs: p >= 0 ? [{ name: 'p', chain: 0, i: p, c: 'a' }] : [],
+        aggs: [{ label: 'nodes in the set', value: String(seen.size), c: 'b' }],
+      });
+      steps.push({ tag: 'init', trace: ['Remember every node visited; a revisit is the cycle’s entrance.'], state: st(0) });
+      let p = n ? 0 : -1;
+      while (p >= 0) {
+        if (seen.has(p)) {
+          steps.push({ tag: 'found', trace: ['Index ', C(p), ' (value ', C(vals[p]), ') is already in the set — the cycle starts here.'], state: st(p, 'final') });
+          return { steps, result: String(vals[p]), resultDetail: `cycle starts at index ${p}` };
+        }
+        seen.add(p);
+        steps.push({ tag: 'walk', trace: ['New node ', A(vals[p]), ' (index ', A(p), ') — remember it.'], state: st(p) });
+        p = next(p);
+      }
+      steps.push({ tag: 'none', trace: ['Reached null — no cycle.'], state: st(-1) });
+      return { steps, result: 'null', resultDetail: 'no cycle' };
+    },
+    note: 'The first repeated node is by definition the entrance, which makes this easy to trust — but the set holds up to n nodes. Floyd’s two phases find the same node with two pointers and O(1) memory.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Intersection of Two Linked Lists ================= */
@@ -364,6 +473,73 @@ const intersectionLists: ProblemDef = {
   },
   note: 'Both pointers walk a + c + b nodes (prefix A, shared tail, prefix B), which is symmetric — so they arrive at the shared node simultaneously no matter how lopsided the lists are. If there is no intersection, both reach null on the same step, so the same loop returns null with no special case.',
   complexity: { time: 'O(m + n)', space: 'O(1)' },
+  brute: {
+    label: 'Hash set of nodes',
+    technique: 'Store every node of list A in a set, then walk list B until a node from the set appears.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    ListNode* getIntersectionNode(ListNode* a, ListNode* b) {'),
+        L('        unordered_set<ListNode*> inA;', 'init'),
+        L('        for (ListNode* p = a; p; p = p->next) inA.insert(p);', 'init'),
+        L('        for (ListNode* q = b; q; q = q->next)', 'walk'),
+        L('            if (inA.count(q)) return q;', 'walk', 'meet'),
+        L('        return nullptr;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('public class Solution {'),
+        L('    public ListNode getIntersectionNode(ListNode a, ListNode b) {'),
+        L('        Set<ListNode> inA = new HashSet<>();', 'init'),
+        L('        for (ListNode p = a; p != null; p = p.next) inA.add(p);', 'init'),
+        L('        for (ListNode q = b; q != null; q = q.next)', 'walk'),
+        L('            if (inA.contains(q)) return q;', 'walk', 'meet'),
+        L('        return null;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parseOpt = (s: string) => {
+        if (!(s ?? '').trim()) return [] as number[];
+        return parseIntArray(s, { maxLen: 6 });
+      };
+      const aPre = parseOpt(values.a);
+      if (typeof aPre === 'string') return { error: aPre };
+      const bPre = parseOpt(values.b);
+      if (typeof bPre === 'string') return { error: bPre };
+      const shared = parseOpt(values.shared);
+      if (typeof shared === 'string') return { error: shared };
+      if (aPre.length + shared.length === 0 || bPre.length + shared.length === 0) return { error: 'Both lists need at least one node.' };
+      const listA = [...aPre.map((v, i) => ({ v, id: `a${i}` })), ...shared.map((v, i) => ({ v, id: `s${i}` }))];
+      const listB = [...bPre.map((v, i) => ({ v, id: `b${i}` })), ...shared.map((v, i) => ({ v, id: `s${i}` }))];
+      const inA = new Set<string>();
+      const steps: Step[] = [];
+      const st = (q?: number, hit?: string): ListState => ({
+        chains: [
+          { label: 'list A (all in the set)', items: listA.map((n) => ({ v: n.v, mark: n.id === hit ? ('final' as const) : inA.has(n.id) ? ('good' as const) : undefined })) },
+          { label: 'list B', items: listB.map((n, k) => ({ v: n.v, mark: n.id === hit ? ('final' as const) : k === q ? ('active' as const) : undefined })) },
+        ],
+        aggs: [{ label: 'nodes in the set', value: String(inA.size), c: 'b' }],
+      });
+      listA.forEach((n) => inA.add(n.id));
+      steps.push({ tag: 'init', trace: ['Put every node of A (by identity, not value) into a set.'], state: st() });
+      for (let k = 0; k < listB.length; k++) {
+        const nd = listB[k];
+        if (inA.has(nd.id)) {
+          steps.push({ tag: 'meet', trace: ['This node of B (value ', C(nd.v), ') is also in A — it is the intersection.'], state: st(k, nd.id) });
+          return { steps, result: String(nd.v), resultDetail: 'intersection node' };
+        }
+        steps.push({ tag: 'walk', trace: ['Node ', A(nd.v), ' of B is not in A’s set.'], state: st(k) });
+      }
+      steps.push({ tag: 'ret', trace: ['B ended without touching A — ', C('null'), '.'], state: st() });
+      return { steps, result: 'null', resultDetail: 'no intersection' };
+    },
+    note: 'O(m + n) time, but storing A costs O(m) memory. Letting each pointer switch to the other list at its end makes both travel the same distance, so they meet at the intersection with O(1) memory.',
+    complexity: { time: 'O(m + n)', space: 'O(m)' },
+  },
 };
 
 /* ================= Remove Duplicates from Sorted List ================= */
@@ -472,6 +648,67 @@ const removeDupSorted: ProblemDef = {
   },
   note: 'Note that cur does not advance after an unlink — the new next might be another duplicate of the same value. Advancing unconditionally is the classic bug, and it silently survives inputs like [1,1,2] while failing on [1,1,1].',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Hash set',
+    technique: 'Walk the list keeping a set of values seen; unlink any node whose value is already in the set.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    ListNode* deleteDuplicates(ListNode* head) {'),
+        L('        unordered_set<int> seen;', 'init'),
+        L('        ListNode dummy(0, head); ListNode* prev = &dummy;', 'init'),
+        L('        while (prev->next) {', 'check'),
+        L('            if (seen.count(prev->next->val)) prev->next = prev->next->next;', 'drop'),
+        L('            else { seen.insert(prev->next->val); prev = prev->next; }', 'keep'),
+        L('        }'),
+        L('        return dummy.next;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public ListNode deleteDuplicates(ListNode head) {'),
+        L('        Set<Integer> seen = new HashSet<>();', 'init'),
+        L('        ListNode dummy = new ListNode(0, head), prev = dummy;', 'init'),
+        L('        while (prev.next != null) {', 'check'),
+        L('            if (seen.contains(prev.next.val)) prev.next = prev.next.next;', 'drop'),
+        L('            else { seen.add(prev.next.val); prev = prev.next; }', 'keep'),
+        L('        }'),
+        L('        return dummy.next;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const vals = parseIntArray(values.list, { maxLen: 12 });
+      if (typeof vals === 'string') return { error: vals };
+      for (let i = 1; i < vals.length; i++) if (vals[i] < vals[i - 1]) return { error: 'The list must be sorted ascending.' };
+      const seen = new Set<number>();
+      const alive = vals.map(() => true);
+      const steps: Step[] = [];
+      const st = (cur: number): ListState => ({
+        chains: [{ label: 'list', items: vals.map((v, i) => ({ v, mark: !alive[i] ? ('dim' as const) : i === cur ? ('active' as const) : undefined })) }],
+        ptrs: cur < vals.length ? [{ name: 'cur', chain: 0, i: cur, c: 'a' }] : [],
+        aggs: [{ label: 'seen', value: `{ ${[...seen].join(', ')} }`, c: 'b' }],
+      });
+      steps.push({ tag: 'init', trace: ['Ignore the sorting: remember every value seen in a set.'], state: st(0) });
+      vals.forEach((v, i) => {
+        if (seen.has(v)) {
+          alive[i] = false;
+          steps.push({ tag: 'drop', trace: [F(v), ' is already in the set — unlink this node.'], state: st(i) });
+        } else {
+          seen.add(v);
+          steps.push({ tag: 'keep', trace: [B(v), ' is new — keep it.'], state: st(i) });
+        }
+      });
+      const out = vals.filter((_, i) => alive[i]);
+      steps.push({ tag: 'ret', trace: ['Result: ', C(out.join(' → ')), '.'], state: st(vals.length) });
+      return { steps, result: `[${out.join(' → ')}]` };
+    },
+    note: 'Works even on unsorted lists, but costs O(n) memory. Because the list is sorted, duplicates are always adjacent, so comparing each node with its neighbour needs no set at all.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Remove Duplicates from Sorted List II ================= */
@@ -582,6 +819,63 @@ const removeDupSortedII: ProblemDef = {
   },
   note: 'The dummy head is what makes this materially harder than version I: here the head itself can be deleted, so without a stable node in front you would need a separate branch for "the answer starts later". prev only advances on a kept node, which is what lets it bridge across an entire deleted run.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Count, then filter',
+    technique: 'First pass counts every value; second pass keeps only nodes whose value appears exactly once.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    ListNode* deleteDuplicates(ListNode* head) {'),
+        L('        unordered_map<int, int> cnt;', 'init'),
+        L('        for (ListNode* p = head; p; p = p->next) cnt[p->val]++;', 'count'),
+        L('        ListNode dummy(0, head); ListNode* prev = &dummy;', 'filter'),
+        L('        while (prev->next)', 'filter'),
+        L('            if (cnt[prev->next->val] > 1) prev->next = prev->next->next;', 'filter'),
+        L('            else prev = prev->next;', 'filter'),
+        L('        return dummy.next;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public ListNode deleteDuplicates(ListNode head) {'),
+        L('        Map<Integer, Integer> cnt = new HashMap<>();', 'init'),
+        L('        for (ListNode p = head; p != null; p = p.next) cnt.merge(p.val, 1, Integer::sum);', 'count'),
+        L('        ListNode dummy = new ListNode(0, head), prev = dummy;', 'filter'),
+        L('        while (prev.next != null)', 'filter'),
+        L('            if (cnt.get(prev.next.val) > 1) prev.next = prev.next.next;', 'filter'),
+        L('            else prev = prev.next;', 'filter'),
+        L('        return dummy.next;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const vals = parseIntArray(values.list, { maxLen: 12 });
+      if (typeof vals === 'string') return { error: vals };
+      for (let i = 1; i < vals.length; i++) if (vals[i] < vals[i - 1]) return { error: 'The list must be sorted ascending.' };
+      const cnt = new Map<number, number>();
+      vals.forEach((v) => cnt.set(v, (cnt.get(v) ?? 0) + 1));
+      const alive = vals.map(() => true);
+      const steps: Step[] = [];
+      const st = (cur?: number): ListState => ({
+        chains: [{ label: 'list', items: vals.map((v, i) => ({ v, mark: !alive[i] ? ('dim' as const) : i === cur ? ('active' as const) : undefined })) }],
+        aggs: [{ label: 'counts', value: [...cnt.entries()].map(([v, c]) => `${v}:${c}`).join('  '), c: 'b' }],
+      });
+      steps.push({ tag: 'init', trace: ['Two passes: count, then filter.'], state: st() });
+      steps.push({ tag: 'count', trace: ['Counts: ', A([...cnt.entries()].map(([v, c]) => `${v}×${c}`).join(', ')), '.'], state: st() });
+      vals.forEach((v, i) => {
+        if (cnt.get(v)! > 1) alive[i] = false;
+        steps.push({ tag: 'filter', trace: [cnt.get(v)! > 1 ? F(v) : B(v), cnt.get(v)! > 1 ? ' appears more than once — remove it.' : ' is unique — keep it.'], state: st(i) });
+      });
+      const out = vals.filter((_, i) => alive[i]);
+      steps.push({ tag: 'ret', trace: ['Result: ', C(out.length ? out.join(' → ') : 'empty'), '.'], state: st() });
+      return { steps, result: out.length ? `[${out.join(' → ')}]` : '[]' };
+    },
+    note: 'Two passes and an O(n) map. With the list sorted, each run of equal values can be detected and skipped in place during a single pass with a dummy head.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Rotate List ================= */
@@ -685,6 +979,67 @@ const rotateList: ProblemDef = {
   },
   note: 'Taking k modulo n first is essential — the problem allows k far larger than the list, and walking k literal steps would time out. Closing the ring turns two separate relink operations into one clean cut, which is why this beats the "find the split, then splice" version on both code length and off-by-one risk.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Rotate one step at a time',
+    technique: 'Repeat k times: walk to the second-to-last node and move the tail to the front.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    ListNode* rotateRight(ListNode* head, int k) {'),
+        L('        if (!head || !head->next) return head;', 'len'),
+        L('        while (k--) {', 'step'),
+        L('            ListNode* p = head;', 'step'),
+        L('            while (p->next->next) p = p->next;  // O(n) walk', 'step'),
+        L('            p->next->next = head; head = p->next; p->next = nullptr;', 'step'),
+        L('        }'),
+        L('        return head;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public ListNode rotateRight(ListNode head, int k) {'),
+        L('        if (head == null || head.next == null) return head;', 'len'),
+        L('        while (k-- > 0) {', 'step'),
+        L('            ListNode p = head;', 'step'),
+        L('            while (p.next.next != null) p = p.next;  // O(n) walk', 'step'),
+        L('            p.next.next = head; head = p.next; p.next = null;', 'step'),
+        L('        }'),
+        L('        return head;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const vals = parseIntArray(values.list, { maxLen: 10 });
+      if (typeof vals === 'string') return { error: vals };
+      const k = parseInt1(values.k, 'k', { min: 0, max: 100 });
+      if (typeof k === 'string') return { error: k };
+      let cur = [...vals];
+      let walked = 0;
+      const steps: Step[] = [];
+      const st = (hl?: boolean): ListState => ({
+        chains: [{ label: 'list', items: cur.map((v, i) => ({ v, mark: hl && i === 0 ? ('active' as const) : undefined })) }],
+        aggs: [{ label: 'nodes walked', value: String(walked), c: 'a' }],
+      });
+      if (cur.length < 2) {
+        steps.push({ tag: 'len', trace: ['Zero or one node — rotating changes nothing.'], state: st() });
+        return { steps, result: `[${cur.join(' → ')}]` };
+      }
+      steps.push({ tag: 'len', trace: ['No modulo trick: literally rotate ', A(k), ' time(s), one node per rotation.'], state: st() });
+      for (let t = 0; t < k; t++) {
+        walked += cur.length - 1;
+        cur = [cur[cur.length - 1], ...cur.slice(0, -1)];
+        if (t < 12) steps.push({ tag: 'step', trace: ['Rotation ', A(t + 1), ': walk to the end and move ', B(cur[0]), ' to the front.'], state: st(true) });
+        else if (t === 12) steps.push({ tag: 'step', trace: ['… and so on — every rotation walks the whole list again …'], state: st(true) });
+      }
+      steps.push({ tag: 'ret', trace: ['Result: ', C(cur.join(' → ')), ' after walking ', A(walked), ' nodes.'], state: st() });
+      return { steps, result: `[${cur.join(' → ')}]` };
+    },
+    note: 'k can be far bigger than the list, and each rotation walks the whole list — O(n·k). Rotating by k is the same as rotating by k mod n, which the ring-and-cut method does in one pass.',
+    complexity: { time: 'O(n · k)', space: 'O(1)' },
+  },
 };
 
 /* ================= Sort List ================= */
@@ -818,6 +1173,71 @@ const sortList: ProblemDef = {
   },
   note: 'This is the O(n log n) sort the problem demands, and the only common one that reaches O(1) extra space on a list — recursion still costs O(log n) stack, so a strict constant-space answer needs the bottom-up iterative variant. Cutting with slow->next = null before recursing is mandatory; forget it and the two halves stay joined and recurse forever.',
   complexity: { time: 'O(n log n)', space: 'O(log n) recursion' },
+  brute: {
+    label: 'Insertion sort',
+    technique: 'Build a sorted list by taking nodes one at a time and splicing each into its place, scanning from the front.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    ListNode* sortList(ListNode* head) {'),
+        L('        ListNode dummy(INT_MIN);', 'base'),
+        L('        while (head) {', 'insert'),
+        L('            ListNode* next = head->next;', 'insert'),
+        L('            ListNode* p = &dummy;', 'insert'),
+        L('            while (p->next && p->next->val < head->val) p = p->next;', 'insert'),
+        L('            head->next = p->next; p->next = head;', 'insert'),
+        L('            head = next;', 'insert'),
+        L('        }'),
+        L('        return dummy.next;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public ListNode sortList(ListNode head) {'),
+        L('        ListNode dummy = new ListNode(Integer.MIN_VALUE);', 'base'),
+        L('        while (head != null) {', 'insert'),
+        L('            ListNode next = head.next, p = dummy;', 'insert'),
+        L('            while (p.next != null && p.next.val < head.val) p = p.next;', 'insert'),
+        L('            head.next = p.next; p.next = head;', 'insert'),
+        L('            head = next;', 'insert'),
+        L('        }'),
+        L('        return dummy.next;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const vals = parseIntArray(values.list, { maxLen: 8 });
+      if (typeof vals === 'string') return { error: vals };
+      const sorted: number[] = [];
+      let compares = 0;
+      const steps: Step[] = [];
+      const st = (rest: number[], at?: number): ListState => ({
+        chains: [
+          { label: 'unsorted', items: rest.map((v, i) => ({ v, mark: i === 0 ? ('active' as const) : undefined })) },
+          { label: 'sorted', items: sorted.map((v, i) => ({ v, mark: i === at ? ('good' as const) : ('win' as const) })) },
+        ],
+        aggs: [{ label: 'comparisons', value: String(compares), c: 'a' }],
+      });
+      steps.push({ tag: 'base', trace: ['Take nodes from the input one by one and splice each into the sorted list.'], state: st(vals) });
+      vals.forEach((v, i) => {
+        let at = 0;
+        while (at < sorted.length && sorted[at] < v) {
+          at++;
+          compares++;
+        }
+        compares++;
+        sorted.splice(at, 0, v);
+        steps.push({ tag: 'insert', trace: ['Insert ', A(v), ' at position ', B(at), ' after scanning from the front.'], state: st(vals.slice(i + 1), at) });
+      });
+      steps.push({ tag: 'ret', trace: ['Sorted: ', C(sorted.join(' → ')), ' (', A(compares), ' comparisons).'], state: st([]) });
+      return { steps, result: `[${sorted.join(' → ')}]` };
+    },
+    note: 'Natural on a linked list (splicing is O(1)), but finding each spot scans from the front — O(n²) comparisons in the worst case. Merge sort splits and merges in O(n log n).',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Partition List ================= */
@@ -922,6 +1342,66 @@ const partitionList: ProblemDef = {
   },
   note: 'Appending to the end of each chain (rather than the front) is what preserves relative order, which the problem explicitly requires. Setting h->next = null before joining is easy to forget and leaves a cycle: the last "big" node would still point at whatever followed it originally.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Two value arrays',
+    technique: 'Copy the values smaller than x into one array and the rest into another, then write them back in that order.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    ListNode* partition(ListNode* head, int x) {'),
+        L('        vector<int> small, big;', 'init'),
+        L('        for (ListNode* p = head; p; p = p->next)', 'route'),
+        L('            (p->val < x ? small : big).push_back(p->val);', 'route'),
+        L('        small.insert(small.end(), big.begin(), big.end());', 'join'),
+        L('        int i = 0;', 'join'),
+        L('        for (ListNode* p = head; p; p = p->next) p->val = small[i++];', 'join'),
+        L('        return head;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public ListNode partition(ListNode head, int x) {'),
+        L('        List<Integer> small = new ArrayList<>(), big = new ArrayList<>();', 'init'),
+        L('        for (ListNode p = head; p != null; p = p.next)', 'route'),
+        L('            (p.val < x ? small : big).add(p.val);', 'route'),
+        L('        small.addAll(big);', 'join'),
+        L('        int i = 0;', 'join'),
+        L('        for (ListNode p = head; p != null; p = p.next) p.val = small.get(i++);', 'join'),
+        L('        return head;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const vals = parseIntArray(values.list, { maxLen: 12 });
+      if (typeof vals === 'string') return { error: vals };
+      const x = parseInt1(values.x, 'x');
+      if (typeof x === 'string') return { error: x };
+      const small: number[] = [];
+      const big: number[] = [];
+      const steps: Step[] = [];
+      const st = (i: number): ListState => ({
+        chains: [
+          { label: 'list', items: vals.map((v, k) => ({ v, mark: k === i ? ('active' as const) : undefined })) },
+          { label: `array: < ${x}`, items: small.map((v) => ({ v, mark: 'good' as const })), broken: true },
+          { label: `array: ≥ ${x}`, items: big.map((v) => ({ v, mark: 'win' as const })), broken: true },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Copy values out into two arrays, keeping their original order.'], state: st(-1) });
+      vals.forEach((v, i) => {
+        (v < x ? small : big).push(v);
+        steps.push({ tag: 'route', trace: [A(v), v < x ? [' < ', x, ' — to the small array.'].join('') : [' ≥ ', x, ' — to the big array.'].join('')], state: st(i) });
+      });
+      const out = [...small, ...big];
+      steps.push({ tag: 'join', trace: ['Write the values back: small ones first, then the rest.'], state: st(-1) });
+      steps.push({ tag: 'ret', trace: ['Result: ', C(out.join(' → ')), '.'], state: st(-1) });
+      return { steps, result: `[${out.join(' → ')}]` };
+    },
+    note: 'O(n) time but O(n) extra memory, and it rewrites node values instead of relinking nodes. Building two chains with dummy heads and joining them keeps O(1) extra space.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Reverse Linked List II ================= */
@@ -1008,13 +1488,16 @@ const reverseListII: ProblemDef = {
       state: st(lo > 0 ? { [lo - 1]: 'active' } : {}),
     });
     for (let i = 0; i < hi - lo; i++) {
-      const move = cur[lo + 1];
+      // curr (the original first node of the sublist) drifts one place right
+      // per iteration, so the node to lift is always the one just after it.
+      const from = lo + 1 + i;
+      const move = cur[from];
       steps.push({
         tag: 'lift',
         trace: ['Lift node ', A(move), ' out of the sublist by linking its predecessor straight past it.'],
-        state: st({ [lo + 1]: 'active' }),
+        state: st({ [from]: 'active' }),
       });
-      cur.splice(lo + 1, 1);
+      cur.splice(from, 1);
       cur.splice(lo, 0, move);
       steps.push({
         tag: 'front',
@@ -1034,6 +1517,63 @@ const reverseListII: ProblemDef = {
   },
   note: 'The head-insertion variant reverses the sublist in one pass without ever detaching it, so the surrounding links stay correct for free — the alternative (cut out, reverse, splice back) needs four pointers held simultaneously and is far more error-prone under interview pressure.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Reverse the values',
+    technique: 'Copy the values between left and right into an array, reverse the array, and write them back into the same nodes.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    ListNode* reverseBetween(ListNode* head, int left, int right) {'),
+        L('        vector<int> v; ListNode* p = head;', 'walk'),
+        L('        for (int i = 1; i < left; i++) p = p->next;', 'walk'),
+        L('        ListNode* start = p;', 'walk'),
+        L('        for (int i = left; i <= right; i++, p = p->next) v.push_back(p->val);', 'copy'),
+        L('        reverse(v.begin(), v.end());', 'copy'),
+        L('        for (int x : v) { start->val = x; start = start->next; }', 'write'),
+        L('        return head;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public ListNode reverseBetween(ListNode head, int left, int right) {'),
+        L('        List<Integer> v = new ArrayList<>(); ListNode p = head;', 'walk'),
+        L('        for (int i = 1; i < left; i++) p = p.next;', 'walk'),
+        L('        ListNode start = p;', 'walk'),
+        L('        for (int i = left; i <= right; i++, p = p.next) v.add(p.val);', 'copy'),
+        L('        Collections.reverse(v);', 'copy'),
+        L('        for (int x : v) { start.val = x; start = start.next; }', 'write'),
+        L('        return head;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const vals = parseIntArray(values.list, { maxLen: 10 });
+      if (typeof vals === 'string') return { error: vals };
+      const left = parseInt1(values.left, 'left', { min: 1 });
+      if (typeof left === 'string') return { error: left };
+      const right = parseInt1(values.right, 'right', { min: 1 });
+      if (typeof right === 'string') return { error: right };
+      if (left > right) return { error: 'left must be ≤ right.' };
+      if (right > vals.length) return { error: `right must be ≤ the list length (${vals.length}).` };
+      const cur = [...vals];
+      const steps: Step[] = [];
+      const st = (m: 'active' | 'good'): ListState => ({
+        chains: [{ label: 'list', items: cur.map((v, i) => ({ v, mark: i >= left - 1 && i <= right - 1 ? m : undefined })) }],
+      });
+      steps.push({ tag: 'walk', trace: ['Walk to position ', A(left), '.'], state: st('active') });
+      const seg = cur.slice(left - 1, right);
+      steps.push({ tag: 'copy', trace: ['Copy positions ', A(left), '…', A(right), ' into an array: ', A(seg.join(', ')), ', then reverse it.'], state: st('active') });
+      seg.reverse().forEach((v, k) => (cur[left - 1 + k] = v));
+      steps.push({ tag: 'write', trace: ['Write the reversed values back into the same nodes: ', B(seg.join(', ')), '.'], state: st('good') });
+      steps.push({ tag: 'ret', trace: ['Result: ', C(cur.join(' → ')), '.'], state: st('good') });
+      return { steps, result: `[${cur.join(' → ')}]` };
+    },
+    note: 'Simple, but it needs O(right − left) extra memory and changes values rather than links. The head-insertion loop reverses the actual node pointers in one pass with O(1) extra space.',
+    complexity: { time: 'O(n)', space: 'O(right − left)' },
+  },
 };
 
 export const linkedList3: ProblemDef[] = [
