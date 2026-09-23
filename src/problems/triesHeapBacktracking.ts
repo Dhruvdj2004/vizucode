@@ -133,6 +133,67 @@ const maximumXOR: ProblemDef = {
   },
   note: 'The identity a ⊕ b = c ⟺ a ⊕ c = b turns "is there a pair?" into a single hash lookup, which is what removes the inner loop. The trie solution stores the same prefixes as a binary tree and walks the opposite bit at each level — same greedy idea, different container.',
   complexity: { time: 'O(n · 32)', space: 'O(n)' },
+  brute: {
+    label: 'Every pair',
+    technique: 'XOR every pair of numbers and keep the largest result.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findMaximumXOR(vector<int>& nums) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < nums.size(); i++)', 'pair', 'better'),
+        L('            for (int j = i + 1; j < nums.size(); j++)', 'pair', 'better'),
+        L('                best = max(best, nums[i] ^ nums[j]);', 'pair', 'better'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findMaximumXOR(int[] nums) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < nums.length; i++)', 'pair', 'better'),
+        L('            for (int j = i + 1; j < nums.length; j++)', 'pair', 'better'),
+        L('                best = Math.max(best, nums[i] ^ nums[j]);', 'pair', 'better'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 255, maxLen: 10 });
+      if (typeof nums === 'string') return { error: nums };
+      const WIDTH = 8;
+      const toBits = (n: number): (0 | 1)[] => [...Array(WIDTH)].map((_, i) => ((n >>> (WIDTH - 1 - i)) & 1) as 0 | 1);
+      const steps: Step[] = [];
+      let best = 0;
+      let pairs = 0;
+      const view = (a: number, b: number) => ({
+        rows: [
+          { label: `a = ${a}`, bits: toBits(a), c: 'a' as const },
+          { label: `b = ${b}`, bits: toBits(b), c: 'a' as const },
+          { label: `a ⊕ b = ${a ^ b}`, bits: toBits(a ^ b), c: 'c' as const },
+          { label: `best = ${best}`, bits: toBits(best), c: 'b' as const },
+        ],
+        aggs: [{ label: 'pairs tried', value: String(pairs), c: 'a' as const }],
+      });
+      steps.push({ tag: 'init', trace: ['No trie and no prefix tricks: XOR all ', A((nums.length * (nums.length - 1)) / 2), ' pairs.'], state: view(0, 0) });
+      for (let i = 0; i < nums.length; i++)
+        for (let j = i + 1; j < nums.length; j++) {
+          pairs++;
+          const x = nums[i] ^ nums[j];
+          const better = x > best;
+          if (better) best = x;
+          if (better || steps.length < 40)
+            steps.push({ tag: better ? 'better' : 'pair', trace: [A(nums[i]), ' ⊕ ', A(nums[j]), ' = ', better ? B(x) : F(x), better ? ' — new best.' : '.'], state: view(nums[i], nums[j]) });
+        }
+      steps.push({ tag: 'ret', trace: ['Maximum XOR: ', C(best), ' after ', A(pairs), ' pairs.'], state: view(0, 0) });
+      return { steps, result: String(best) };
+    },
+    note: 'Simple and exact, but O(n²). Deciding the answer one bit at a time (with a set of prefixes or a binary trie) needs only O(n · bits).',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Replace Words ================= */
@@ -338,6 +399,95 @@ const replaceWords: ProblemDef = {
   },
   note: 'Returning at the first ★ is what satisfies "replace with the shortest root" — a deeper marker would be a longer root, so stopping early is not just an optimisation but part of the specification. A hash set of roots also works, but you would have to try every prefix length separately.',
   complexity: { time: 'O(total characters)', space: 'O(dictionary size)' },
+  brute: {
+    label: 'Check every root',
+    technique: 'For each word, test every dictionary root with startsWith and keep the shortest match.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string replaceWords(vector<string>& roots, string sentence) {'),
+        L('        stringstream in(sentence); string w, out;', 'init'),
+        L('        while (in >> w) {', 'word'),
+        L('            string best = w;', 'word'),
+        L('            for (auto& r : roots)', 'test'),
+        L('                if (w.rfind(r, 0) == 0 && r.size() < best.size()) best = r;', 'test', 'hit'),
+        L('            out += (out.empty() ? "" : " ") + best;', 'word'),
+        L('        }'),
+        L('        return out;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String replaceWords(List<String> roots, String sentence) {'),
+        L('        StringBuilder out = new StringBuilder();', 'init'),
+        L('        for (String w : sentence.split(" ")) {', 'word'),
+        L('            String best = w;', 'word'),
+        L('            for (String r : roots)', 'test'),
+        L('                if (w.startsWith(r) && r.length() < best.length()) best = r;', 'test', 'hit'),
+        L('            if (out.length() > 0) out.append(\' \');', 'word'),
+        L('            out.append(best);', 'word'),
+        L('        }'),
+        L('        return out.toString();', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const roots = (values.roots ?? '')
+        .split(/[,\s]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (roots.length === 0) return { error: 'Enter at least one root.' };
+      if (roots.length > 6 || roots.some((r) => !/^[a-z]{1,8}$/.test(r))) return { error: 'Up to 6 roots, each 1–8 lowercase letters.' };
+      const words = (values.sentence ?? '')
+        .split(/\s+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (words.length === 0) return { error: 'Enter a sentence.' };
+      if (words.length > 10 || words.some((w) => !/^[a-z]+$/.test(w))) return { error: 'Up to 10 words, lowercase letters only.' };
+      const out: string[] = [];
+      let tests = 0;
+      const steps: Step[] = [];
+      // A flat "tree": one hub with every root hanging below it, so each comparison has a node to light up.
+      const nodes = [
+        { id: 0, val: 'roots', x: 0.5, y: 0 },
+        ...roots.map((r, i) => ({ id: i + 1, val: r, x: roots.length === 1 ? 0.5 : i / (roots.length - 1), y: 1 })),
+      ];
+      const edges = roots.map((_, i) => [0, i + 1] as [number, number]);
+      const view = (cur: number | null, hits: number[], word: string): TreeState => ({
+        nodes,
+        edges,
+        current: cur,
+        done: hits,
+        aggs: [
+          { label: 'word', value: word || '—', c: 'a' },
+          { label: 'output', value: out.join(' ') || '—', c: 'c' },
+          { label: 'startsWith tests', value: String(tests), c: 'b' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['No trie: every word is compared against ', A('every root'), '.'], state: view(null, [], '') });
+      for (const w of words) {
+        let best = w;
+        const hits: number[] = [];
+        steps.push({ tag: 'word', trace: ['Word "', A(w), '".'], state: view(null, [], w) });
+        roots.forEach((r, i) => {
+          tests++;
+          const ok = w.startsWith(r);
+          if (ok) hits.push(i + 1);
+          if (ok && r.length < best.length) best = r;
+          if (steps.length < MAX_STEPS)
+            steps.push({ tag: ok ? 'hit' : 'test', trace: ['"', A(w), '" starts with "', ok ? B(r) : F(r), '"? ', ok ? B('yes') : F('no'), '.'], state: view(i + 1, hits, w) });
+        });
+        out.push(best);
+      }
+      steps.push({ tag: 'ret', trace: ['Result: "', C(out.join(' ')), '" after ', A(tests), ' startsWith tests.'], state: view(null, [], '') });
+      return { steps, result: out.join(' ') };
+    },
+    note: 'Every word is compared with every root, costing O(words × roots × length). A trie walks each word once and stops at the first root marker, so the number of roots stops mattering.',
+    complexity: { time: 'O(W · R · L)', space: 'O(1)' },
+  },
 };
 
 /* ================= Design Browser History ================= */
@@ -459,6 +609,101 @@ const browserHistory: ProblemDef = {
   },
   note: 'Clamping instead of erroring is the specified behaviour — "move as far as you can" — and it removes every bounds check from the calling code. The two-stack design also works, but truncation on visit becomes a loop of pops, and peeking the current page needs an extra variable anyway.',
   complexity: { time: 'O(1) back/forward, O(n) worst-case visit', space: 'O(n)' },
+  brute: {
+    label: 'Two stacks',
+    technique: 'Keep the pages behind you on a back stack and the pages ahead on a forward stack; visiting clears the forward stack.',
+    code: {
+      cpp: [
+        L('class BrowserHistory {'),
+        L('    stack<string> back, fwd; string cur;'),
+        L('public:'),
+        L('    BrowserHistory(string home) : cur(home) {}', 'init'),
+        L('    void visit(string url) {'),
+        L('        back.push(cur); cur = url;', 'visit'),
+        L('        fwd = stack<string>();', 'visit', 'truncate'),
+        L('    }'),
+        L('    string back(int steps) {'),
+        L('        while (steps-- && !back.empty()) { fwd.push(cur); cur = back.top(); back.pop(); }', 'back'),
+        L('        return cur;', 'back'),
+        L('    }'),
+        L('    string forward(int steps) {'),
+        L('        while (steps-- && !fwd.empty()) { back.push(cur); cur = fwd.top(); fwd.pop(); }', 'forward'),
+        L('        return cur;', 'forward'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class BrowserHistory {'),
+        L('    Deque<String> back = new ArrayDeque<>(), fwd = new ArrayDeque<>();'),
+        L('    String cur;'),
+        L('    public BrowserHistory(String home) { cur = home; }', 'init'),
+        L('    public void visit(String url) {'),
+        L('        back.push(cur); cur = url;', 'visit'),
+        L('        fwd.clear();', 'visit', 'truncate'),
+        L('    }'),
+        L('    public String back(int steps) {'),
+        L('        while (steps-- > 0 && !back.isEmpty()) { fwd.push(cur); cur = back.pop(); }', 'back'),
+        L('        return cur;', 'back'),
+        L('    }'),
+        L('    public String forward(int steps) {'),
+        L('        while (steps-- > 0 && !fwd.isEmpty()) { back.push(cur); cur = fwd.pop(); }', 'forward'),
+        L('        return cur;', 'forward'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = (values.ops ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter at least one operation.' };
+      if (raw.length > 12) return { error: 'Keep it to at most 12 operations.' };
+      const back: string[] = [];
+      const fwd: string[] = [];
+      let cur = 'a';
+      const returned: string[] = [];
+      const steps: Step[] = [];
+      const st = (): StackState => ({
+        stack: back.map((v) => ({ v })),
+        stackLabel: 'Back stack (top ↑)',
+        stack2: fwd.map((v) => ({ v, c: 'f' as const })),
+        stack2Label: 'Forward stack (top ↑)',
+        aggs: [
+          { label: 'current page', value: cur, c: 'a' },
+          { label: 'returned', value: returned.join(', ') || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Start on "', A('a'), '" with both stacks empty.'], state: st() });
+      for (const op of raw) {
+        const [name, arg] = op.split(/\s+/);
+        const cmd = name.toLowerCase();
+        if (cmd === 'visit') {
+          if (!arg) return { error: `"${op}" needs a page name, e.g. "visit b".` };
+          back.push(cur);
+          cur = arg;
+          const dropped = fwd.length;
+          fwd.length = 0;
+          steps.push({ tag: dropped ? 'truncate' : 'visit', trace: ['visit("', A(arg), '") — push the old page onto the back stack', dropped ? [' and clear ', dropped, ' forward page(s)'].join('') : '', '.'], state: st() });
+        } else if (cmd === 'back' || cmd === 'forward') {
+          const k = Number(arg);
+          if (!Number.isInteger(k) || k < 1) return { error: `"${op}" needs a positive step count, e.g. "back 2".` };
+          const from = cmd === 'back' ? back : fwd;
+          const to = cmd === 'back' ? fwd : back;
+          let moved = 0;
+          while (moved < k && from.length) {
+            to.push(cur);
+            cur = from.pop()!;
+            moved++;
+          }
+          returned.push(cur);
+          steps.push({ tag: cmd, trace: [cmd, '(', A(k), ') — moved ', A(moved), ' page(s), one pop and one push each. Returns "', C(cur), '".'], state: st() });
+        } else {
+          return { error: `Unknown operation "${op}". Use visit <page>, back <n> or forward <n>.` };
+        }
+      }
+      return { steps, result: returned.join(', ') || 'no values returned', resultDetail: `now on "${cur}"` };
+    },
+    note: 'Also correct, but back(k) and forward(k) cost O(k) because pages are moved one at a time between stacks. The array-with-cursor design jumps the cursor in O(1).',
+    complexity: { time: 'O(k) back/forward, O(n) visit', space: 'O(n)' },
+  },
 };
 
 /* ================= LFU Cache ================= */
@@ -632,6 +877,129 @@ const lfuCache: ProblemDef = {
   },
   note: 'Tracking minFreq explicitly is what keeps every operation O(1) — it only ever increases by one on a touch, or resets to 1 on an insert, so it never needs searching. Getting LFU right means remembering that an insert makes minFreq 1 unconditionally, even if every other key is used far more.',
   complexity: { time: 'O(1) per operation', space: 'O(capacity)' },
+  brute: {
+    label: 'Scan for the victim',
+    technique: 'Store each key with its use count and last-use time; on eviction, scan every key to find the least-used, oldest one.',
+    code: {
+      cpp: [
+        L('class LFUCache {'),
+        L('    int cap, clock = 0;'),
+        L('    unordered_map<int, array<int, 3>> kv;  // value, freq, lastUse'),
+        L('public:'),
+        L('    LFUCache(int capacity) : cap(capacity) {}', 'insert'),
+        L('    int get(int key) {'),
+        L('        if (!kv.count(key)) return -1;', 'miss'),
+        L('        kv[key][1]++; kv[key][2] = ++clock;', 'touch'),
+        L('        return kv[key][0];', 'hit'),
+        L('    }'),
+        L('    void put(int key, int value) {'),
+        L('        if (kv.count(key)) { kv[key][0] = value; kv[key][1]++; kv[key][2] = ++clock; return; }', 'update'),
+        L('        if (kv.size() == cap) {', 'evict'),
+        L('            auto victim = kv.begin();', 'evict'),
+        L('            for (auto it = kv.begin(); it != kv.end(); it++)  // O(n) scan', 'evict'),
+        L('                if (it->second[1] < victim->second[1] ||', 'evict'),
+        L('                    (it->second[1] == victim->second[1] && it->second[2] < victim->second[2])) victim = it;', 'evict'),
+        L('            kv.erase(victim);', 'evict'),
+        L('        }'),
+        L('        kv[key] = {value, 1, ++clock};', 'insert'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class LFUCache {'),
+        L('    int cap, clock = 0;'),
+        L('    Map<Integer, int[]> kv = new HashMap<>();  // value, freq, lastUse'),
+        L('    public LFUCache(int capacity) { cap = capacity; }', 'insert'),
+        L('    public int get(int key) {'),
+        L('        int[] e = kv.get(key);'),
+        L('        if (e == null) return -1;', 'miss'),
+        L('        e[1]++; e[2] = ++clock;', 'touch'),
+        L('        return e[0];', 'hit'),
+        L('    }'),
+        L('    public void put(int key, int value) {'),
+        L('        int[] e = kv.get(key);'),
+        L('        if (e != null) { e[0] = value; e[1]++; e[2] = ++clock; return; }', 'update'),
+        L('        if (kv.size() == cap) {', 'evict'),
+        L('            int victim = -1;', 'evict'),
+        L('            for (var en : kv.entrySet())  // O(n) scan', 'evict'),
+        L('                if (victim == -1 || en.getValue()[1] < kv.get(victim)[1] ||', 'evict'),
+        L('                    (en.getValue()[1] == kv.get(victim)[1] && en.getValue()[2] < kv.get(victim)[2])) victim = en.getKey();', 'evict'),
+        L('            kv.remove(victim);', 'evict'),
+        L('        }'),
+        L('        kv.put(key, new int[]{value, 1, ++clock});', 'insert'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const cap = parseInt1(values.cap, 'Capacity', { min: 1, max: 4 });
+      if (typeof cap === 'string') return { error: cap };
+      const raw = (values.ops ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter at least one operation.' };
+      if (raw.length > 12) return { error: 'Keep it to at most 12 operations.' };
+      const kv = new Map<number, { value: number; freq: number; last: number }>();
+      let clock = 0;
+      let scanned = 0;
+      const returned: string[] = [];
+      const steps: Step[] = [];
+      const st = (mark?: number): StackState => ({
+        stack: [...kv.entries()].map(([k, e]) => ({ v: `key ${k} = ${e.value} · used ${e.freq}× · t${e.last}`, c: k === mark ? ('a' as const) : undefined })),
+        stackLabel: `cache (${kv.size}/${cap}) — unordered`,
+        aggs: [
+          { label: 'keys scanned for evictions', value: String(scanned), c: 'a' },
+          { label: 'returned', value: returned.join(', ') || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'insert', trace: ['No frequency buckets: each key just remembers its use count and last-use time.'], state: st() });
+      for (const op of raw) {
+        const parts = op.split(/\s+/);
+        const cmd = parts[0].toLowerCase();
+        if (cmd === 'get') {
+          const key = Number(parts[1]);
+          if (!Number.isInteger(key)) return { error: `"${op}" needs a key, e.g. "get 1".` };
+          const e = kv.get(key);
+          if (!e) {
+            returned.push('-1');
+            steps.push({ tag: 'miss', trace: ['get(', A(key), ') — missing, return ', C(-1), '.'], state: st() });
+          } else {
+            e.freq++;
+            e.last = ++clock;
+            returned.push(String(e.value));
+            steps.push({ tag: 'hit', trace: ['get(', A(key), ') — count ', B(e.freq), ', return ', C(e.value), '.'], state: st(key) });
+          }
+        } else if (cmd === 'put') {
+          const key = Number(parts[1]);
+          const value = Number(parts[2]);
+          if (!Number.isInteger(key) || !Number.isInteger(value)) return { error: `"${op}" needs a key and value, e.g. "put 1 5".` };
+          const e = kv.get(key);
+          if (e) {
+            e.value = value;
+            e.freq++;
+            e.last = ++clock;
+            steps.push({ tag: 'update', trace: ['put(', A(key), ', ', A(value), ') — update and count a use.'], state: st(key) });
+          } else {
+            if (kv.size === cap) {
+              let victim = -1;
+              for (const [k, x] of kv) {
+                scanned++;
+                const v = kv.get(victim);
+                if (!v || x.freq < v.freq || (x.freq === v.freq && x.last < v.last)) victim = k;
+              }
+              kv.delete(victim);
+              steps.push({ tag: 'evict', trace: ['Full — scan all ', A(cap), ' keys for the least used (oldest on ties): evict key ', F(victim), '.'], state: st() });
+            }
+            kv.set(key, { value, freq: 1, last: ++clock });
+            steps.push({ tag: 'insert', trace: ['Insert key ', A(key), ' = ', A(value), ' with count 1.'], state: st(key) });
+          }
+        } else {
+          return { error: `Unknown operation "${op}". Use get <k> or put <k> <v>.` };
+        }
+      }
+      return { steps, result: returned.join(', ') || 'no gets performed', resultDetail: `${kv.size} key(s) cached` };
+    },
+    note: 'get and put are O(1) except eviction, which scans every key — O(capacity). Frequency buckets with per-bucket recency order (plus a minFreq pointer) make eviction O(1) too.',
+    complexity: { time: 'O(1) get, O(capacity) evicting put', space: 'O(capacity)' },
+  },
 };
 
 /* ============================================================
@@ -804,6 +1172,70 @@ const topKWords: ProblemDef = {
   },
   note: 'Capping the heap at k gives O(n log k) rather than O(n log n) — a real win when k is small and n is large. The tie-break must be inverted inside the heap: because the root is what gets discarded, the alphabetically later word has to compare as "smaller".',
   complexity: { time: 'O(n log k)', space: 'O(n)' },
+  brute: {
+    label: 'Sort everything',
+    technique: 'Count the words, sort all distinct words by (count desc, word asc), and take the first k.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<string> topKFrequent(vector<string>& words, int k) {'),
+        L('        unordered_map<string, int> cnt;', 'count'),
+        L('        for (auto& w : words) cnt[w]++;', 'count'),
+        L('        vector<string> all;', 'sort'),
+        L('        for (auto& [w, c] : cnt) all.push_back(w);', 'sort'),
+        L('        sort(all.begin(), all.end(), [&](auto& a, auto& b) {', 'sort'),
+        L('            return cnt[a] != cnt[b] ? cnt[a] > cnt[b] : a < b;', 'sort'),
+        L('        });'),
+        L('        return vector<string>(all.begin(), all.begin() + k);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<String> topKFrequent(String[] words, int k) {'),
+        L('        Map<String, Integer> cnt = new HashMap<>();', 'count'),
+        L('        for (String w : words) cnt.merge(w, 1, Integer::sum);', 'count'),
+        L('        List<String> all = new ArrayList<>(cnt.keySet());', 'sort'),
+        L('        all.sort((a, b) -> !cnt.get(a).equals(cnt.get(b))', 'sort'),
+        L('            ? cnt.get(b) - cnt.get(a) : a.compareTo(b));', 'sort'),
+        L('        return all.subList(0, k);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const words = (values.words ?? '')
+        .split(/[,\s]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (words.length === 0) return { error: 'Enter at least one word.' };
+      if (words.length > 14 || words.some((w) => !/^[a-z]{1,10}$/.test(w))) return { error: 'Up to 14 words, each 1–10 lowercase letters.' };
+      const k = parseInt1(values.k, 'k', { min: 1 });
+      if (typeof k === 'string') return { error: k };
+      const cnt = new Map<string, number>();
+      for (const w of words) cnt.set(w, (cnt.get(w) ?? 0) + 1);
+      if (k > cnt.size) return { error: `k cannot exceed the number of distinct words (${cnt.size}).` };
+      const steps: Step[] = [];
+      const entries = [...cnt.entries()];
+      steps.push({
+        tag: 'count',
+        trace: ['Count every word: ', A(entries.map(([w, c]) => `${w}×${c}`).join(', ')), '.'],
+        state: { heap: entries.map(([w, c]) => `${w}×${c}`), label: 'counts (unsorted)' },
+      });
+      const sorted = [...entries].sort((a, b) => (a[1] !== b[1] ? b[1] - a[1] : a[0] < b[0] ? -1 : 1));
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort all ', A(sorted.length), ' distinct words: higher count first, alphabetical on ties.'],
+        state: { heap: sorted.map(([w, c]) => `${w}×${c}`), hl: sorted.slice(0, k).map((_, i) => i), label: 'fully sorted list, drawn level by level' },
+      });
+      const res = sorted.slice(0, k).map(([w]) => w);
+      steps.push({ tag: 'ret', trace: ['Take the first ', C(k), ': ', C(res.join(', ')), '.'], state: { heap: res, ok: res.map((_, i) => i), label: 'result' } });
+      return { steps, result: `[${res.join(', ')}]` };
+    },
+    note: 'Sorting every distinct word costs O(m log m) even when k is tiny. A size-k heap only ever pays log k per word.',
+    complexity: { time: 'O(n + m log m)', space: 'O(m)' },
+  },
 };
 
 /* ================= Kth Smallest Element in a Sorted Matrix ================= */
@@ -929,6 +1361,70 @@ const kthSmallestMatrix: ProblemDef = {
   },
   note: 'This is a k-way merge of n sorted lists, so the heap never exceeds n entries no matter how large the matrix is. Binary-searching the value range instead gives O(n log(max−min)) and beats this when k approaches n² — worth mentioning if the interviewer pushes on complexity.',
   complexity: { time: 'O(k log n)', space: 'O(n)' },
+  brute: {
+    label: 'Flatten & sort',
+    technique: 'Copy all n² values into one list, sort it, and read index k − 1.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int kthSmallest(vector<vector<int>>& m, int k) {'),
+        L('        vector<int> all;', 'init'),
+        L('        for (auto& row : m) all.insert(all.end(), row.begin(), row.end());', 'init'),
+        L('        sort(all.begin(), all.end());', 'sort'),
+        L('        return all[k - 1];', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int kthSmallest(int[][] m, int k) {'),
+        L('        int n = m.length, i = 0;', 'init'),
+        L('        int[] all = new int[n * n];', 'init'),
+        L('        for (int[] row : m) for (int v : row) all[i++] = v;', 'init'),
+        L('        Arrays.sort(all);', 'sort'),
+        L('        return all[k - 1];', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const rows = (values.grid ?? '')
+        .split(/[;|]/)
+        .map((r) => r.trim())
+        .filter(Boolean)
+        .map((r) => r.split(/[,\s]+/).filter(Boolean).map(Number));
+      if (rows.length === 0) return { error: 'Enter a matrix, rows separated by ";".' };
+      if (rows.some((r) => r.some((v) => !Number.isFinite(v)))) return { error: 'All entries must be numbers.' };
+      const n = rows.length;
+      if (!rows.every((r) => r.length === n)) return { error: 'The matrix must be square.' };
+      if (n > 5) return { error: 'Keep it to at most 5×5.' };
+      for (const r of rows) for (let c = 1; c < n; c++) if (r[c] < r[c - 1]) return { error: 'Each row must be sorted ascending.' };
+      for (let c = 0; c < n; c++) for (let r = 1; r < n; r++) if (rows[r][c] < rows[r - 1][c]) return { error: 'Each column must be sorted ascending.' };
+      const k = parseInt1(values.k, 'k', { min: 1, max: n * n });
+      if (typeof k === 'string') return { error: k };
+      const all = rows.flat().sort((a, b) => a - b);
+      const steps: Step[] = [];
+      steps.push({
+        tag: 'init',
+        trace: ['Ignore the sorted rows and columns: copy all ', A(n * n), ' values into one list.'],
+        state: { grid: rows, rowLabels: rows.map((_, i) => i), colLabels: rows.map((_, i) => i), mark: {} },
+      });
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort them: ', A(all.join(', ')), '.'],
+        state: { grid: [all], rowLabels: ['sorted'], colLabels: all.map((_, i) => i + 1), mark: {} },
+      });
+      steps.push({
+        tag: 'ret',
+        trace: ['Position ', A(k), ' holds ', C(all[k - 1]), '.'],
+        state: { grid: [all], rowLabels: ['sorted'], colLabels: all.map((_, i) => i + 1), mark: { [`0,${k - 1}`]: 'final' } },
+      });
+      return { steps, result: String(all[k - 1]) };
+    },
+    note: 'O(n² log n) time and O(n²) memory, throwing away all the ordering the matrix already has. Merging rows with a heap needs only O(k log n) and n entries.',
+    complexity: { time: 'O(n² log n)', space: 'O(n²)' },
+  },
 };
 
 const ordinal = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
@@ -1053,6 +1549,84 @@ const reorganizeString: ProblemDef = {
   },
   note: 'Taking two at a time is what makes the greedy provably safe — the two most frequent characters can never be the same one, so no adjacency is ever created. The feasibility check up front is exact: if any count exceeds ⌈n/2⌉ there are not enough gaps to separate its copies.',
   complexity: { time: 'O(n log k)', space: 'O(k)' },
+  brute: {
+    label: 'Fill even slots',
+    technique: 'Place the most frequent letter at indices 0, 2, 4, …, then pour the rest into the remaining even, then odd, slots — O(n), no heap.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string reorganizeString(string s) {'),
+        L('        int cnt[26] = {0}, top = 0;', 'count'),
+        L('        for (char c : s) if (++cnt[c - \'a\'] > cnt[top]) top = c - \'a\';', 'count'),
+        L('        if (cnt[top] > (s.size() + 1) / 2) return "";', 'fail'),
+        L('        string out(s.size(), \' \'); int i = 0;', 'place'),
+        L('        while (cnt[top]--) { out[i] = \'a\' + top; i += 2; }', 'place'),
+        L('        for (int c = 0; c < 26; c++)', 'place'),
+        L('            while (cnt[c]-- > 0) {', 'place'),
+        L('                if (i >= s.size()) i = 1;', 'place'),
+        L('                out[i] = \'a\' + c; i += 2;', 'place'),
+        L('            }'),
+        L('        return out;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String reorganizeString(String s) {'),
+        L('        int[] cnt = new int[26]; int top = 0;', 'count'),
+        L('        for (char c : s.toCharArray()) if (++cnt[c - \'a\'] > cnt[top]) top = c - \'a\';', 'count'),
+        L('        if (cnt[top] > (s.length() + 1) / 2) return "";', 'fail'),
+        L('        char[] out = new char[s.length()]; int i = 0;', 'place'),
+        L('        while (cnt[top]-- > 0) { out[i] = (char) (\'a\' + top); i += 2; }', 'place'),
+        L('        for (int c = 0; c < 26; c++)', 'place'),
+        L('            while (cnt[c]-- > 0) {', 'place'),
+        L('                if (i >= out.length) i = 1;', 'place'),
+        L('                out[i] = (char) (\'a\' + c); i += 2;', 'place'),
+        L('            }'),
+        L('        return new String(out);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,12}$/.test(s)) return { error: 'Use 1–12 lowercase letters.' };
+      const cnt = new Map<string, number>();
+      for (const c of s) cnt.set(c, (cnt.get(c) ?? 0) + 1);
+      const letters = [...cnt.keys()].sort();
+      const top = letters.reduce((a, b) => (cnt.get(b)! > cnt.get(a)! ? b : a));
+      const steps: Step[] = [];
+      const out: string[] = Array(s.length).fill('·');
+      const view = (label: string): HeapState => ({
+        heap: out,
+        label,
+        aggs: [{ label: 'counts', value: letters.map((c) => `${c}×${cnt.get(c)}`).join('  '), c: 'b' }],
+      });
+      steps.push({ tag: 'count', trace: ['Count letters; the most frequent is "', A(top), '" ×', A(cnt.get(top)!), '.'], state: view('output slots (drawn as a tree, read left to right by level)') });
+      if (cnt.get(top)! > Math.floor((s.length + 1) / 2)) {
+        steps.push({ tag: 'fail', trace: ['"', F(top), '" needs more than half the slots — impossible. Return ""', '.'], state: view('impossible') });
+        return { steps, result: '""', resultDetail: 'impossible' };
+      }
+      let i = 0;
+      const order = [top, ...letters.filter((c) => c !== top)];
+      for (const c of order) {
+        const k = cnt.get(c)!;
+        const slots: number[] = [];
+        for (let t = 0; t < k; t++) {
+          if (i >= s.length) i = 1;
+          out[i] = c;
+          slots.push(i);
+          i += 2;
+        }
+        steps.push({ tag: 'place', trace: ['Put "', A(c), '" ×', A(k), ' into slots ', B(slots.join(', ')), ' — every other position, so no two touch.'], state: { ...view('output slots'), hl: slots } });
+      }
+      steps.push({ tag: 'ret', trace: ['Result: "', C(out.join('')), '".'], state: view('done') });
+      return { steps, result: out.join('') };
+    },
+    note: 'Better than the heap: once the most frequent letter is safely spread over the even slots, any order of the rest works, so one counting pass and one filling pass are enough — O(n) instead of O(n log k). The output can differ from the heap version; both are valid.',
+    complexity: { time: 'O(n)', space: 'O(1) — 26 counters' },
+  },
 };
 
 /* ================= Furthest Building You Can Reach ================= */
@@ -1182,6 +1756,90 @@ const furthestBuilding: ProblemDef = {
   },
   note: 'A pure greedy "save ladders for big climbs" fails because you cannot see the future; the heap fixes that by letting an early decision be revised. Note the ladder set holds only the k largest climbs seen so far, which is exactly the optimal assignment at every prefix.',
   complexity: { time: 'O(n log L)', space: 'O(L)' },
+  brute: {
+    label: 'Re-sort every climb',
+    technique: 'At each building, gather every climb so far, sort them, give ladders to the biggest and pay bricks for the rest.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int furthestBuilding(vector<int>& h, int bricks, int ladders) {'),
+        L('        vector<int> climbs;', 'init'),
+        L('        for (int i = 0; i + 1 < h.size(); i++) {', 'free', 'ladder'),
+        L('            if (h[i + 1] <= h[i]) continue;', 'free'),
+        L('            climbs.push_back(h[i + 1] - h[i]);', 'ladder'),
+        L('            vector<int> c = climbs;', 'ladder'),
+        L('            sort(c.rbegin(), c.rend());  // biggest first', 'ladder'),
+        L('            long need = 0;', 'ladder'),
+        L('            for (int j = ladders; j < c.size(); j++) need += c[j];', 'ladder'),
+        L('            if (need > bricks) return i;', 'stuck'),
+        L('        }'),
+        L('        return h.size() - 1;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int furthestBuilding(int[] h, int bricks, int ladders) {'),
+        L('        List<Integer> climbs = new ArrayList<>();', 'init'),
+        L('        for (int i = 0; i + 1 < h.length; i++) {', 'free', 'ladder'),
+        L('            if (h[i + 1] <= h[i]) continue;', 'free'),
+        L('            climbs.add(h[i + 1] - h[i]);', 'ladder'),
+        L('            List<Integer> c = new ArrayList<>(climbs);', 'ladder'),
+        L('            c.sort(Collections.reverseOrder());', 'ladder'),
+        L('            long need = 0;', 'ladder'),
+        L('            for (int j = ladders; j < c.size(); j++) need += c.get(j);', 'ladder'),
+        L('            if (need > bricks) return i;', 'stuck'),
+        L('        }'),
+        L('        return h.length - 1;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const h = parseIntArray(values.heights, { min: 1, maxLen: 12 });
+      if (typeof h === 'string') return { error: h };
+      const bricks = parseInt1(values.bricks, 'Bricks', { min: 0 });
+      if (typeof bricks === 'string') return { error: bricks };
+      const ladders = parseInt1(values.ladders, 'Ladders', { min: 0, max: 6 });
+      if (typeof ladders === 'string') return { error: ladders };
+      const steps: Step[] = [];
+      const climbs: number[] = [];
+      const view = (sorted: number[], label: string, need: number): HeapState => ({
+        heap: sorted,
+        hl: sorted.slice(0, ladders).map((_, i) => i),
+        label,
+        aggs: [
+          { label: 'bricks needed', value: `${need} of ${bricks}`, c: need > bricks ? 'a' : 'b' },
+          { label: 'ladders', value: String(ladders), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Keep every climb; at each step decide from scratch which ones get ladders.'], state: view([], 'climbs so far', 0) });
+      for (let i = 0; i + 1 < h.length; i++) {
+        const d = h[i + 1] - h[i];
+        if (d <= 0) {
+          steps.push({ tag: 'free', trace: ['Building ', A(i), ' → ', A(i + 1), ': going down is free.'], state: view([...climbs].sort((a, b) => b - a), 'climbs so far', 0) });
+          continue;
+        }
+        climbs.push(d);
+        const sorted = [...climbs].sort((a, b) => b - a);
+        const need = sorted.slice(ladders).reduce((a, b) => a + b, 0);
+        steps.push({
+          tag: 'ladder',
+          trace: ['Climb ', A(d), '. Sort all ', A(climbs.length), ' climbs, ladder the biggest ', A(Math.min(ladders, climbs.length)), ', bricks for the rest: ', need > bricks ? F(need) : B(need), ' bricks.'],
+          state: view(sorted, 'all climbs, sorted biggest first (highlighted = laddered)', need),
+        });
+        if (need > bricks) {
+          steps.push({ tag: 'stuck', trace: ['Not enough bricks — the furthest reachable building is ', C(i), '.'], state: view(sorted, 'stuck', need) });
+          return { steps, result: String(i) };
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Every climb covered — reach the last building, index ', C(h.length - 1), '.'], state: view([...climbs].sort((a, b) => b - a), 'finished', 0) });
+      return { steps, result: String(h.length - 1) };
+    },
+    note: 'The allocation rule is right — ladders on the biggest climbs — but re-sorting all climbs at every building costs O(n² log n). The min-heap of laddered climbs makes each decision O(log ladders).',
+    complexity: { time: 'O(n² log n)', space: 'O(n)' },
+  },
 };
 
 /* ============================================================
@@ -1313,6 +1971,81 @@ const combinationSumIII: ProblemDef = {
   },
   note: 'Two constraints do the pruning: passing d + 1 downward enforces distinctness and ascending order in one move, and breaking when d > rem cuts an entire tail of the loop because the digits are already sorted. Without that break the search still works but explores far more dead ends.',
   complexity: { time: 'O(C(9,k) · k)', space: 'O(k)' },
+  brute: {
+    label: 'Bitmask',
+    technique: 'Each of the 2⁹ subsets of the digits 1–9 is a 9-bit mask; keep masks with k bits whose digits sum to n.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> combinationSum3(int k, int n) {'),
+        L('        vector<vector<int>> res;', 'init'),
+        L('        for (int mask = 0; mask < (1 << 9); mask++) {', 'try'),
+        L('            if (__builtin_popcount(mask) != k) continue;', 'try'),
+        L('            vector<int> cur; int sum = 0;', 'try'),
+        L('            for (int d = 1; d <= 9; d++) if (mask >> (d - 1) & 1) { cur.push_back(d); sum += d; }', 'try'),
+        L('            if (sum == n) res.push_back(cur);', 'hit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<Integer>> combinationSum3(int k, int n) {'),
+        L('        List<List<Integer>> res = new ArrayList<>();', 'init'),
+        L('        for (int mask = 0; mask < (1 << 9); mask++) {', 'try'),
+        L('            if (Integer.bitCount(mask) != k) continue;', 'try'),
+        L('            List<Integer> cur = new ArrayList<>(); int sum = 0;', 'try'),
+        L('            for (int d = 1; d <= 9; d++) if ((mask >> (d - 1) & 1) == 1) { cur.add(d); sum += d; }', 'try'),
+        L('            if (sum == n) res.add(cur);', 'hit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const k = parseInt1(values.k, 'k', { min: 1, max: 5 });
+      if (typeof k === 'string') return { error: k };
+      const n = parseInt1(values.n, 'n', { min: 1, max: 45 });
+      if (typeof n === 'string') return { error: n };
+      const steps: Step[] = [];
+      const res: number[][] = [];
+      let tried = 0;
+      const st = (digits: number[], label: string): StackState => ({
+        array: {
+          arr: [...Array(9)].map((_, i) => i + 1),
+          mark: Object.fromEntries(digits.map((d) => [d - 1, 'good' as const])),
+        },
+        stack: digits.map((v) => ({ v, c: 'b' as const })),
+        stackLabel: label,
+        aggs: [
+          { label: `${k}-digit masks tried`, value: String(tried), c: 'a' },
+          { label: 'results', value: res.map((r) => `[${r.join(',')}]`).join(' ') || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Walk all ', A(512), ' subsets of 1–9, keeping those with ', A(k), ' digits that sum to ', C(n), '.'], state: st([], 'subset') });
+      for (let mask = 0; mask < 1 << 9; mask++) {
+        const digits = [...Array(9)].map((_, i) => i + 1).filter((d) => (mask >> (d - 1)) & 1);
+        if (digits.length !== k) continue;
+        tried++;
+        const sum = digits.reduce((a, b) => a + b, 0);
+        if (sum === n) {
+          res.push(digits);
+          steps.push({ tag: 'hit', trace: ['{', B(digits.join(', ')), '} sums to ', C(n), ' — keep it.'], state: st(digits, 'match') });
+        } else if (steps.length < 25) {
+          steps.push({ tag: 'try', trace: ['{', A(digits.join(', ')), '} sums to ', F(sum), '.'], state: st(digits, 'subset') });
+        }
+      }
+      // Masks count up in binary, not in dictionary order — sort so the list reads like the backtracking output.
+      res.sort((x, y) => { for (let i = 0; i < k; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; });
+      steps.push({ tag: 'ret', trace: [C(res.length), ' combination(s) after checking ', A(tried), ' subsets of size ', A(k), '.'], state: st([], 'done') });
+      return { steps, result: res.length ? res.map((r) => `[${r.join(',')}]`).join(', ') : 'none' };
+    },
+    note: 'Always examines all 512 masks. Backtracking builds digits in increasing order and stops as soon as the running sum overshoots, so it visits far fewer states — though with only 9 digits both are instant.',
+    complexity: { time: 'O(2⁹ · 9)', space: 'O(k)' },
+  },
 };
 
 /* ================= Sudoku Solver ================= */
@@ -1459,6 +2192,127 @@ const sudokuSolver: ProblemDef = {
   },
   note: 'Returning true straight up the call stack is what stops the search the instant a solution appears — without it the recursion would keep exploring and the undo would wipe the answer out. Real speed comes from picking the most-constrained empty cell rather than the first one, which prunes vastly more.',
   complexity: { time: 'exponential worst case', space: 'O(empty cells)' },
+  brute: {
+    label: 'Most-constrained cell',
+    technique: 'Always fill the empty cell with the fewest legal digits next (MRV), which prunes dead branches far earlier.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool solve(vector<vector<char>>& b) {'),
+        L('        int br = -1, bc = -1, fewest = 10;', 'scan'),
+        L('        for (int r = 0; r < 9; r++)', 'scan'),
+        L('            for (int c = 0; c < 9; c++)', 'scan'),
+        L('                if (b[r][c] == \'.\') {', 'scan'),
+        L('                    int n = countLegal(b, r, c);', 'scan'),
+        L('                    if (n < fewest) { fewest = n; br = r; bc = c; }', 'scan'),
+        L('                }'),
+        L('        if (br == -1) return true;', 'solved'),
+        L('        for (char d = \'1\'; d <= \'9\'; d++) {'),
+        L('            if (!legal(b, br, bc, d)) continue;', 'reject'),
+        L('            b[br][bc] = d;', 'place'),
+        L('            if (solve(b)) return true;', 'place'),
+        L('            b[br][bc] = \'.\';', 'undo'),
+        L('        }'),
+        L('        return false;', 'dead'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    boolean solve(char[][] b) {'),
+        L('        int br = -1, bc = -1, fewest = 10;', 'scan'),
+        L('        for (int r = 0; r < 9; r++)', 'scan'),
+        L('            for (int c = 0; c < 9; c++)', 'scan'),
+        L('                if (b[r][c] == \'.\') {', 'scan'),
+        L('                    int n = countLegal(b, r, c);', 'scan'),
+        L('                    if (n < fewest) { fewest = n; br = r; bc = c; }', 'scan'),
+        L('                }'),
+        L('        if (br == -1) return true;', 'solved'),
+        L('        for (char d = \'1\'; d <= \'9\'; d++) {'),
+        L('            if (!legal(b, br, bc, d)) continue;', 'reject'),
+        L('            b[br][bc] = d;', 'place'),
+        L('            if (solve(b)) return true;', 'place'),
+        L('            b[br][bc] = \'.\';', 'undo'),
+        L('        }'),
+        L('        return false;', 'dead'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const rows = (values.grid ?? '')
+        .split(/[;|]/)
+        .map((r) => r.trim())
+        .filter(Boolean)
+        .map((r) => r.split(/[,\s]+/).filter(Boolean).map(Number));
+      if (rows.length !== 4 || !rows.every((r) => r.length === 4)) return { error: 'Enter a 4×4 grid, rows separated by ";".' };
+      if (rows.some((r) => r.some((v) => !Number.isInteger(v) || v < 0 || v > 4))) return { error: 'Use digits 0–4 (0 means empty).' };
+      const b = rows.map((r) => [...r]);
+      const N = 4;
+      const BOX = 2;
+      const ok = (r: number, c: number, d: number) => {
+        for (let i = 0; i < N; i++) if (b[r][i] === d || b[i][c] === d) return false;
+        const br = Math.floor(r / BOX) * BOX;
+        const bc = Math.floor(c / BOX) * BOX;
+        for (let i = 0; i < BOX; i++) for (let j = 0; j < BOX; j++) if (b[br + i][bc + j] === d) return false;
+        return true;
+      };
+      const given = new Set<string>();
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (b[r][c] !== 0) given.add(`${r},${c}`);
+      for (const key of given) {
+        const [r, c] = key.split(',').map(Number);
+        const d = b[r][c];
+        b[r][c] = 0;
+        if (!ok(r, c, d)) return { error: `The given grid already breaks the rules at row ${r}, column ${c}.` };
+        b[r][c] = d;
+      }
+      const steps: Step[] = [];
+      const view = (active?: string, mark: 'active' | 'good' | 'dim' = 'active'): MatrixState => ({
+        grid: b.map((row) => row.map((v) => (v === 0 ? '·' : v))),
+        rowLabels: [...Array(N)].map((_, i) => i),
+        colLabels: [...Array(N)].map((_, i) => i),
+        mark: { ...Object.fromEntries([...given].map((key) => [key, 'good' as const])), ...(active ? { [active]: mark } : {}) },
+      });
+      let solved = false;
+      const solve = (): boolean => {
+        if (steps.length > MAX_STEPS) return true;
+        let best: [number, number] | null = null;
+        let fewest = N + 1;
+        for (let r = 0; r < N; r++)
+          for (let c = 0; c < N; c++) {
+            if (b[r][c] !== 0) continue;
+            const n = [...Array(N)].filter((_, d) => ok(r, c, d + 1)).length;
+            if (n < fewest) {
+              fewest = n;
+              best = [r, c];
+            }
+          }
+        if (!best) {
+          solved = true;
+          steps.push({ tag: 'solved', trace: ['No empty cells remain — ', C('solved'), '.'], state: view() });
+          return true;
+        }
+        const [r, c] = best;
+        steps.push({ tag: 'scan', trace: ['The most constrained empty cell is (', A(r), ',', A(c), ') with only ', A(fewest), ' legal digit(s).'], state: view(`${r},${c}`) });
+        for (let d = 1; d <= N; d++) {
+          if (!ok(r, c, d)) continue;
+          b[r][c] = d;
+          steps.push({ tag: 'place', trace: ['Place ', A(d), ' and recurse.'], state: view(`${r},${c}`) });
+          if (solve()) return true;
+          b[r][c] = 0;
+          steps.push({ tag: 'undo', trace: ['Dead end — undo the ', F(d), '.'], state: view(`${r},${c}`, 'dim') });
+        }
+        steps.push({ tag: 'dead', trace: ['No digit fits — back up.'], state: view(`${r},${c}`, 'dim') });
+        return false;
+      };
+      steps.push({ tag: 'scan', trace: ['Instead of the first empty cell, always pick the one with the ', A('fewest'), ' legal digits.'], state: view() });
+      solve();
+      return { steps, result: solved ? b.map((r) => r.join('')).join(';') : 'no solution' };
+    },
+    note: 'Better in practice: a cell with one legal digit is a forced move, and a cell with zero exposes a dead end immediately, so far fewer wrong branches are explored than when filling cells in reading order.',
+    complexity: { time: 'exponential worst case, far fewer branches', space: 'O(empty cells)' },
+  },
 };
 
 /* ================= Restore IP Addresses ================= */
@@ -1591,6 +2445,90 @@ const restoreIP: ProblemDef = {
   },
   note: 'Both rejections use break rather than continue, which is correct because extending the cut can only make things worse — a leading zero stays, and a number over 255 only grows. The search space is tiny (at most 3⁴ splits), so the real risk here is validation bugs, not performance.',
   complexity: { time: 'O(1) — at most 81 splits', space: 'O(1)' },
+  brute: {
+    label: 'Three nested loops',
+    technique: 'Choose the lengths of the first three parts (1–3 each) with three loops; the fourth part is whatever remains.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    bool valid(const string& p) {'),
+        L('        return p.size() >= 1 && p.size() <= 3 && (p.size() == 1 || p[0] != \'0\') && stoi(p) <= 255;'),
+        L('    }'),
+        L('public:'),
+        L('    vector<string> restoreIpAddresses(string s) {'),
+        L('        vector<string> res; int n = s.size();', 'init'),
+        L('        for (int a = 1; a <= 3; a++)', 'try'),
+        L('            for (int b = 1; b <= 3; b++)', 'try'),
+        L('                for (int c = 1; c <= 3; c++) {', 'try'),
+        L('                    int d = n - a - b - c;', 'try'),
+        L('                    if (d < 1 || d > 3) continue;', 'try'),
+        L('                    string p1 = s.substr(0, a), p2 = s.substr(a, b), p3 = s.substr(a + b, c), p4 = s.substr(a + b + c);', 'try'),
+        L('                    if (valid(p1) && valid(p2) && valid(p3) && valid(p4))', 'hit'),
+        L('                        res.push_back(p1 + "." + p2 + "." + p3 + "." + p4);', 'hit'),
+        L('                }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    boolean valid(String p) {'),
+        L('        return p.length() >= 1 && p.length() <= 3 && (p.length() == 1 || p.charAt(0) != \'0\') && Integer.parseInt(p) <= 255;'),
+        L('    }'),
+        L('    public List<String> restoreIpAddresses(String s) {'),
+        L('        List<String> res = new ArrayList<>(); int n = s.length();', 'init'),
+        L('        for (int a = 1; a <= 3; a++)', 'try'),
+        L('            for (int b = 1; b <= 3; b++)', 'try'),
+        L('                for (int c = 1; c <= 3; c++) {', 'try'),
+        L('                    int d = n - a - b - c;', 'try'),
+        L('                    if (d < 1 || d > 3) continue;', 'try'),
+        L('                    String p1 = s.substring(0, a), p2 = s.substring(a, a + b), p3 = s.substring(a + b, a + b + c), p4 = s.substring(a + b + c);', 'try'),
+        L('                    if (valid(p1) && valid(p2) && valid(p3) && valid(p4))', 'hit'),
+        L('                        res.add(p1 + "." + p2 + "." + p3 + "." + p4);', 'hit'),
+        L('                }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim();
+      if (!/^[0-9]{4,12}$/.test(s)) return { error: 'Enter 4–12 digits.' };
+      const n = s.length;
+      const valid = (p: string) => p.length >= 1 && p.length <= 3 && (p.length === 1 || p[0] !== '0') && Number(p) <= 255;
+      const steps: Step[] = [];
+      const res: string[] = [];
+      let tried = 0;
+      const st = (parts: string[], label: string): StackState => ({
+        array: { arr: s.split('') },
+        stack: parts.map((p) => ({ v: p, c: valid(p) ? ('b' as const) : ('f' as const) })),
+        stackLabel: label,
+        aggs: [
+          { label: 'splits tried', value: String(tried), c: 'a' },
+          { label: 'valid addresses', value: res.join('   ') || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['At most 3 × 3 × 3 = 27 ways to choose the first three part lengths — try them all.'], state: st([], 'parts') });
+      for (let a = 1; a <= 3; a++)
+        for (let b = 1; b <= 3; b++)
+          for (let c = 1; c <= 3; c++) {
+            const d = n - a - b - c;
+            if (d < 1 || d > 3) continue;
+            tried++;
+            const parts = [s.slice(0, a), s.slice(a, a + b), s.slice(a + b, a + b + c), s.slice(a + b + c)];
+            if (parts.every(valid)) {
+              res.push(parts.join('.'));
+              steps.push({ tag: 'hit', trace: ['Lengths ', A(`${a}-${b}-${c}-${d}`), ' → ', C(parts.join('.')), ' is valid.'], state: st(parts, 'valid') });
+            } else {
+              steps.push({ tag: 'try', trace: ['Lengths ', A(`${a}-${b}-${c}-${d}`), ' → ', F(parts.join('.')), ' has an invalid part.'], state: st(parts, 'rejected') });
+            }
+          }
+      steps.push({ tag: 'ret', trace: res.length ? [C(res.length), ' valid address(es) from ', A(tried), ' splits.'] : ['No valid IP address can be formed.'], state: st([], 'done') });
+      return { steps, result: res.length ? res.join(', ') : 'none' };
+    },
+    note: 'With only 27 possible length combinations, plain loops are just as fast as backtracking and arguably simpler. Backtracking pays off when the number of parts is not fixed.',
+    complexity: { time: 'O(27) = O(1)', space: 'O(1)' },
+  },
 };
 
 /* ================= Word Break II ================= */
@@ -1736,6 +2674,104 @@ const wordBreakII: ProblemDef = {
   },
   note: 'Memoising by start index is what saves this from blowing up: a suffix like "anddog" gets solved once no matter how many prefixes lead into it. Note the cache stores every sentence for that suffix, not a boolean — the plain Word Break only needs the boolean, which is why it is a Medium and this is a Hard.',
   complexity: { time: 'O(n² · number of results)', space: 'O(n² )' },
+  brute: {
+    label: 'No memo',
+    technique: 'The same backtracking over dictionary prefixes, but every suffix is re-solved each time it is reached.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    unordered_set<string> dict;'),
+        L('    vector<string> dfs(string& s, int i) {', 'enter'),
+        L('        if (i == s.size()) return {""};', 'base'),
+        L('        vector<string> out;'),
+        L('        for (int j = i + 1; j <= s.size(); j++) {'),
+        L('            string w = s.substr(i, j - i);'),
+        L('            if (!dict.count(w)) continue;', 'choose'),
+        L('            for (auto& rest : dfs(s, j))', 'choose'),
+        L('                out.push_back(w + (rest.empty() ? "" : " " + rest));', 'choose'),
+        L('        }'),
+        L('        return out;'),
+        L('    }'),
+        L('public:'),
+        L('    vector<string> wordBreak(string s, vector<string>& words) {'),
+        L('        dict = unordered_set<string>(words.begin(), words.end());', 'init'),
+        L('        return dfs(s, 0);', 'init', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    Set<String> dict;'),
+        L('    List<String> dfs(String s, int i) {', 'enter'),
+        L('        if (i == s.length()) return List.of("");', 'base'),
+        L('        List<String> out = new ArrayList<>();'),
+        L('        for (int j = i + 1; j <= s.length(); j++) {'),
+        L('            String w = s.substring(i, j);'),
+        L('            if (!dict.contains(w)) continue;', 'choose'),
+        L('            for (String rest : dfs(s, j))', 'choose'),
+        L('                out.add(w + (rest.isEmpty() ? "" : " " + rest));', 'choose'),
+        L('        }'),
+        L('        return out;'),
+        L('    }'),
+        L('    public List<String> wordBreak(String s, List<String> words) {'),
+        L('        dict = new HashSet<>(words);', 'init'),
+        L('        return dfs(s, 0);', 'init', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,14}$/.test(s)) return { error: 'Use 1–14 lowercase letters.' };
+      const words = (values.dict ?? '')
+        .split(/[,\s]+/)
+        .map((w) => w.trim().toLowerCase())
+        .filter(Boolean);
+      if (words.length === 0 || words.length > 8 || words.some((w) => !/^[a-z]{1,8}$/.test(w))) {
+        return { error: 'Enter 1–8 dictionary words, each 1–8 lowercase letters.' };
+      }
+      const dict = new Set(words);
+      const steps: Step[] = [];
+      const visits = Array(s.length + 1).fill(0);
+      const chosen: string[] = [];
+      let calls = 0;
+      const st = (i: number, note: string): StackState => ({
+        array: {
+          arr: s.split(''),
+          mark: Object.fromEntries(s.split('').map((_, k) => [k, k < i ? ('good' as const) : undefined]).filter(([, v]) => v)),
+        },
+        stack: chosen.map((w) => ({ v: w, c: 'b' as const })),
+        stackLabel: note,
+        aggs: [
+          { label: 'calls', value: String(calls), c: 'a' },
+          { label: 'times each index was solved', value: visits.map((v, k) => (v ? `${k}:${v}` : '')).filter(Boolean).join(' '), c: 'b' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Same search as before, minus the memo: a suffix reached twice is solved twice.'], state: st(0, 'words chosen') });
+      const dfs = (i: number): string[] => {
+        calls++;
+        visits[i]++;
+        if (steps.length < MAX_STEPS)
+          steps.push({ tag: 'enter', trace: ['Solve from index ', A(i), visits[i] > 1 ? [' — for the ', visits[i], 'th time'].join('') : '', '.'], state: st(i, 'words chosen') });
+        if (i === s.length) return [''];
+        const out: string[] = [];
+        for (let j = i + 1; j <= s.length; j++) {
+          const w = s.slice(i, j);
+          if (!dict.has(w)) continue;
+          chosen.push(w);
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'choose', trace: ['"', A(w), '" is a word — recurse from ', B(j), '.'], state: st(j, 'words chosen') });
+          for (const rest of dfs(j)) out.push(w + (rest ? ' ' + rest : ''));
+          chosen.pop();
+        }
+        return out;
+      };
+      const res = dfs(0);
+      steps.push({ tag: 'ret', trace: res.length ? [C(res.length), ' sentence(s) after ', A(calls), ' calls.'] : ['The string cannot be broken into dictionary words.'], state: st(s.length, 'done') });
+      return { steps, result: res.length ? res.join(' | ') : 'none' };
+    },
+    note: 'Without the memo, a shared suffix is rebuilt once per prefix that reaches it, which blows up on inputs like "aaaa…" with words "a", "aa", "aaa". Memoising each index’s sentence list solves every suffix once.',
+    complexity: { time: 'O(2ⁿ) worst case', space: 'O(n) stack' },
+  },
 };
 
 export const triesHeapBacktracking: ProblemDef[] = [
