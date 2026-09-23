@@ -151,6 +151,74 @@ const numberOfProvinces: ProblemDef = {
   },
   note: 'The outer loop is what makes this a component count rather than a single traversal — a graph can be disconnected, so one DFS from node 0 is not enough. Union-find gives the same answer and is the natural choice when edges arrive one at a time instead of all at once.',
   complexity: { time: 'O(n²) on an adjacency matrix', space: 'O(n)' },
+  brute: {
+    label: 'Union-Find',
+    technique: 'Start with every city as its own group and union the two ends of every connection; the groups left are the provinces.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    vector<int> p;'),
+        L('    int find(int x) { return p[x] == x ? x : p[x] = find(p[x]); }'),
+        L('public:'),
+        L('    int findCircleNum(vector<vector<int>>& isConnected) {'),
+        L('        int n = isConnected.size(), count = n;', 'init'),
+        L('        p.resize(n); iota(p.begin(), p.end(), 0);', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'union'),
+        L('            for (int j = i + 1; j < n; j++)', 'union'),
+        L('                if (isConnected[i][j] && find(i) != find(j)) { p[find(i)] = find(j); count--; }', 'union'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    int[] p;'),
+        L('    int find(int x) { return p[x] == x ? x : (p[x] = find(p[x])); }'),
+        L('    public int findCircleNum(int[][] isConnected) {'),
+        L('        int n = isConnected.length, count = n;', 'init'),
+        L('        p = new int[n];', 'init'),
+        L('        for (int i = 0; i < n; i++) p[i] = i;', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'union'),
+        L('            for (int j = i + 1; j < n; j++)', 'union'),
+        L('                if (isConnected[i][j] == 1 && find(i) != find(j)) { p[find(i)] = find(j); count--; }', 'union'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parsed = parseEdges(values.edges);
+      if (typeof parsed === 'string') return { error: parsed };
+      const { n, edges } = parsed;
+      const p = [...Array(n)].map((_, i) => i);
+      const find = (x: number): number => (p[x] === x ? x : (p[x] = find(p[x])));
+      let count = n;
+      const merged: string[] = [];
+      const nodes = circleLayout([...Array(n)].map((_, i) => i));
+      const steps: Step[] = [];
+      const view = (): TreeState => ({
+        nodes: nodes.map((nd) => ({ ...nd, badge: `g${find(nd.id)}` })),
+        edges,
+        edgeMark: merged,
+        aggs: [{ label: 'provinces', value: String(count), c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['Every city starts as its own province (badge = group root).'], state: view() });
+      for (const [u, v] of edges) {
+        if (find(u) !== find(v)) {
+          p[find(u)] = find(v);
+          count--;
+          merged.push(key(u, v));
+          steps.push({ tag: 'union', trace: ['Connection ', A(`${u}–${v}`), ' joins two provinces — ', C(count), ' left.'], state: view() });
+        } else {
+          steps.push({ tag: 'union', trace: ['Connection ', F(`${u}–${v}`), ' is inside one province already.'], state: view() });
+        }
+      }
+      steps.push({ tag: 'ret', trace: [C(count), ' province(s).'], state: view() });
+      return { steps, result: String(count) };
+    },
+    note: 'Same answer as one DFS per unvisited city, with near-constant work per connection. Union-Find also handles connections arriving one at a time, where re-running DFS would be wasteful.',
+    complexity: { time: 'O(n² · α(n)) on a matrix', space: 'O(n)' },
+  },
 };
 
 /* ================= Is Graph Bipartite? ================= */
@@ -291,6 +359,73 @@ const isBipartite: ProblemDef = {
   },
   note: 'A graph is bipartite exactly when it has no odd-length cycle, and the colouring conflict is how you detect one — walking an odd cycle returns you to the start needing the opposite colour. Looping over every start node matters because a disconnected graph can hide the offending component.',
   complexity: { time: 'O(V + E)', space: 'O(V)' },
+  brute: {
+    label: 'Try every colouring',
+    technique: 'Assign each node one of two colours in all 2ⁿ ways and check whether any assignment has no same-coloured edge.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isBipartite(vector<vector<int>>& graph) {'),
+        L('        int n = graph.size();', 'init'),
+        L('        for (int mask = 0; mask < (1 << n); mask++) {', 'try'),
+        L('            bool ok = true;', 'try'),
+        L('            for (int u = 0; u < n && ok; u++)', 'try'),
+        L('                for (int v : graph[u])', 'try'),
+        L('                    if (((mask >> u) & 1) == ((mask >> v) & 1)) { ok = false; break; }', 'try'),
+        L('            if (ok) return true;', 'ok'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isBipartite(int[][] graph) {'),
+        L('        int n = graph.length;', 'init'),
+        L('        for (int mask = 0; mask < (1 << n); mask++) {', 'try'),
+        L('            boolean ok = true;', 'try'),
+        L('            for (int u = 0; u < n && ok; u++)', 'try'),
+        L('                for (int v : graph[u])', 'try'),
+        L('                    if (((mask >> u) & 1) == ((mask >> v) & 1)) { ok = false; break; }', 'try'),
+        L('            if (ok) return true;', 'ok'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parsed = parseEdges(values.edges);
+      if (typeof parsed === 'string') return { error: parsed };
+      const { n, edges } = parsed;
+      const nodes = circleLayout([...Array(n)].map((_, i) => i));
+      const steps: Step[] = [];
+      const view = (mask: number, bad?: [number, number]): TreeState => ({
+        nodes: nodes.map((nd) => ({ ...nd, badge: (mask >> nd.id) & 1 ? '○' : '●' })),
+        edges,
+        done: [...Array(n)].map((_, i) => i).filter((i) => !((mask >> i) & 1)),
+        queued: [...Array(n)].map((_, i) => i).filter((i) => (mask >> i) & 1),
+        edgeMark: bad ? [key(bad[0], bad[1])] : [],
+        aggs: [{ label: 'colourings tried', value: `${mask + 1} / ${2 ** n}`, c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['No BFS: test every one of the ', A(2 ** n), ' ways to colour the nodes ● or ○.'], state: view(0) });
+      let ok = false;
+      for (let mask = 0; mask < 1 << n; mask++) {
+        const bad = edges.find(([u, v]) => ((mask >> u) & 1) === ((mask >> v) & 1));
+        if (!bad) {
+          ok = true;
+          steps.push({ tag: 'ok', trace: ['Colouring #', A(mask + 1), ' has no edge between equal colours — ', C('bipartite'), '.'], state: view(mask) });
+          break;
+        }
+        if (steps.length < 40) steps.push({ tag: 'try', trace: ['Colouring #', A(mask + 1), ': edge ', F(`${bad[0]}–${bad[1]}`), ' joins two equal colours.'], state: view(mask, bad) });
+      }
+      if (!ok) steps.push({ tag: 'ret', trace: ['All ', A(2 ** n), ' colourings fail — ', C('not bipartite'), '.'], state: view((1 << n) - 1) });
+      return { steps, result: ok ? 'true' : 'false' };
+    },
+    note: 'Exponential in the number of nodes. Once one node’s colour is fixed, every neighbour’s colour is forced, so BFS/DFS colouring decides it in O(V + E).',
+    complexity: { time: 'O(2ⁿ · E)', space: 'O(1)' },
+  },
 };
 
 /* ================= Find Eventual Safe States ================= */
@@ -419,6 +554,97 @@ const eventualSafeStates: ProblemDef = {
   },
   note: 'The middle state ("in progress") is what distinguishes a back edge into the current path — a real cycle — from a cross edge into an already-finished subtree, which is harmless. Reversing the edges and running Kahn topological sort gives the same answer iteratively.',
   complexity: { time: 'O(V + E)', space: 'O(V)' },
+  brute: {
+    label: 'Reverse graph + Kahn',
+    technique: 'Reverse every edge and peel nodes with no outgoing edges (terminals) layer by layer; everything peeled is safe.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> eventualSafeNodes(vector<vector<int>>& g) {'),
+        L('        int n = g.size();', 'init'),
+        L('        vector<vector<int>> rev(n); vector<int> out(n);', 'init'),
+        L('        for (int u = 0; u < n; u++) { out[u] = g[u].size(); for (int v : g[u]) rev[v].push_back(u); }', 'init'),
+        L('        queue<int> q;', 'seed'),
+        L('        for (int u = 0; u < n; u++) if (!out[u]) q.push(u);', 'seed'),
+        L('        vector<bool> safe(n);', 'seed'),
+        L('        while (!q.empty()) {', 'safe'),
+        L('            int v = q.front(); q.pop(); safe[v] = true;', 'safe'),
+        L('            for (int u : rev[v]) if (--out[u] == 0) q.push(u);', 'safe'),
+        L('        }'),
+        L('        vector<int> res;', 'ret'),
+        L('        for (int u = 0; u < n; u++) if (safe[u]) res.push_back(u);', 'ret'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<Integer> eventualSafeNodes(int[][] g) {'),
+        L('        int n = g.length;', 'init'),
+        L('        List<List<Integer>> rev = new ArrayList<>(); int[] out = new int[n];', 'init'),
+        L('        for (int i = 0; i < n; i++) rev.add(new ArrayList<>());', 'init'),
+        L('        for (int u = 0; u < n; u++) { out[u] = g[u].length; for (int v : g[u]) rev.get(v).add(u); }', 'init'),
+        L('        Deque<Integer> q = new ArrayDeque<>();', 'seed'),
+        L('        for (int u = 0; u < n; u++) if (out[u] == 0) q.add(u);', 'seed'),
+        L('        boolean[] safe = new boolean[n];', 'seed'),
+        L('        while (!q.isEmpty()) {', 'safe'),
+        L('            int v = q.poll(); safe[v] = true;', 'safe'),
+        L('            for (int u : rev.get(v)) if (--out[u] == 0) q.add(u);', 'safe'),
+        L('        }'),
+        L('        List<Integer> res = new ArrayList<>();', 'ret'),
+        L('        for (int u = 0; u < n; u++) if (safe[u]) res.add(u);', 'ret'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parsed = parseEdges(values.edges);
+      if (typeof parsed === 'string') return { error: parsed };
+      const { n, edges } = parsed;
+      const out = Array(n).fill(0);
+      const rev: number[][] = [...Array(n)].map(() => []);
+      for (const [u, v] of edges) {
+        out[u]++;
+        rev[v].push(u);
+      }
+      const nodes = circleLayout([...Array(n)].map((_, i) => i));
+      const safe = Array(n).fill(false);
+      let queue: number[] = [];
+      const steps: Step[] = [];
+      const view = (cur: number | null): TreeState => ({
+        nodes: nodes.map((nd) => ({ ...nd, badge: safe[nd.id] ? '✓' : `out:${out[nd.id]}` })),
+        edges,
+        directed: true,
+        current: cur,
+        done: [...Array(n)].map((_, i) => i).filter((i) => safe[i]),
+        queued: [...queue],
+        aggs: [{ label: 'safe so far', value: [...Array(n)].map((_, i) => i).filter((i) => safe[i]).join(', ') || '—', c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['Count each node’s outgoing edges. A node whose every exit leads to safe nodes is safe too.'], state: view(null) });
+      queue = [...Array(n)].map((_, i) => i).filter((i) => out[i] === 0);
+      steps.push({ tag: 'seed', trace: ['Terminal nodes (no exits) are safe: ', B(`{${queue.join(', ')}}`), '.'], state: view(null) });
+      while (queue.length) {
+        const v = queue.shift()!;
+        safe[v] = true;
+        const unlocked: number[] = [];
+        for (const u of rev[v]) {
+          out[u]--;
+          if (out[u] === 0) {
+            queue.push(u);
+            unlocked.push(u);
+          }
+        }
+        steps.push({ tag: 'safe', trace: ['Node ', B(v), ' is safe. ', unlocked.length ? ['Nodes ', unlocked.join(', '), ' now have only safe exits — safe too.'].join('') : 'No new node becomes safe.'], state: view(v) });
+      }
+      const res = [...Array(n)].map((_, i) => i).filter((i) => safe[i]);
+      steps.push({ tag: 'ret', trace: ['Safe nodes: ', C(res.length ? res.join(', ') : 'none'), '. Nodes never peeled can reach a cycle.'], state: view(null) });
+      return { steps, result: res.length ? `[${res.join(', ')}]` : '[]' };
+    },
+    note: 'Also O(V + E), but iterative: it peels the graph from the terminals backwards instead of detecting cycles with a coloured DFS, so there is no recursion depth to worry about.',
+    complexity: { time: 'O(V + E)', space: 'O(V + E)' },
+  },
 };
 
 /* ================= Number of Ways to Arrive at Destination ================= */
@@ -579,6 +805,101 @@ const numberOfWays: ProblemDef = {
   },
   note: 'The reset-versus-add distinction is the whole problem: a strictly shorter route invalidates every path counted so far, while an equally short one contributes its own count. Because Dijkstra settles nodes in non-decreasing distance order, ways[u] is already final when u is used to relax its neighbours.',
   complexity: { time: 'O(E log V)', space: 'O(V + E)' },
+  brute: {
+    label: 'Enumerate every path',
+    technique: 'DFS every simple path from 0 to n − 1, tracking the smallest total time and how many paths achieve it.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    long best = LONG_MAX, ways = 0;'),
+        L('    void dfs(vector<vector<pair<int,int>>>& adj, int u, long t, vector<bool>& on) {', 'pop'),
+        L('        if (u == adj.size() - 1) {', 'better', 'equal'),
+        L('            if (t < best) { best = t; ways = 1; } else if (t == best) ways++;', 'better', 'equal'),
+        L('            return;'),
+        L('        }'),
+        L('        for (auto [v, w] : adj[u]) if (!on[v]) {', 'relax'),
+        L('            on[v] = true; dfs(adj, v, t + w, on); on[v] = false;', 'relax'),
+        L('        }'),
+        L('    }'),
+        L('public:'),
+        L('    int countPaths(int n, vector<vector<int>>& roads) { /* build adj, dfs from 0 */ return ways; }', 'init', 'ret'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    long best = Long.MAX_VALUE, ways = 0;'),
+        L('    void dfs(List<int[]>[] adj, int u, long t, boolean[] on) {', 'pop'),
+        L('        if (u == adj.length - 1) {', 'better', 'equal'),
+        L('            if (t < best) { best = t; ways = 1; } else if (t == best) ways++;', 'better', 'equal'),
+        L('            return;'),
+        L('        }'),
+        L('        for (int[] e : adj[u]) if (!on[e[0]]) {', 'relax'),
+        L('            on[e[0]] = true; dfs(adj, e[0], t + e[1], on); on[e[0]] = false;', 'relax'),
+        L('        }'),
+        L('    }'),
+        L('    public int countPaths(int n, int[][] roads) { /* build adj, dfs from 0 */ return (int) ways; }', 'init', 'ret'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parsed = parseWeighted(values.edges);
+      if (typeof parsed === 'string') return { error: parsed };
+      const { n, edges } = parsed;
+      const adj: [number, number][][] = [...Array(n)].map(() => []);
+      for (const [u, v, w] of edges) {
+        adj[u].push([v, w]);
+        adj[v].push([u, w]);
+      }
+      const nodes = circleLayout([...Array(n)].map((_, i) => i));
+      let best = Infinity;
+      let ways = 0;
+      let paths = 0;
+      const path = [0];
+      const steps: Step[] = [];
+      const view = (): TreeState => ({
+        nodes,
+        edges: edges.map(([u, v]) => [u, v] as [number, number]),
+        done: [...path],
+        current: n - 1,
+        edgeMark: path.slice(1).map((v, i) => key(path[i], v)),
+        aggs: [
+          { label: 'shortest time', value: best === Infinity ? '—' : String(best), c: 'b' },
+          { label: 'ways', value: String(ways), c: 'c' },
+          { label: 'complete paths', value: String(paths), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['No Dijkstra: walk every simple path from ', A(0), ' to ', A(n - 1), '.'], state: view() });
+      const on = Array(n).fill(false);
+      on[0] = true;
+      const dfs = (u: number, t: number) => {
+        if (u === n - 1) {
+          paths++;
+          if (t < best) {
+            best = t;
+            ways = 1;
+            if (steps.length < MAX_STEPS) steps.push({ tag: 'better', trace: ['Path ', A(path.join(' → ')), ' takes ', B(t), ' — a new shortest time; ways reset to 1.'], state: view() });
+          } else if (t === best) {
+            ways++;
+            if (steps.length < MAX_STEPS) steps.push({ tag: 'equal', trace: ['Path ', A(path.join(' → ')), ' also takes ', B(t), ' — ways = ', C(ways), '.'], state: view() });
+          } else if (steps.length < MAX_STEPS) steps.push({ tag: 'pop', trace: ['Path ', A(path.join(' → ')), ' takes ', F(t), ' — too slow.'], state: view() });
+          return;
+        }
+        for (const [v, w] of adj[u]) {
+          if (on[v]) continue;
+          on[v] = true;
+          path.push(v);
+          dfs(v, t + w);
+          path.pop();
+          on[v] = false;
+        }
+      };
+      dfs(0, 0);
+      steps.push({ tag: 'ret', trace: ['Checked ', A(paths), ' paths: ', C(ways), ' of them take the shortest time ', C(best === Infinity ? '∞' : best), '.'], state: view() });
+      return { steps, result: String(ways), resultDetail: `shortest time ${best === Infinity ? '∞' : best}` };
+    },
+    note: 'The number of simple paths can be exponential in the number of nodes. Dijkstra that carries a path count alongside each distance finds the same answer in O(E log V).',
+    complexity: { time: 'O(V!) worst case', space: 'O(V) stack' },
+  },
 };
 
 /* ================= Find the City With the Smallest Number of Neighbors ================= */
@@ -732,6 +1053,92 @@ const findTheCity: ProblemDef = {
   },
   note: 'The k loop must be outermost — it is what makes the invariant "shortest paths using only cities 0..k as intermediates" hold. Swapping the loop order is the classic Floyd–Warshall bug and quietly produces wrong answers on graphs where a path needs two intermediates.',
   complexity: { time: 'O(n³)', space: 'O(n²)' },
+  brute: {
+    label: 'Dijkstra from every city',
+    technique: 'Run a single-source shortest path from each city in turn and count how many cities land within the threshold.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    vector<int> dijkstra(int n, vector<vector<pair<int,int>>>& adj, int src);  // O(n²) array version'),
+        L('public:'),
+        L('    int findTheCity(int n, vector<vector<int>>& edges, int limit) {'),
+        L('        vector<vector<pair<int,int>>> adj(n);', 'init'),
+        L('        for (auto& e : edges) { adj[e[0]].push_back({e[1], e[2]}); adj[e[1]].push_back({e[0], e[2]}); }', 'init'),
+        L('        int best = -1, bestCount = INT_MAX;', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'count'),
+        L('            auto d = dijkstra(n, adj, i);', 'count'),
+        L('            int c = 0; for (int j = 0; j < n; j++) if (j != i && d[j] <= limit) c++;', 'count'),
+        L('            if (c <= bestCount) { bestCount = c; best = i; }', 'count'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    int[] dijkstra(int n, List<int[]>[] adj, int src) { /* O(n²) array version */ }'),
+        L('    public int findTheCity(int n, int[][] edges, int limit) {'),
+        L('        List<int[]>[] adj = new List[n];', 'init'),
+        L('        for (int i = 0; i < n; i++) adj[i] = new ArrayList<>();', 'init'),
+        L('        for (int[] e : edges) { adj[e[0]].add(new int[]{e[1], e[2]}); adj[e[1]].add(new int[]{e[0], e[2]}); }', 'init'),
+        L('        int best = -1, bestCount = Integer.MAX_VALUE;', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'count'),
+        L('            int[] d = dijkstra(n, adj, i);', 'count'),
+        L('            int c = 0; for (int j = 0; j < n; j++) if (j != i && d[j] <= limit) c++;', 'count'),
+        L('            if (c <= bestCount) { bestCount = c; best = i; }', 'count'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parsed = parseWeighted(values.edges, 6);
+      if (typeof parsed === 'string') return { error: parsed };
+      const { n, edges } = parsed;
+      const limit = parseInt1(values.threshold, 'Distance threshold', { min: 0 });
+      if (typeof limit === 'string') return { error: limit };
+      const adj: [number, number][][] = [...Array(n)].map(() => []);
+      for (const [u, v, w] of edges) {
+        adj[u].push([v, w]);
+        adj[v].push([u, w]);
+      }
+      const nodes = circleLayout([...Array(n)].map((_, i) => i));
+      const steps: Step[] = [];
+      let best = -1;
+      let bestCount = Infinity;
+      const view = (cur: number | null, dist?: number[]): TreeState => ({
+        nodes: nodes.map((nd) => ({ ...nd, badge: dist ? (dist[nd.id] === Infinity ? '∞' : String(dist[nd.id])) : undefined })),
+        edges: edges.map(([u, v]) => [u, v] as [number, number]),
+        current: cur,
+        done: dist ? [...Array(n)].map((_, j) => j).filter((j) => j !== cur && dist[j] <= limit) : [],
+        aggs: [{ label: 'best so far', value: best < 0 ? '—' : `city ${best} with ${bestCount}`, c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['No all-pairs table: run Dijkstra once per city. Badges show distances from the current city.'], state: view(null) });
+      for (let i = 0; i < n; i++) {
+        const dist = Array(n).fill(Infinity);
+        const done = Array(n).fill(false);
+        dist[i] = 0;
+        for (let it = 0; it < n; it++) {
+          let u = -1;
+          for (let j = 0; j < n; j++) if (!done[j] && (u < 0 || dist[j] < dist[u])) u = j;
+          if (dist[u] === Infinity) break;
+          done[u] = true;
+          for (const [v, w] of adj[u]) if (dist[u] + w < dist[v]) dist[v] = dist[u] + w;
+        }
+        const c = dist.filter((d, j) => j !== i && d <= limit).length;
+        if (c <= bestCount) {
+          bestCount = c;
+          best = i;
+        }
+        steps.push({ tag: 'count', trace: ['From city ', A(i), ': ', A(c), ' other city(ies) within ', A(limit), c === bestCount && best === i ? ' — the fewest so far (ties go to the larger index).' : '.'], state: view(i, dist) });
+      }
+      steps.push({ tag: 'ret', trace: ['Answer: city ', C(best), '.'], state: view(best) });
+      return { steps, result: String(best), resultDetail: `${bestCount} cities within ${limit}` };
+    },
+    note: 'n runs of O(n²) Dijkstra is O(n³) — the same order as Floyd–Warshall on dense graphs, and faster on sparse ones with a heap. Floyd–Warshall is simply shorter to write.',
+    complexity: { time: 'O(n³)', space: 'O(n)' },
+  },
 };
 
 /* ================= Min Cost to Connect All Points ================= */
@@ -881,6 +1288,96 @@ const minCostConnect: ProblemDef = {
   },
   note: 'On a complete graph — which this is, since any two points can be joined — Prim\'s with a simple array beats a heap, because the graph has O(n²) edges anyway. The greedy is safe by the cut property: the cheapest edge crossing any split of the nodes always belongs to some minimum spanning tree.',
   complexity: { time: 'O(n²)', space: 'O(n)' },
+  brute: {
+    label: "Kruskal's MST",
+    technique: 'List every pair of points with its distance, sort the pairs, and add each one that joins two different groups.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    vector<int> p;'),
+        L('    int find(int x) { return p[x] == x ? x : p[x] = find(p[x]); }'),
+        L('public:'),
+        L('    int minCostConnectPoints(vector<vector<int>>& pts) {'),
+        L('        int n = pts.size(), total = 0, used = 0;', 'init'),
+        L('        vector<array<int,3>> e;', 'init'),
+        L('        for (int i = 0; i < n; i++) for (int j = i + 1; j < n; j++)', 'init'),
+        L('            e.push_back({abs(pts[i][0]-pts[j][0]) + abs(pts[i][1]-pts[j][1]), i, j});', 'init'),
+        L('        sort(e.begin(), e.end());', 'sort'),
+        L('        p.resize(n); iota(p.begin(), p.end(), 0);', 'sort'),
+        L('        for (auto [w, a, b] : e) {', 'edge'),
+        L('            if (find(a) == find(b)) continue;', 'skip'),
+        L('            p[find(a)] = find(b); total += w;', 'take'),
+        L('            if (++used == n - 1) break;', 'take'),
+        L('        }'),
+        L('        return total;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    int[] p;'),
+        L('    int find(int x) { return p[x] == x ? x : (p[x] = find(p[x])); }'),
+        L('    public int minCostConnectPoints(int[][] pts) {'),
+        L('        int n = pts.length, total = 0, used = 0;', 'init'),
+        L('        List<int[]> e = new ArrayList<>();', 'init'),
+        L('        for (int i = 0; i < n; i++) for (int j = i + 1; j < n; j++)', 'init'),
+        L('            e.add(new int[]{Math.abs(pts[i][0]-pts[j][0]) + Math.abs(pts[i][1]-pts[j][1]), i, j});', 'init'),
+        L('        e.sort((a, b) -> a[0] - b[0]);', 'sort'),
+        L('        p = new int[n]; for (int i = 0; i < n; i++) p[i] = i;', 'sort'),
+        L('        for (int[] ed : e) {', 'edge'),
+        L('            if (find(ed[1]) == find(ed[2])) continue;', 'skip'),
+        L('            p[find(ed[1])] = find(ed[2]); total += ed[0];', 'take'),
+        L('            if (++used == n - 1) break;', 'take'),
+        L('        }'),
+        L('        return total;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const pts = (values.points ?? '')
+        .split(/[;|]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => s.split(/[,\s]+/).filter(Boolean).map(Number));
+      if (pts.length < 2) return { error: 'Enter at least two points, e.g. "0,0; 2,2".' };
+      if (pts.length > 6) return { error: 'Keep it to at most 6 points.' };
+      if (!pts.every((p) => p.length === 2 && p.every((v) => Number.isFinite(v)))) return { error: 'Each point needs exactly two numbers, e.g. "3,10".' };
+      const n = pts.length;
+      const dist = (i: number, j: number) => Math.abs(pts[i][0] - pts[j][0]) + Math.abs(pts[i][1] - pts[j][1]);
+      const nodes = circleLayout(pts.map((p) => `(${p[0]},${p[1]})`));
+      const all: [number, number, number][] = [];
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) all.push([dist(i, j), i, j]);
+      all.sort((a, b) => a[0] - b[0]);
+      const p = [...Array(n)].map((_, i) => i);
+      const find = (x: number): number => (p[x] === x ? x : (p[x] = find(p[x])));
+      const chosen: [number, number][] = [];
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (cand?: [number, number]): TreeState => ({
+        nodes: nodes.map((nd) => ({ ...nd, badge: `g${find(nd.id)}` })),
+        edges: [...chosen, ...(cand ? [cand] : [])],
+        edgeMark: chosen.map(([u, v]) => key(u, v)),
+        aggs: [{ label: 'total cost', value: String(total), c: 'c' }],
+      });
+      steps.push({ tag: 'sort', trace: ['Build all ', A(all.length), ' point pairs and sort them by distance, cheapest first.'], state: view() });
+      for (const [w, a, b] of all) {
+        if (chosen.length === n - 1) break;
+        if (find(a) === find(b)) {
+          steps.push({ tag: 'skip', trace: ['Pair ', F(`${a}–${b}`), ' (', F(w), ') would close a loop — skip.'], state: view([a, b]) });
+          continue;
+        }
+        p[find(a)] = find(b);
+        chosen.push([a, b]);
+        total += w;
+        steps.push({ tag: 'take', trace: ['Take ', A(`${a}–${b}`), ' (', B(w), ') — total ', C(total), '.'], state: view() });
+      }
+      steps.push({ tag: 'ret', trace: ['Minimum spanning tree costs ', C(total), '.'], state: view() });
+      return { steps, result: String(total), resultDetail: `${n - 1} edges` };
+    },
+    note: 'On a complete graph there are n² pairs to sort, so Kruskal costs O(n² log n) — a little more than Prim’s O(n²). Kruskal is the better choice when the graph is sparse and the edge list is given.',
+    complexity: { time: 'O(n² log n)', space: 'O(n²)' },
+  },
 };
 
 /* ================= Number of Operations to Make Network Connected ================= */
@@ -1022,6 +1519,85 @@ const networkConnected: ProblemDef = {
   },
   note: 'You never need to count the spares against the requirement: if there are at least n−1 cables in total, the number of redundant ones always covers components − 1. That is why the only failure case is checked up front, before any union at all.',
   complexity: { time: 'O(E · α(n))', space: 'O(n)' },
+  brute: {
+    label: 'DFS components',
+    technique: 'If there are at least n − 1 cables, count connected components with DFS; you need one move per extra component.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int makeConnected(int n, vector<vector<int>>& cables) {'),
+        L('        if (cables.size() < n - 1) return -1;', 'enough'),
+        L('        vector<vector<int>> adj(n);', 'init'),
+        L('        for (auto& c : cables) { adj[c[0]].push_back(c[1]); adj[c[1]].push_back(c[0]); }', 'init'),
+        L('        vector<bool> seen(n); int comps = 0;', 'init'),
+        L('        for (int i = 0; i < n; i++) if (!seen[i]) { comps++; dfs(adj, i, seen); }', 'merge'),
+        L('        return comps - 1;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int makeConnected(int n, int[][] cables) {'),
+        L('        if (cables.length < n - 1) return -1;', 'enough'),
+        L('        List<List<Integer>> adj = new ArrayList<>();', 'init'),
+        L('        for (int i = 0; i < n; i++) adj.add(new ArrayList<>());', 'init'),
+        L('        for (int[] c : cables) { adj.get(c[0]).add(c[1]); adj.get(c[1]).add(c[0]); }', 'init'),
+        L('        boolean[] seen = new boolean[n]; int comps = 0;', 'init'),
+        L('        for (int i = 0; i < n; i++) if (!seen[i]) { comps++; dfs(adj, i, seen); }', 'merge'),
+        L('        return comps - 1;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const n = parseInt1(values.n, 'Number of computers', { min: 2, max: 8 });
+      if (typeof n === 'string') return { error: n };
+      const parsed = parseEdges(values.edges, n);
+      if (typeof parsed === 'string') return { error: parsed };
+      const edges = parsed.edges;
+      if (parsed.n > n) return { error: `Computer ids must be between 0 and ${n - 1}.` };
+      const nodes = circleLayout([...Array(n)].map((_, i) => i));
+      const comp = Array(n).fill(-1);
+      let comps = 0;
+      const steps: Step[] = [];
+      const view = (cur: number | null): TreeState => ({
+        nodes: nodes.map((nd) => ({ ...nd, badge: comp[nd.id] >= 0 ? `C${comp[nd.id]}` : undefined })),
+        edges,
+        current: cur,
+        done: [...Array(n)].map((_, i) => i).filter((i) => comp[i] >= 0),
+        aggs: [{ label: 'components', value: String(comps), c: 'a' }],
+      });
+      if (edges.length < n - 1) {
+        steps.push({ tag: 'enough', trace: ['Only ', F(edges.length), ' cables for ', F(n), ' computers — impossible. ', C('-1'), '.'], state: view(null) });
+        return { steps, result: '-1' };
+      }
+      const adj: number[][] = [...Array(n)].map(() => []);
+      for (const [u, v] of edges) {
+        adj[u].push(v);
+        adj[v].push(u);
+      }
+      steps.push({ tag: 'init', trace: ['Enough cables exist. Count the connected groups with DFS.'], state: view(null) });
+      for (let i = 0; i < n; i++) {
+        if (comp[i] >= 0) continue;
+        const stack = [i];
+        comp[i] = comps;
+        while (stack.length) {
+          const u = stack.pop()!;
+          for (const v of adj[u]) if (comp[v] < 0) {
+            comp[v] = comps;
+            stack.push(v);
+          }
+        }
+        comps++;
+        steps.push({ tag: 'merge', trace: ['DFS from computer ', A(i), ' finds group ', B(`C${comps - 1}`), '.'], state: view(i) });
+      }
+      steps.push({ tag: 'ret', trace: [A(comps), ' group(s) need ', C(comps - 1), ' cable move(s) to join.'], state: view(null) });
+      return { steps, result: String(comps - 1), resultDetail: `${comps} components` };
+    },
+    note: 'Same O(V + E) work as the Union-Find version. The key insight is identical: with at least n − 1 cables, redundant ones always exist, so the answer depends only on the number of components.',
+    complexity: { time: 'O(V + E)', space: 'O(V + E)' },
+  },
 };
 
 /* ================= Accounts Merge ================= */
@@ -1200,6 +1776,118 @@ const accountsMerge: ProblemDef = {
   },
   note: 'The name cannot be the union key — two different people can share a name, and the problem\'s examples exploit exactly that. Emails are the identity; the name is only looked up at the end from any member of the group, since every account in a group carries the same one.',
   complexity: { time: 'O(total emails · α)', space: 'O(total emails)' },
+  brute: {
+    label: 'DFS over an email graph',
+    technique: 'Link every email in an account to that account’s first email, then DFS the resulting graph; each component is one person.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<string>> accountsMerge(vector<vector<string>>& accounts) {'),
+        L('        unordered_map<string, vector<string>> adj; unordered_map<string, string> owner;', 'init'),
+        L('        for (auto& a : accounts)', 'union'),
+        L('            for (int i = 1; i < a.size(); i++) {', 'union'),
+        L('                owner[a[i]] = a[0];', 'union'),
+        L('                adj[a[1]].push_back(a[i]); adj[a[i]].push_back(a[1]);', 'union'),
+        L('            }'),
+        L('        unordered_set<string> seen; vector<vector<string>> res;', 'group'),
+        L('        for (auto& [e, _] : adj) if (!seen.count(e)) {', 'group'),
+        L('            vector<string> comp; dfs(adj, e, seen, comp);', 'group'),
+        L('            sort(comp.begin(), comp.end());', 'group'),
+        L('            comp.insert(comp.begin(), owner[e]); res.push_back(comp);', 'build'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<String>> accountsMerge(List<List<String>> accounts) {'),
+        L('        Map<String, List<String>> adj = new HashMap<>(); Map<String, String> owner = new HashMap<>();', 'init'),
+        L('        for (List<String> a : accounts)', 'union'),
+        L('            for (int i = 1; i < a.size(); i++) {', 'union'),
+        L('                owner.put(a.get(i), a.get(0));', 'union'),
+        L('                adj.computeIfAbsent(a.get(1), k -> new ArrayList<>()).add(a.get(i));', 'union'),
+        L('                adj.computeIfAbsent(a.get(i), k -> new ArrayList<>()).add(a.get(1));', 'union'),
+        L('            }'),
+        L('        Set<String> seen = new HashSet<>(); List<List<String>> res = new ArrayList<>();', 'group'),
+        L('        for (String e : adj.keySet()) if (!seen.contains(e)) {', 'group'),
+        L('            List<String> comp = new ArrayList<>(); dfs(adj, e, seen, comp);', 'group'),
+        L('            Collections.sort(comp);', 'group'),
+        L('            comp.add(0, owner.get(e)); res.add(comp);', 'build'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const rows = (values.accounts ?? '')
+        .split(/[;|]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (rows.length === 0) return { error: 'Enter accounts like "John: a b; Mary: c".' };
+      if (rows.length > 6) return { error: 'Keep it to at most 6 accounts.' };
+      const accounts: { name: string; emails: string[] }[] = [];
+      for (const r of rows) {
+        const m = r.match(/^([A-Za-z]+)\s*:\s*(.+)$/);
+        if (!m) return { error: `Bad account "${r}" — use "Name: email email".` };
+        const emails = m[2].split(/[,\s]+/).filter(Boolean);
+        if (emails.length === 0) return { error: `Account "${m[1]}" has no emails.` };
+        if (emails.some((e) => !/^[a-z0-9]{1,6}$/.test(e))) return { error: 'Use short lowercase email labels like a, b, c1.' };
+        accounts.push({ name: m[1], emails });
+      }
+      const allMails = [...new Set(accounts.flatMap((a) => a.emails))];
+      if (allMails.length > 8) return { error: 'Keep it to at most 8 distinct emails.' };
+      const idx = new Map(allMails.map((m, i) => [m, i]));
+      const owner = new Map<string, string>();
+      for (const a of accounts) for (const e of a.emails) owner.set(e, a.name);
+      const adj = new Map<string, string[]>(allMails.map((m) => [m, []]));
+      const links: [number, number][] = [];
+      for (const a of accounts)
+        for (const e of a.emails.slice(1)) {
+          adj.get(a.emails[0])!.push(e);
+          adj.get(e)!.push(a.emails[0]);
+          links.push([idx.get(a.emails[0])!, idx.get(e)!]);
+        }
+      const nodes = circleLayout(allMails);
+      const compOf = new Map<string, number>();
+      const steps: Step[] = [];
+      const view = (cur: number | null): TreeState => ({
+        nodes: nodes.map((nd) => ({ ...nd, badge: compOf.has(String(nd.val)) ? `P${compOf.get(String(nd.val))}` : undefined })),
+        edges: links,
+        current: cur,
+        done: [...compOf.keys()].map((m) => idx.get(m)!),
+      });
+      steps.push({ tag: 'init', trace: ['Emails are nodes. Link each account’s emails to its first email.'], state: view(null) });
+      steps.push({ tag: 'union', trace: ['Built ', A(links.length), ' link(s) from ', A(accounts.length), ' account(s).'], state: view(null) });
+      const res: string[] = [];
+      let comp = 0;
+      for (const m of allMails) {
+        if (compOf.has(m)) continue;
+        const group: string[] = [];
+        const stack = [m];
+        compOf.set(m, comp);
+        while (stack.length) {
+          const e = stack.pop()!;
+          group.push(e);
+          for (const f of adj.get(e)!) if (!compOf.has(f)) {
+            compOf.set(f, comp);
+            stack.push(f);
+          }
+        }
+        group.sort();
+        res.push(`${owner.get(group[0])}: ${group.join(' ')}`);
+        steps.push({ tag: 'group', trace: ['DFS from ', A(m), ' collects ', B(group.join(', ')), ' — one person: ', B(owner.get(group[0])!), '.'], state: view(idx.get(m)!) });
+        comp++;
+      }
+      steps.push({ tag: 'build', trace: [C(res.length), ' merged account(s).'], state: view(null) });
+      steps.push({ tag: 'ret', trace: [C(res.join('  |  ')), '.'], state: view(null) });
+      return { steps, result: res.join(' | ') };
+    },
+    note: 'Same near-linear work as Union-Find: building the graph is O(total emails) and each DFS visits each email once. Union-Find avoids building adjacency lists, DFS avoids the parent array — pick whichever reads better.',
+    complexity: { time: 'O(total emails · log)', space: 'O(total emails)' },
+  },
 };
 
 /* ================= Most Stones Removed with Same Row or Column ================= */
@@ -1332,6 +2020,95 @@ const mostStonesRemoved: ProblemDef = {
   },
   note: 'The non-obvious claim is that a group can always be reduced to exactly one stone — true because you can remove in reverse order of a spanning tree\'s leaves, so each stone still has a live neighbour when its turn comes. Once you believe that, no simulation is needed: just count components.',
   complexity: { time: 'O(n² · α)', space: 'O(n)' },
+  brute: {
+    label: 'DFS components',
+    technique: 'Treat stones sharing a row or column as connected; count components with DFS. Each component can be cleared down to one stone.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int removeStones(vector<vector<int>>& s) {'),
+        L('        int n = s.size(), comps = 0;', 'init'),
+        L('        vector<bool> seen(n);', 'init'),
+        L('        for (int i = 0; i < n; i++) if (!seen[i]) {', 'pair'),
+        L('            comps++;', 'pair'),
+        L('            vector<int> st = {i}; seen[i] = true;', 'pair'),
+        L('            while (!st.empty()) {', 'merge'),
+        L('                int u = st.back(); st.pop_back();', 'merge'),
+        L('                for (int v = 0; v < n; v++)  // O(n) neighbour scan', 'merge'),
+        L('                    if (!seen[v] && (s[u][0] == s[v][0] || s[u][1] == s[v][1])) { seen[v] = true; st.push_back(v); }', 'merge'),
+        L('            }'),
+        L('        }'),
+        L('        return n - comps;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int removeStones(int[][] s) {'),
+        L('        int n = s.length, comps = 0;', 'init'),
+        L('        boolean[] seen = new boolean[n];', 'init'),
+        L('        for (int i = 0; i < n; i++) if (!seen[i]) {', 'pair'),
+        L('            comps++;', 'pair'),
+        L('            Deque<Integer> st = new ArrayDeque<>(List.of(i)); seen[i] = true;', 'pair'),
+        L('            while (!st.isEmpty()) {', 'merge'),
+        L('                int u = st.pop();', 'merge'),
+        L('                for (int v = 0; v < n; v++)  // O(n) neighbour scan', 'merge'),
+        L('                    if (!seen[v] && (s[u][0] == s[v][0] || s[u][1] == s[v][1])) { seen[v] = true; st.push(v); }', 'merge'),
+        L('            }'),
+        L('        }'),
+        L('        return n - comps;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const stones = (values.stones ?? '')
+        .split(/[;|]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => s.split(/[,\s]+/).filter(Boolean).map(Number));
+      if (stones.length < 1) return { error: 'Enter at least one stone, e.g. "0,0; 0,1".' };
+      if (stones.length > 8) return { error: 'Keep it to at most 8 stones.' };
+      if (!stones.every((s) => s.length === 2 && s.every((v) => Number.isInteger(v) && v >= 0))) return { error: 'Each stone needs a row and column, e.g. "1,2".' };
+      const n = stones.length;
+      const nodes = circleLayout(stones.map((s) => `${s[0]},${s[1]}`));
+      const linked: [number, number][] = [];
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (stones[i][0] === stones[j][0] || stones[i][1] === stones[j][1]) linked.push([i, j]);
+      const comp = Array(n).fill(-1);
+      let comps = 0;
+      const steps: Step[] = [];
+      const view = (cur: number | null): TreeState => ({
+        nodes: nodes.map((nd) => ({ ...nd, badge: comp[nd.id] >= 0 ? `C${comp[nd.id]}` : undefined })),
+        edges: linked,
+        current: cur,
+        done: [...Array(n)].map((_, i) => i).filter((i) => comp[i] >= 0),
+        aggs: [{ label: 'components', value: String(comps), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['Stones sharing a row or column are linked (edges shown). Count components with DFS.'], state: view(null) });
+      for (let i = 0; i < n; i++) {
+        if (comp[i] >= 0) continue;
+        const st = [i];
+        comp[i] = comps;
+        let size = 0;
+        while (st.length) {
+          const u = st.pop()!;
+          size++;
+          for (let v = 0; v < n; v++)
+            if (comp[v] < 0 && (stones[u][0] === stones[v][0] || stones[u][1] === stones[v][1])) {
+              comp[v] = comps;
+              st.push(v);
+            }
+        }
+        comps++;
+        steps.push({ tag: 'merge', trace: ['DFS from stone (', A(stones[i].join(',')), ') finds a group of ', B(size), ' — ', B(size - 1), ' of them can be removed.'], state: view(i) });
+      }
+      steps.push({ tag: 'ret', trace: [A(n), ' stones − ', A(comps), ' group(s) = ', C(n - comps), ' removable.'], state: view(null) });
+      return { steps, result: String(n - comps), resultDetail: `${comps} components` };
+    },
+    note: 'Scanning all stones for neighbours makes each DFS step O(n), for O(n²) total — the same bound as the pairwise Union-Find. Unioning rows with columns instead of stones with stones brings it down to near-linear.',
+    complexity: { time: 'O(n²)', space: 'O(n)' },
+  },
 };
 
 /* ================= Word Ladder II ================= */
@@ -1530,6 +2307,117 @@ const wordLadderII: ProblemDef = {
   },
   note: 'Deleting words per level rather than per word is the crux: deleting immediately would let the first discoverer claim a word and hide equally short alternatives, while never deleting would allow longer paths back. Collecting parents instead of full paths during BFS keeps memory proportional to the graph, not to the number of ladders.',
   complexity: { time: 'O(N · L · 26 + paths)', space: 'O(N · L)' },
+  brute: {
+    label: 'DFS every route',
+    technique: 'Depth-first search every simple route from begin to end through one-letter changes, keeping all routes of the shortest length.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    vector<vector<string>> res; int best = INT_MAX;'),
+        L('    void dfs(string w, string& end, vector<string>& path, unordered_set<string>& left) {', 'expand'),
+        L('        if (path.size() > best) return;', 'expand'),
+        L('        if (w == end) {', 'found'),
+        L('            if (path.size() < best) { best = path.size(); res.clear(); }', 'found'),
+        L('            res.push_back(path); return;', 'found'),
+        L('        }'),
+        L('        for (auto nb : vector<string>(left.begin(), left.end())) if (oneApart(w, nb)) {', 'expand'),
+        L('            left.erase(nb); path.push_back(nb);', 'expand'),
+        L('            dfs(nb, end, path, left);', 'expand'),
+        L('            path.pop_back(); left.insert(nb);', 'expand'),
+        L('        }'),
+        L('    }'),
+        L('public:'),
+        L('    vector<vector<string>> findLadders(string b, string e, vector<string>& list) { /* dfs from b */ return res; }', 'init', 'ret'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    List<List<String>> res = new ArrayList<>(); int best = Integer.MAX_VALUE;'),
+        L('    void dfs(String w, String end, List<String> path, Set<String> left) {', 'expand'),
+        L('        if (path.size() > best) return;', 'expand'),
+        L('        if (w.equals(end)) {', 'found'),
+        L('            if (path.size() < best) { best = path.size(); res.clear(); }', 'found'),
+        L('            res.add(new ArrayList<>(path)); return;', 'found'),
+        L('        }'),
+        L('        for (String nb : new ArrayList<>(left)) if (oneApart(w, nb)) {', 'expand'),
+        L('            left.remove(nb); path.add(nb);', 'expand'),
+        L('            dfs(nb, end, path, left);', 'expand'),
+        L('            path.remove(path.size() - 1); left.add(nb);', 'expand'),
+        L('        }'),
+        L('    }'),
+        L('    public List<List<String>> findLadders(String b, String e, List<String> list) { /* dfs from b */ return res; }', 'init', 'ret'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const begin = (values.begin ?? '').trim().toLowerCase();
+      const end = (values.end ?? '').trim().toLowerCase();
+      if (!/^[a-z]{2,5}$/.test(begin) || !/^[a-z]{2,5}$/.test(end)) return { error: 'Begin and end words must be 2–5 lowercase letters.' };
+      if (begin.length !== end.length) return { error: 'Begin and end words must be the same length.' };
+      const words = (values.words ?? '')
+        .split(/[,\s]+/)
+        .map((w) => w.trim().toLowerCase())
+        .filter(Boolean);
+      if (words.length === 0 || words.length > 8) return { error: 'Enter 1–8 dictionary words.' };
+      if (words.some((w) => w.length !== begin.length || !/^[a-z]+$/.test(w))) return { error: `Every word must be ${begin.length} lowercase letters.` };
+      if (!words.includes(end)) return { error: 'The end word must appear in the word list.' };
+      const all = [...new Set([begin, ...words])];
+      const idx = new Map(all.map((w, i) => [w, i]));
+      const oneApart = (a: string, b: string) => [...a].filter((c, i) => c !== b[i]).length === 1;
+      const graphEdges: [number, number][] = [];
+      for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (oneApart(all[i], all[j])) graphEdges.push([i, j]);
+      const nodes = circleLayout(all);
+      let best = Infinity;
+      let res: string[][] = [];
+      let routes = 0;
+      const path = [begin];
+      const steps: Step[] = [];
+      const view = (): TreeState => ({
+        nodes,
+        edges: graphEdges,
+        done: path.map((w) => idx.get(w)!),
+        current: idx.get(end)!,
+        edgeMark: path.slice(1).map((w, i) => { const a = idx.get(path[i])!; const b = idx.get(w)!; return key(Math.min(a, b), Math.max(a, b)); }),
+        aggs: [
+          { label: 'shortest length', value: best === Infinity ? '—' : String(best), c: 'b' },
+          { label: 'routes explored', value: String(routes), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['No BFS layering: try every route by depth-first search, pruning routes already longer than the best.'], state: view() });
+      const left = new Set(words.filter((w) => w !== begin));
+      const dfs = (w: string) => {
+        if (path.length > best) return;
+        if (w === end) {
+          routes++;
+          if (path.length < best) {
+            best = path.length;
+            res = [];
+          }
+          res.push([...path]);
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'found', trace: ['Reached "', C(end), '" via ', B(path.join(' → ')), ' (', A(path.length), ' words).'], state: view() });
+          return;
+        }
+        for (const nb of [...left]) {
+          if (!oneApart(w, nb)) continue;
+          left.delete(nb);
+          path.push(nb);
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'expand', trace: ['"', A(w), '" → "', A(nb), '".'], state: view() });
+          dfs(nb);
+          path.pop();
+          left.add(nb);
+        }
+      };
+      dfs(begin);
+      steps.push({
+        tag: 'ret',
+        trace: res.length ? [C(res.length), ' shortest ladder(s): ', C(res.map((r) => r.join(' → ')).join('  |  ')), '.'] : ['No ladder connects the two words.'],
+        state: view(),
+      });
+      return { steps, result: res.length ? res.map((r) => r.join(' → ')).join(' | ') : 'none' };
+    },
+    note: 'Without BFS layering the DFS explores many long routes before the depth bound tightens, which is exponential in the word count. BFS finds the shortest length first and records parents, so only shortest ladders are ever rebuilt.',
+    complexity: { time: 'Exponential in the word count', space: 'O(N · L)' },
+  },
 };
 
 /* ================= Critical Connections in a Network ================= */
@@ -1697,6 +2585,79 @@ const criticalConnections: ProblemDef = {
   },
   note: 'The strict inequality low[v] > disc[u] is what makes this bridges rather than articulation points — equality means v can reach u itself, so a cycle covers the edge. Skipping only the single parent edge is correct for simple graphs; with parallel edges you must skip by edge id, or every duplicated edge is wrongly called a bridge.',
   complexity: { time: 'O(V + E)', space: 'O(V + E)' },
+  brute: {
+    label: 'Remove each edge and test',
+    technique: 'Delete one connection at a time and check with a DFS whether the network is still connected; if not, that connection is critical.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> criticalConnections(int n, vector<vector<int>>& conns) {'),
+        L('        vector<vector<int>> res;', 'start'),
+        L('        for (int skip = 0; skip < conns.size(); skip++)', 'visit'),
+        L('            if (!connectedWithout(n, conns, skip))  // fresh DFS each time', 'visit', 'bridge'),
+        L('                res.push_back(conns[skip]);', 'bridge'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<Integer>> criticalConnections(int n, List<List<Integer>> conns) {'),
+        L('        List<List<Integer>> res = new ArrayList<>();', 'start'),
+        L('        for (int skip = 0; skip < conns.size(); skip++)', 'visit'),
+        L('            if (!connectedWithout(n, conns, skip))  // fresh DFS each time', 'visit', 'bridge'),
+        L('                res.add(conns.get(skip));', 'bridge'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parsed = parseEdges(values.edges, 7);
+      if (typeof parsed === 'string') return { error: parsed };
+      const { n, edges } = parsed;
+      const nodes = circleLayout([...Array(n)].map((_, i) => i));
+      const bridges: [number, number][] = [];
+      const steps: Step[] = [];
+      const view = (skip: number, reached: number[] = []): TreeState => ({
+        nodes,
+        edges: edges.filter((_, i) => i !== skip),
+        done: reached,
+        edgeMark: bridges.map(([u, v]) => key(u, v)),
+        aggs: [{ label: 'removed edge', value: skip >= 0 ? `${edges[skip][0]}-${edges[skip][1]}` : '—', c: 'a' }],
+      });
+      steps.push({ tag: 'start', trace: ['No low-link times: remove each connection in turn and re-check connectivity from scratch.'], state: view(-1) });
+      edges.forEach(([a, b], skip) => {
+        const adj: number[][] = [...Array(n)].map(() => []);
+        edges.forEach(([u, v], i) => {
+          if (i === skip) return;
+          adj[u].push(v);
+          adj[v].push(u);
+        });
+        const seen = new Set([0]);
+        const st = [0];
+        while (st.length) {
+          const u = st.pop()!;
+          for (const v of adj[u]) if (!seen.has(v)) {
+            seen.add(v);
+            st.push(v);
+          }
+        }
+        const critical = seen.size < n;
+        if (critical) bridges.push([a, b]);
+        steps.push({
+          tag: critical ? 'bridge' : 'visit',
+          trace: ['Without ', A(`${a}–${b}`), ', DFS reaches ', A(seen.size), ' of ', A(n), ' nodes — ', critical ? B('critical') : F('not critical'), '.'],
+          state: view(skip, [...seen]),
+        });
+      });
+      steps.push({ tag: 'ret', trace: bridges.length ? ['Critical connections: ', C(bridges.map(([u, v]) => `[${u},${v}]`).join(', ')), '.'] : ['No critical connections.'], state: view(-1) });
+      return { steps, result: bridges.length ? bridges.map(([u, v]) => `[${u},${v}]`).join(', ') : 'none' };
+    },
+    note: 'One full DFS per edge makes this O(E · (V + E)). Tarjan’s algorithm finds every bridge in a single DFS by comparing each child’s lowest reachable discovery time with its parent’s.',
+    complexity: { time: 'O(E · (V + E))', space: 'O(V + E)' },
+  },
 };
 
 export const graphs4: ProblemDef[] = [

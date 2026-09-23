@@ -32,9 +32,10 @@ await build({
 });
 const { problemRegistry } = await import(pathToFileURL(out).href);
 
-// Top-level items of a "[a, b, [c, d]]" result, sorted — lets two results that
-// list the same items in a different order count as equivalent.
+// Top-level items of a "[a, b, [c, d]]" (or "a | b") result, sorted — lets two
+// results that list the same items in a different order count as equivalent.
 function items(r) {
+  if (typeof r === 'string' && r.includes(' | ')) return r.split(' | ').map((x) => x.trim()).sort().join('\u0000');
   if (typeof r !== 'string' || !r.startsWith('[') || !r.endsWith(']')) return null;
   const out = [];
   let depth = 0;
