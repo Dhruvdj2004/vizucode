@@ -91,6 +91,78 @@ const maxSubarray: ProblemDef = {
   },
   note: 'The greedy cut is airtight: a negative prefix can never improve a subarray that extends past it, so dropping it loses nothing. Every element is visited once, and best captures the answer before any restart can erase it.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Try every start index, extend the end with a running sum, and keep the best sum seen.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxSubArray(vector<int>& nums) {'),
+        L('        int best = nums[0];', 'init'),
+        L('        for (int i = 0; i < nums.size(); i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < nums.size(); j++) {', 'grow', 'better'),
+        L('                sum += nums[j];', 'grow', 'better'),
+        L('                best = max(best, sum);', 'better'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxSubArray(int[] nums) {'),
+        L('        int best = nums[0];', 'init'),
+        L('        for (int i = 0; i < nums.length; i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < nums.length; j++) {', 'grow', 'better'),
+        L('                sum += nums[j];', 'grow', 'better'),
+        L('                best = Math.max(best, sum);', 'better'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { maxLen: 14 });
+      if (typeof nums === 'string') return { error: nums };
+      const steps: Step[] = [];
+      let best = nums[0];
+      let bestRange: [number, number] = [0, 0];
+      let sum = 0;
+      const st = (i: number, j: number | null): ArrayState => ({
+        arr: nums,
+        window: j !== null ? [i, j] : null,
+        ptrs: i < nums.length ? [{ name: 'i', i, c: 'b' }] : [],
+        aggs: [
+          { label: 'sum', value: String(sum), c: 'a' },
+          { label: 'best', value: String(best), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Try all n(n+1)/2 subarrays, keeping a running sum per start.'], state: st(0, null) });
+      for (let i = 0; i < nums.length; i++) {
+        sum = 0;
+        steps.push({ tag: 'outer', trace: ['Start at index ', B(i), '.'], state: st(i, null) });
+        for (let j = i; j < nums.length; j++) {
+          sum += nums[j];
+          const better = sum > best;
+          if (better) {
+            best = sum;
+            bestRange = [i, j];
+          }
+          steps.push({ tag: better ? 'better' : 'grow', trace: ['Sum of [', B(i), '..', A(j), '] = ', better ? B(sum) : F(sum), better ? ' — best so far.' : '.'], state: st(i, j) });
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Largest sum: ', C(best), '.'], state: { arr: nums, window: bestRange, mark: Object.fromEntries([...Array(bestRange[1] - bestRange[0] + 1)].map((_, k) => [bestRange[0] + k, 'final' as const])) } });
+      return { steps, result: String(best), resultDetail: `indices ${bestRange[0]}…${bestRange[1]}` };
+    },
+    note: 'Quadratic because every start re-sums its suffix. Kadane notices that a negative running sum can never help a later subarray, so it restarts right there and needs one pass.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= 128. Jump Game ================= */
@@ -165,6 +237,69 @@ const jumpGame: ProblemDef = {
   },
   note: 'Reachability here is a single interval [0, reach] — jumps go rightward from anywhere inside it, so tracking just the frontier is lossless. No need to know *which* jumps were taken, only how far the best combination gets.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'DP from the end',
+    technique: 'Mark the last index good; working backwards, an index is good if any index it can jump to is good.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool canJump(vector<int>& nums) {'),
+        L('        int n = nums.size();', 'init'),
+        L('        vector<bool> good(n, false);', 'init'),
+        L('        good[n - 1] = true;', 'init'),
+        L('        for (int i = n - 2; i >= 0; i--)', 'check'),
+        L('            for (int j = i + 1; j <= min(n - 1, i + nums[i]); j++)', 'check'),
+        L('                if (good[j]) { good[i] = true; break; }', 'check'),
+        L('        return good[0];', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean canJump(int[] nums) {'),
+        L('        int n = nums.length;', 'init'),
+        L('        boolean[] good = new boolean[n];', 'init'),
+        L('        good[n - 1] = true;', 'init'),
+        L('        for (int i = n - 2; i >= 0; i--)', 'check'),
+        L('            for (int j = i + 1; j <= Math.min(n - 1, i + nums[i]); j++)', 'check'),
+        L('                if (good[j]) { good[i] = true; break; }', 'check'),
+        L('        return good[0];', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, maxLen: 12 });
+      if (typeof nums === 'string') return { error: nums };
+      const n = nums.length;
+      const good = Array(n).fill(false);
+      good[n - 1] = true;
+      let checks = 0;
+      const steps: Step[] = [];
+      const st = (i: number | null, mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: nums,
+        ptrs: i !== null ? [{ name: 'i', i, c: 'a' }] : [],
+        mark: { ...Object.fromEntries(good.map((g, k) => [k, g ? 'good' : undefined]).filter(([, m]) => m)), ...mark },
+        aggs: [{ label: 'targets checked', value: String(checks), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['Green = "can reach the end from here". The last index trivially can.'], state: st(null) });
+      for (let i = n - 2; i >= 0; i--) {
+        for (let j = i + 1; j <= Math.min(n - 1, i + nums[i]); j++) {
+          checks++;
+          if (good[j]) {
+            good[i] = true;
+            break;
+          }
+        }
+        steps.push({ tag: 'check', trace: ['Index ', A(i), ' (jump ≤ ', A(nums[i]), '): ', good[i] ? B('reaches a green index') : F('no green index in range'), '.'], state: st(i, good[i] ? {} : { [i]: 'dim' }) });
+      }
+      steps.push({ tag: 'ret', trace: ['Index 0 is ', good[0] ? B('green') : F('not green'), ' — return ', C(String(good[0])), '.'], state: st(null) });
+      return { steps, result: String(good[0]) };
+    },
+    note: 'Each index may scan its whole jump range, so the worst case is O(n²). The greedy keeps only the farthest reachable index and answers in one forward pass.',
+    complexity: { time: 'O(n²)', space: 'O(n)' },
+  },
 };
 
 /* ================= 129. Jump Game II ================= */
@@ -245,6 +380,64 @@ const jumpGameII: ProblemDef = {
   },
   note: 'This is level-order BFS wearing a greedy costume: [start, end] is the current BFS level, farthest is the next level\'s boundary, and jumps counts levels. That equivalence is why the greedy is provably minimal.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'DP over indices',
+    technique: 'jumps[i] = fewest jumps to land on i; every index relaxes all the indices it can reach.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int jump(vector<int>& nums) {'),
+        L('        int n = nums.size();', 'init'),
+        L('        vector<int> jumps(n, INT_MAX);', 'init'),
+        L('        jumps[0] = 0;', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'relax'),
+        L('            for (int j = i + 1; j <= min(n - 1, i + nums[i]); j++)', 'relax'),
+        L('                jumps[j] = min(jumps[j], jumps[i] + 1);', 'relax'),
+        L('        return jumps[n - 1];', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int jump(int[] nums) {'),
+        L('        int n = nums.length;', 'init'),
+        L('        int[] jumps = new int[n];', 'init'),
+        L('        Arrays.fill(jumps, Integer.MAX_VALUE); jumps[0] = 0;', 'init'),
+        L('        for (int i = 0; i < n; i++)', 'relax'),
+        L('            for (int j = i + 1; j <= Math.min(n - 1, i + nums[i]); j++)', 'relax'),
+        L('                jumps[j] = Math.min(jumps[j], jumps[i] + 1);', 'relax'),
+        L('        return jumps[n - 1];', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, maxLen: 12 });
+      if (typeof nums === 'string') return { error: nums };
+      if (nums.length < 2) return { error: 'Need at least two positions.' };
+      const n = nums.length;
+      const jumps = Array(n).fill(Infinity);
+      jumps[0] = 0;
+      const steps: Step[] = [];
+      const st = (i: number | null, range: [number, number] | null): ArrayState => ({
+        arr: nums.map((v, k) => `${v}｜${jumps[k] === Infinity ? '∞' : jumps[k]}`),
+        window: range,
+        ptrs: i !== null ? [{ name: 'i', i, c: 'a' }] : [],
+      });
+      steps.push({ tag: 'init', trace: ['Each box shows ', A('jump length｜fewest jumps to land here'), '. Index 0 costs 0.'], state: st(null, null) });
+      for (let i = 0; i < n; i++) {
+        if (jumps[i] === Infinity || nums[i] === 0) continue;
+        const hi = Math.min(n - 1, i + nums[i]);
+        for (let j = i + 1; j <= hi; j++) jumps[j] = Math.min(jumps[j], jumps[i] + 1);
+        steps.push({ tag: 'relax', trace: ['From index ', A(i), ' (', A(jumps[i]), ' jumps), indices ', A(i + 1), '…', A(hi), ' can be reached in at most ', B(jumps[i] + 1), '.'], state: st(i, [i + 1, hi]) });
+      }
+      steps.push({ tag: 'ret', trace: ['Fewest jumps to the end: ', C(jumps[n - 1]), '.'], state: st(null, null) });
+      return { steps, result: String(jumps[n - 1]) };
+    },
+    note: 'Every index relaxes its whole jump range — O(n²) in the worst case. The greedy treats each jump as a BFS level over a range of indices and finishes in one pass.',
+    complexity: { time: 'O(n²)', space: 'O(n)' },
+  },
 };
 
 /* ================= 130. Gas Station ================= */
@@ -348,6 +541,89 @@ const gasStation: ProblemDef = {
   },
   note: 'Two facts combine: (1) if total gas ≥ total cost, some start must work; (2) if starting at s dies at i, every start in (s, i] dies there too (it enters with less fuel). So one elimination pass leaves exactly the answer.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Try every start',
+    technique: 'For each station, simulate the full loop from there and return the first start that never runs dry.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int canCompleteCircuit(vector<int>& gas, vector<int>& cost) {'),
+        L('        int n = gas.size();', 'init'),
+        L('        for (int s = 0; s < n; s++) {', 'start'),
+        L('            int tank = 0, k = 0;', 'start'),
+        L('            for (; k < n; k++) {', 'start'),
+        L('                int i = (s + k) % n;', 'start'),
+        L('                tank += gas[i] - cost[i];', 'start'),
+        L('                if (tank < 0) break;', 'dry'),
+        L('            }'),
+        L('            if (k == n) return s;', 'ret'),
+        L('        }'),
+        L('        return -1;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int canCompleteCircuit(int[] gas, int[] cost) {'),
+        L('        int n = gas.length;', 'init'),
+        L('        for (int s = 0; s < n; s++) {', 'start'),
+        L('            int tank = 0, k = 0;', 'start'),
+        L('            for (; k < n; k++) {', 'start'),
+        L('                int i = (s + k) % n;', 'start'),
+        L('                tank += gas[i] - cost[i];', 'start'),
+        L('                if (tank < 0) break;', 'dry'),
+        L('            }'),
+        L('            if (k == n) return s;', 'ret'),
+        L('        }'),
+        L('        return -1;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const gas = parseIntArray(values.gas, { min: 0, maxLen: 10 });
+      if (typeof gas === 'string') return { error: gas };
+      const cost = parseIntArray(values.cost, { min: 0, maxLen: 10 });
+      if (typeof cost === 'string') return { error: cost };
+      if (gas.length !== cost.length) return { error: 'Gas and cost must have the same length.' };
+      const n = gas.length;
+      const diffs = gas.map((g, i) => g - cost[i]);
+      const steps: Step[] = [];
+      let visited = 0;
+      const st = (s: number, upto: number[], dry?: number): ArrayState => ({
+        arr: diffs.map((d) => (d >= 0 ? `+${d}` : String(d))),
+        ptrs: [{ name: 'start', i: s, c: 'b' }],
+        mark: { ...Object.fromEntries(upto.map((i) => [i, 'good' as const])), ...(dry !== undefined ? { [dry]: 'dim' as const } : {}) },
+        aggs: [{ label: 'stations simulated', value: String(visited), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['Each box is gas − cost at that station. Try every start and drive the whole loop.'], state: st(0, []) });
+      let result = -1;
+      for (let s = 0; s < n && result < 0; s++) {
+        let tank = 0;
+        const path: number[] = [];
+        let k = 0;
+        for (; k < n; k++) {
+          const i = (s + k) % n;
+          tank += diffs[i];
+          visited++;
+          if (tank < 0) {
+            steps.push({ tag: 'dry', trace: ['Start ', A(s), ': the tank goes negative (', F(tank), ') at station ', F(i), ' after ', A(k + 1), ' stop(s).'], state: st(s, path, i) });
+            break;
+          }
+          path.push(i);
+        }
+        if (k === n) {
+          result = s;
+          steps.push({ tag: 'start', trace: ['Start ', A(s), ' completes the full loop with ', B(tank), ' gas left.'], state: st(s, path) });
+        }
+      }
+      steps.push({ tag: 'ret', trace: result >= 0 ? ['Answer: start at station ', C(result), ' (', A(visited), ' stations simulated).'] : ['No start works — return ', C(-1), '.'], state: st(Math.max(result, 0), []) });
+      return { steps, result: String(result) };
+    },
+    note: 'Up to n starts × n stations = O(n²). The greedy observes that if you run dry at station i, no start between the old start and i can work either, so it jumps straight past them.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= 131. Hand of Straights ================= */
@@ -455,6 +731,88 @@ const handOfStraights: ProblemDef = {
   },
   note: 'The smallest card is the forcing move: no straight can contain it except one that starts at it, so the greedy choice is not a heuristic but a logical necessity — if it fails, every arrangement fails.',
   complexity: { time: 'O(n log n)', space: 'O(n)' },
+  brute: {
+    label: 'Linear removals',
+    technique: 'Repeatedly take the smallest remaining card and search the list for each next card of its straight, removing them one by one.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isNStraightHand(vector<int>& hand, int k) {'),
+        L('        if (hand.size() % k) return false;', 'init'),
+        L('        vector<int> left = hand;', 'init'),
+        L('        while (!left.empty()) {', 'group'),
+        L('            int start = *min_element(left.begin(), left.end());', 'group'),
+        L('            for (int v = start; v < start + k; v++) {', 'group'),
+        L('                auto it = find(left.begin(), left.end(), v);  // O(n) search', 'group', 'miss'),
+        L('                if (it == left.end()) return false;', 'miss'),
+        L('                left.erase(it);', 'group'),
+        L('            }'),
+        L('        }'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isNStraightHand(int[] hand, int k) {'),
+        L('        if (hand.length % k != 0) return false;', 'init'),
+        L('        List<Integer> left = new ArrayList<>();', 'init'),
+        L('        for (int c : hand) left.add(c);', 'init'),
+        L('        while (!left.isEmpty()) {', 'group'),
+        L('            int start = Collections.min(left);', 'group'),
+        L('            for (int v = start; v < start + k; v++)', 'group', 'miss'),
+        L('                if (!left.remove(Integer.valueOf(v))) return false;  // O(n) search', 'group', 'miss'),
+        L('        }'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const hand = parseIntArray(values.hand, { min: 1, maxLen: 12 });
+      if (typeof hand === 'string') return { error: hand };
+      const k = parseInt1(values.k, 'Group size', { min: 1, max: 6 });
+      if (typeof k === 'string') return { error: k };
+      const steps: Step[] = [];
+      const left = [...hand];
+      const groups: number[][] = [];
+      let scanned = 0;
+      const view = (active: number[] = []): ListState => ({
+        chains: [
+          { label: 'remaining (unsorted)', items: left.map((v) => ({ v })), broken: true },
+          ...groups.map((g, i) => ({ label: `group ${i + 1}`, items: g.map((v) => ({ v, mark: g === active ? ('active' as const) : ('good' as const) })), broken: true })),
+        ],
+        aggs: [{ label: 'cards scanned', value: String(scanned), c: 'a' }],
+      });
+      if (hand.length % k !== 0) {
+        steps.push({ tag: 'init', trace: [F(hand.length), ' cards cannot split into groups of ', F(k), '.'], state: view() });
+        return { steps, result: 'false', resultDetail: 'count not divisible by k' };
+      }
+      steps.push({ tag: 'init', trace: ['No sorting and no count map: search the plain list for every card we need.'], state: view() });
+      while (left.length) {
+        const start = Math.min(...left);
+        scanned += left.length;
+        const g: number[] = [];
+        groups.push(g);
+        for (let v = start; v < start + k; v++) {
+          const idx = left.indexOf(v);
+          scanned += idx < 0 ? left.length : idx + 1;
+          if (idx < 0) {
+            steps.push({ tag: 'miss', trace: ['Straight from ', A(start), ' needs ', F(v), ', which is not in the list — ', C('false'), '.'], state: view(g) });
+            return { steps, result: 'false', resultDetail: `missing ${v}` };
+          }
+          left.splice(idx, 1);
+          g.push(v);
+        }
+        steps.push({ tag: 'group', trace: ['Smallest is ', A(start), '; found and removed ', B(g.join(', ')), ' by searching the list.'], state: view(g) });
+      }
+      steps.push({ tag: 'ret', trace: ['Every card used — ', C('true'), ' (', A(scanned), ' cards scanned).'], state: view() });
+      return { steps, result: 'true', resultDetail: `${groups.length} groups of ${k}` };
+    },
+    note: 'Same greedy rule (start each straight at the smallest card), but every lookup and removal is a linear scan, so it is O(n²). A sorted count map makes each lookup O(log n).',
+    complexity: { time: 'O(n²)', space: 'O(n)' },
+  },
 };
 
 /* ================= 132. Merge Triplets ================= */
@@ -565,6 +923,80 @@ const mergeTriplets: ProblemDef = {
   },
   note: 'Max-merging is monotone: adding a safe triplet never breaks anything, so the only question is coverage — does some safe triplet achieve each target coordinate exactly? Three booleans replace any search over subsets.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Try every subset',
+    technique: 'For every subset of triplets, take the element-wise max and check whether it equals the target.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool mergeTriplets(vector<vector<int>>& t, vector<int>& target) {'),
+        L('        int n = t.size();', 'init'),
+        L('        for (int mask = 1; mask < (1 << n); mask++) {', 'try'),
+        L('            vector<int> m = {0, 0, 0};', 'try'),
+        L('            for (int i = 0; i < n; i++)', 'try'),
+        L('                if (mask >> i & 1)', 'try'),
+        L('                    for (int k = 0; k < 3; k++) m[k] = max(m[k], t[i][k]);', 'try'),
+        L('            if (m == target) return true;', 'hit'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean mergeTriplets(int[][] t, int[] target) {'),
+        L('        int n = t.length;', 'init'),
+        L('        for (int mask = 1; mask < (1 << n); mask++) {', 'try'),
+        L('            int[] m = new int[3];', 'try'),
+        L('            for (int i = 0; i < n; i++)', 'try'),
+        L('                if ((mask >> i & 1) == 1)', 'try'),
+        L('                    for (int k = 0; k < 3; k++) m[k] = Math.max(m[k], t[i][k]);', 'try'),
+        L('            if (Arrays.equals(m, target)) return true;', 'hit'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const tripStrs = (values.triplets ?? '').split(';').map((t) => t.trim()).filter(Boolean);
+      if (tripStrs.length === 0 || tripStrs.length > 8) return { error: 'Enter 1–8 triplets ("a b c; a b c").' };
+      const trips: number[][] = [];
+      for (const t of tripStrs) {
+        const nums = t.split(/[\s,]+/).map(Number);
+        if (nums.length !== 3 || nums.some((x) => !Number.isInteger(x))) return { error: `Bad triplet "${t}".` };
+        trips.push(nums);
+      }
+      const target = (values.target ?? '').split(/[\s,]+/).map(Number);
+      if (target.length !== 3 || target.some((x) => !Number.isInteger(x))) return { error: 'Target must be three integers.' };
+      const n = trips.length;
+      const steps: Step[] = [];
+      const view = (mask: number, m: number[] | null): ListState => ({
+        chains: [
+          ...trips.map((t, i) => ({ label: `triplet ${i + 1}`, items: t.map((v) => ({ v, mark: mask >> i & 1 ? ('active' as const) : undefined })), broken: true })),
+          { label: 'element-wise max', items: (m ?? ['·', '·', '·']).map((v, k) => ({ v, mark: m && v === target[k] ? ('good' as const) : undefined })), broken: true },
+          { label: 'target', items: target.map((v) => ({ v, mark: 'win' as const })), broken: true },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Try all ', A(2 ** n - 1), ' non-empty subsets of triplets.'], state: view(0, null) });
+      let ok = false;
+      for (let mask = 1; mask < 1 << n; mask++) {
+        const m = [0, 0, 0];
+        for (let i = 0; i < n; i++) if (mask >> i & 1) for (let k = 0; k < 3; k++) m[k] = Math.max(m[k], trips[i][k]);
+        const hit = m.every((v, k) => v === target[k]);
+        if (hit || steps.length < 30) steps.push({ tag: hit ? 'hit' : 'try', trace: ['Subset {', A([...Array(n)].map((_, i) => (mask >> i & 1 ? i + 1 : 0)).filter(Boolean).join(', ')), '} merges to [', hit ? B(m.join(', ')) : F(m.join(', ')), ']', hit ? ' — equals the target!' : '.'], state: view(mask, m) });
+        if (hit) {
+          ok = true;
+          break;
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Answer: ', C(String(ok)), '.'], state: view(0, null) });
+      return { steps, result: String(ok) };
+    },
+    note: 'Exponential in the number of triplets. The greedy notices that any triplet not exceeding the target in any coordinate can safely be merged, so one pass over the triplets decides it.',
+    complexity: { time: 'O(n · 2ⁿ)', space: 'O(1)' },
+  },
 };
 
 /* ================= 133. Partition Labels ================= */
@@ -659,6 +1091,81 @@ const partitionLabels: ProblemDef = {
   },
   note: 'Every letter drags its chunk boundary to its own last occurrence — the running max of those is the earliest legal cut. When the scan index reaches it, nothing inside leaks rightward, so cutting there is both safe and greedy-minimal.',
   complexity: { time: 'O(n)', space: 'O(26)' },
+  brute: {
+    label: 'Rescan for last occurrences',
+    technique: 'Grow each chunk, and for every character inside it search the rest of the string for its last occurrence.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> partitionLabels(string s) {'),
+        L('        vector<int> res; int start = 0;', 'init'),
+        L('        while (start < s.size()) {', 'chunk'),
+        L('            int end = start;', 'chunk'),
+        L('            for (int i = start; i <= end; i++)', 'extend'),
+        L('                end = max(end, (int) s.find_last_of(s[i]));  // O(n) search', 'extend'),
+        L('            res.push_back(end - start + 1);', 'cut'),
+        L('            start = end + 1;', 'cut'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<Integer> partitionLabels(String s) {'),
+        L('        List<Integer> res = new ArrayList<>(); int start = 0;', 'init'),
+        L('        while (start < s.length()) {', 'chunk'),
+        L('            int end = start;', 'chunk'),
+        L('            for (int i = start; i <= end; i++)', 'extend'),
+        L('                end = Math.max(end, s.lastIndexOf(s.charAt(i)));  // O(n) search', 'extend'),
+        L('            res.add(end - start + 1);', 'cut'),
+        L('            start = end + 1;', 'cut'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,24}$/.test(s)) return { error: 'Lowercase letters, ≤ 24 characters.' };
+      const chars = s.split('');
+      const steps: Step[] = [];
+      const res: number[] = [];
+      let searches = 0;
+      const st = (start: number, end: number, i?: number): ArrayState => ({
+        arr: chars,
+        window: [start, end],
+        ptrs: i !== undefined ? [{ name: 'i', i, c: 'a' }] : [],
+        aggs: [
+          { label: 'chunks', value: `[${res.join(', ')}]`, c: 'c' },
+          { label: 'characters searched', value: String(searches), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['No precomputed "last index" table: each time, search the string again.'], state: st(0, 0) });
+      let start = 0;
+      while (start < chars.length) {
+        let end = start;
+        steps.push({ tag: 'chunk', trace: ['New chunk at ', A(start), '.'], state: st(start, end) });
+        for (let i = start; i <= end; i++) {
+          const last = s.lastIndexOf(chars[i]);
+          searches += chars.length - last;
+          if (last > end) {
+            end = last;
+            steps.push({ tag: 'extend', trace: ["'", A(chars[i]), "' last appears at ", B(last), ' — the chunk must reach at least there.'], state: st(start, end, i) });
+          }
+        }
+        res.push(end - start + 1);
+        steps.push({ tag: 'cut', trace: ['Every letter in [', A(start), '..', A(end), '] ends inside it — cut. Size ', B(end - start + 1), '.'], state: st(start, end) });
+        start = end + 1;
+      }
+      steps.push({ tag: 'ret', trace: ['Chunk sizes: ', C(`[${res.join(', ')}]`), '.'], state: st(0, chars.length - 1) });
+      return { steps, result: `[${res.join(', ')}]`, resultDetail: `${res.length} chunks` };
+    },
+    note: 'Each character triggers a search to the end of the string, so the worst case is O(n²). Recording every letter’s last index in one pass first makes each lookup O(1).',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= 134. Valid Parenthesis String ================= */
@@ -761,6 +1268,77 @@ const validParenString: ProblemDef = {
   },
   note: 'The set of achievable open-counts is always a contiguous interval (each character shifts or widens it by 1), so two integers represent every possible interpretation of the wildcards simultaneously — no backtracking, no 3ⁿ branches.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Set of balances',
+    technique: 'Carry the full set of open-bracket counts that are still possible; "*" branches into three counts.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool checkValidString(string s) {'),
+        L('        set<int> can = {0};', 'init'),
+        L('        for (char c : s) {', 'step'),
+        L('            set<int> next;', 'step'),
+        L('            for (int b : can) {', 'step'),
+        L('                if (c != \')\') next.insert(b + 1);           // ( or * as (', 'step'),
+        L('                if (c != \'(\' && b > 0) next.insert(b - 1);  // ) or * as )', 'step'),
+        L('                if (c == \'*\') next.insert(b);               // * as empty', 'step'),
+        L('            }'),
+        L('            can = next;', 'step'),
+        L('        }'),
+        L('        return can.count(0);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean checkValidString(String s) {'),
+        L('        Set<Integer> can = new HashSet<>(Set.of(0));', 'init'),
+        L('        for (char c : s.toCharArray()) {', 'step'),
+        L('            Set<Integer> next = new HashSet<>();', 'step'),
+        L('            for (int b : can) {', 'step'),
+        L('                if (c != \')\') next.add(b + 1);', 'step'),
+        L('                if (c != \'(\' && b > 0) next.add(b - 1);', 'step'),
+        L('                if (c == \'*\') next.add(b);', 'step'),
+        L('            }'),
+        L('            can = next;', 'step'),
+        L('        }'),
+        L('        return can.contains(0);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim();
+      if (!/^[()*]{1,16}$/.test(s)) return { error: 'Only ( ) * characters, 1–16.' };
+      const chars = s.split('');
+      const steps: Step[] = [];
+      let can = new Set<number>([0]);
+      const st = (i: number | null): ArrayState => ({
+        arr: chars,
+        ptrs: i !== null ? [{ name: 'i', i, c: 'a' }] : [],
+        aggs: [{ label: 'possible open counts', value: can.size ? `{ ${[...can].sort((a, b) => a - b).join(', ')} }` : '∅', c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['Before reading anything, the only possible open count is ', B(0), '.'], state: st(null) });
+      for (let i = 0; i < chars.length; i++) {
+        const c = chars[i];
+        const next = new Set<number>();
+        for (const b of can) {
+          if (c !== ')') next.add(b + 1);
+          if (c !== '(' && b > 0) next.add(b - 1);
+          if (c === '*') next.add(b);
+        }
+        can = next;
+        steps.push({ tag: 'step', trace: ["'", A(c), "' → possible counts ", can.size ? B(`{ ${[...can].sort((a, b) => a - b).join(', ')} }`) : F('∅ (no way to stay valid)'), '.'], state: st(i) });
+        if (!can.size) break;
+      }
+      const ok = can.has(0);
+      steps.push({ tag: 'ret', trace: ['A count of 0 is ', ok ? B('possible') : F('not possible'), ' at the end — return ', C(String(ok)), '.'], state: st(null) });
+      return { steps, result: String(ok) };
+    },
+    note: 'Tracking every possible balance is O(n²) in the worst case. Those balances always form a contiguous range, so storing just its two ends (lo and hi) gives the same answer in O(1) space.',
+    complexity: { time: 'O(n²)', space: 'O(n)' },
+  },
 };
 
 export const greedy = [maxSubarray, jumpGame, jumpGameII, gasStation, handOfStraights, mergeTriplets, partitionLabels, validParenString];
