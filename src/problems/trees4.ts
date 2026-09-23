@@ -117,6 +117,68 @@ const inorderTraversal: ProblemDef = {
   },
   note: 'On a binary search tree this order comes out sorted, which is why inorder underpins BST validation, the kth-smallest query and the BST iterator. The iterative form is the usual follow-up: same O(n) time, but the stack is yours to control rather than the runtime\'s.',
   complexity: { time: 'O(n)', space: 'O(h)' },
+  brute: {
+    label: 'Recursion',
+    technique: 'inorder(node) = inorder(left), visit node, inorder(right) — the call stack does the bookkeeping.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void go(TreeNode* n, vector<int>& out) {', 'enter'),
+        L('        if (!n) return;', 'enter'),
+        L('        go(n->left, out);', 'enter'),
+        L('        out.push_back(n->val);', 'visit'),
+        L('        go(n->right, out);', 'visit'),
+        L('    }'),
+        L('public:'),
+        L('    vector<int> inorderTraversal(TreeNode* root) {'),
+        L('        vector<int> out; go(root, out); return out;', 'init', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void go(TreeNode n, List<Integer> out) {', 'enter'),
+        L('        if (n == null) return;', 'enter'),
+        L('        go(n.left, out);', 'enter'),
+        L('        out.add(n.val);', 'visit'),
+        L('        go(n.right, out);', 'visit'),
+        L('    }'),
+        L('    public List<Integer> inorderTraversal(TreeNode root) {'),
+        L('        List<Integer> out = new ArrayList<>(); go(root, out); return out;', 'init', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const out: number[] = [];
+      const done: number[] = [];
+      const calls: string[] = [];
+      const steps: Step[] = [];
+      const view = (cur: TNode | null) =>
+        snap(root, { current: cur ? cur.id : null, done: [...done], stack: calls.map((text) => ({ text })), stackTitle: 'Call stack', aggs: [{ label: 'output', value: `[${out.join(', ')}]`, c: 'c' }] });
+      steps.push({ tag: 'init', trace: ['No explicit stack: let recursion remember where to come back to.'], state: view(null) });
+      const go = (n: TNode | null) => {
+        if (!n || steps.length > MAX_STEPS) return;
+        calls.push(`in(${n.val})`);
+        steps.push({ tag: 'enter', trace: ['Enter ', A(n.val), ' — finish its left subtree first.'], state: view(n) });
+        go(n.left);
+        out.push(n.val);
+        done.push(n.id);
+        steps.push({ tag: 'visit', trace: ['Left side of ', B(n.val), ' is done — output it, then go right.'], state: view(n) });
+        go(n.right);
+        calls.pop();
+      };
+      go(root);
+      steps.push({ tag: 'ret', trace: ['In-order: ', C(`[${out.join(', ')}]`), '.'], state: view(null) });
+      return { steps, result: `[${out.join(', ')}]` };
+    },
+    note: 'The shortest correct version: O(n) time and O(h) stack, exactly like the iterative one. Interviewers often ask for the iterative form precisely because it makes that hidden stack explicit.',
+    complexity: { time: 'O(n)', space: 'O(h) recursion' },
+  },
 };
 
 /* ================= Binary Tree Preorder Traversal ================= */
@@ -213,6 +275,63 @@ const preorderTraversal: ProblemDef = {
   },
   note: 'Pushing right before left is the whole trick — a stack reverses insertion order, so the left child must go on last to come off first. Preorder is also the natural order for serialising a tree, since the parent always appears before the children it describes.',
   complexity: { time: 'O(n)', space: 'O(h)' },
+  brute: {
+    label: 'Recursion',
+    technique: 'preorder(node) = visit node, preorder(left), preorder(right).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void go(TreeNode* n, vector<int>& out) {', 'visit'),
+        L('        if (!n) return;', 'visit'),
+        L('        out.push_back(n->val);', 'visit'),
+        L('        go(n->left, out);', 'push'),
+        L('        go(n->right, out);', 'push'),
+        L('    }'),
+        L('public:'),
+        L('    vector<int> preorderTraversal(TreeNode* root) {'),
+        L('        vector<int> out; go(root, out); return out;', 'init', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void go(TreeNode n, List<Integer> out) {', 'visit'),
+        L('        if (n == null) return;', 'visit'),
+        L('        out.add(n.val);', 'visit'),
+        L('        go(n.left, out);', 'push'),
+        L('        go(n.right, out);', 'push'),
+        L('    }'),
+        L('    public List<Integer> preorderTraversal(TreeNode root) {'),
+        L('        List<Integer> out = new ArrayList<>(); go(root, out); return out;', 'init', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const out: number[] = [];
+      const done: number[] = [];
+      const steps: Step[] = [];
+      const view = (cur: TNode | null) => snap(root, { current: cur ? cur.id : null, done: [...done], aggs: [{ label: 'output', value: `[${out.join(', ')}]`, c: 'c' }] });
+      steps.push({ tag: 'init', trace: ['Visit a node the moment you arrive, then recurse left and right.'], state: view(null) });
+      const go = (n: TNode | null) => {
+        if (!n || steps.length > MAX_STEPS) return;
+        out.push(n.val);
+        done.push(n.id);
+        steps.push({ tag: 'visit', trace: ['Arrive at ', B(n.val), ' — output it immediately.'], state: view(n) });
+        go(n.left);
+        go(n.right);
+      };
+      go(root);
+      steps.push({ tag: 'ret', trace: ['Pre-order: ', C(`[${out.join(', ')}]`), '.'], state: view(null) });
+      return { steps, result: `[${out.join(', ')}]` };
+    },
+    note: 'Same O(n) time and O(h) space as the explicit stack; the language’s call stack stores the “come back and do the right child” reminders for you.',
+    complexity: { time: 'O(n)', space: 'O(h) recursion' },
+  },
 };
 
 /* ================= Binary Tree Postorder Traversal ================= */
@@ -319,6 +438,64 @@ const postorderTraversal: ProblemDef = {
   },
   note: 'The reversal trick avoids the usual two-stack or last-visited-pointer bookkeeping. Postorder is the order that matters whenever a node needs answers from both children first — computing height, diameter, or freeing a tree safely.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Recursion',
+    technique: 'postorder(node) = postorder(left), postorder(right), then visit node.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void go(TreeNode* n, vector<int>& out) {', 'pop'),
+        L('        if (!n) return;', 'pop'),
+        L('        go(n->left, out);', 'push'),
+        L('        go(n->right, out);', 'push'),
+        L('        out.push_back(n->val);', 'rev'),
+        L('    }'),
+        L('public:'),
+        L('    vector<int> postorderTraversal(TreeNode* root) {'),
+        L('        vector<int> out; go(root, out); return out;', 'init', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void go(TreeNode n, List<Integer> out) {', 'pop'),
+        L('        if (n == null) return;', 'pop'),
+        L('        go(n.left, out);', 'push'),
+        L('        go(n.right, out);', 'push'),
+        L('        out.add(n.val);', 'rev'),
+        L('    }'),
+        L('    public List<Integer> postorderTraversal(TreeNode root) {'),
+        L('        List<Integer> out = new ArrayList<>(); go(root, out); return out;', 'init', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const out: number[] = [];
+      const done: number[] = [];
+      const steps: Step[] = [];
+      const view = (cur: TNode | null) => snap(root, { current: cur ? cur.id : null, done: [...done], aggs: [{ label: 'output', value: `[${out.join(', ')}]`, c: 'c' }] });
+      steps.push({ tag: 'init', trace: ['A node is output only after both of its subtrees are finished.'], state: view(null) });
+      const go = (n: TNode | null) => {
+        if (!n || steps.length > MAX_STEPS) return;
+        steps.push({ tag: 'push', trace: ['At ', A(n.val), ' — finish both children first.'], state: view(n) });
+        go(n.left);
+        go(n.right);
+        out.push(n.val);
+        done.push(n.id);
+        steps.push({ tag: 'rev', trace: ['Both subtrees of ', B(n.val), ' are done — output it.'], state: view(n) });
+      };
+      go(root);
+      steps.push({ tag: 'ret', trace: ['Post-order: ', C(`[${out.join(', ')}]`), '.'], state: view(null) });
+      return { steps, result: `[${out.join(', ')}]` };
+    },
+    note: 'Recursion makes post-order trivial, while the iterative version needs a trick (reverse a root-right-left traversal) or a “last visited” pointer. O(n) time, O(h) stack.',
+    complexity: { time: 'O(n)', space: 'O(h) recursion' },
+  },
 };
 
 /* ================= Zigzag Level Order Traversal ================= */
@@ -450,6 +627,73 @@ const zigzagLevelOrder: ProblemDef = {
   },
   note: 'Writing straight into the correct slot beats reversing the row afterwards — same complexity, but it makes clear that the traversal itself never changes, only the indexing. Reversing the queue instead is the classic wrong turn: it corrupts the parent order for the level below.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'DFS, then reverse odd levels',
+    technique: 'Collect every level left to right with a depth-indexed DFS, then reverse every second level at the end.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void dfs(TreeNode* n, int d, vector<vector<int>>& res) {', 'pop'),
+        L('        if (!n) return;', 'pop'),
+        L('        if (res.size() == d) res.push_back({});', 'level'),
+        L('        res[d].push_back(n->val);', 'pop'),
+        L('        dfs(n->left, d + 1, res); dfs(n->right, d + 1, res);', 'push'),
+        L('    }'),
+        L('public:'),
+        L('    vector<vector<int>> zigzagLevelOrder(TreeNode* root) {'),
+        L('        vector<vector<int>> res; dfs(root, 0, res);', 'init'),
+        L('        for (int d = 1; d < res.size(); d += 2) reverse(res[d].begin(), res[d].end());', 'flip'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void dfs(TreeNode n, int d, List<List<Integer>> res) {', 'pop'),
+        L('        if (n == null) return;', 'pop'),
+        L('        if (res.size() == d) res.add(new ArrayList<>());', 'level'),
+        L('        res.get(d).add(n.val);', 'pop'),
+        L('        dfs(n.left, d + 1, res); dfs(n.right, d + 1, res);', 'push'),
+        L('    }'),
+        L('    public List<List<Integer>> zigzagLevelOrder(TreeNode root) {'),
+        L('        List<List<Integer>> res = new ArrayList<>(); dfs(root, 0, res);', 'init'),
+        L('        for (int d = 1; d < res.size(); d += 2) Collections.reverse(res.get(d));', 'flip'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const res: number[][] = [];
+      const done: number[] = [];
+      const steps: Step[] = [];
+      const fmt = () => res.map((r) => `[${r.join(',')}]`).join(', ') || '—';
+      const view = (cur: TNode | null) => snap(root, { current: cur ? cur.id : null, done: [...done], aggs: [{ label: 'levels', value: fmt(), c: 'b' }] });
+      steps.push({ tag: 'init', trace: ['First gather every level left to right with DFS; fix the zigzag afterwards.'], state: view(null) });
+      const dfs = (n: TNode | null, d: number) => {
+        if (!n || steps.length > MAX_STEPS) return;
+        if (res.length === d) res.push([]);
+        res[d].push(n.val);
+        done.push(n.id);
+        steps.push({ tag: 'pop', trace: ['Depth ', A(d), ': append ', B(n.val), '.'], state: view(n) });
+        dfs(n.left, d + 1);
+        dfs(n.right, d + 1);
+      };
+      dfs(root, 0);
+      for (let d = 1; d < res.length; d += 2) {
+        res[d].reverse();
+        steps.push({ tag: 'flip', trace: ['Level ', A(d), ' runs right to left — reverse it: ', B(`[${res[d].join(', ')}]`), '.'], state: view(null) });
+      }
+      steps.push({ tag: 'ret', trace: ['Zigzag order: ', C(fmt()), '.'], state: view(null) });
+      return { steps, result: res.map((r) => `[${r.join(',')}]`).join(', ') };
+    },
+    note: 'Same O(n) work: the direction is applied in a clean-up pass instead of while the level is being built. Building each row in the right direction during BFS avoids the extra reversal.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 const ordinalSuffix = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
@@ -556,6 +800,69 @@ const symmetricTree: ProblemDef = {
   },
   note: 'Comparing a node against itself gets you nowhere — symmetry is a property of pairs, which is why the helper takes two nodes. The crossed recursion (a.left with b.right) is the whole algorithm; recursing straight down instead tests whether the two subtrees are identical, which is a different question.',
   complexity: { time: 'O(n)', space: 'O(h)' },
+  brute: {
+    label: 'Queue of mirror pairs',
+    technique: 'Compare nodes in mirrored pairs with a queue: (left.left, right.right) and (left.right, right.left).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isSymmetric(TreeNode* root) {'),
+        L('        queue<pair<TreeNode*, TreeNode*>> q; q.push({root->left, root->right});', 'init'),
+        L('        while (!q.empty()) {', 'pair'),
+        L('            auto [a, b] = q.front(); q.pop();', 'pair'),
+        L('            if (!a && !b) continue;', 'pair'),
+        L('            if (!a || !b || a->val != b->val) return false;', 'bad'),
+        L('            q.push({a->left, b->right}); q.push({a->right, b->left});', 'pair'),
+        L('        }'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isSymmetric(TreeNode root) {'),
+        L('        Deque<TreeNode[]> q = new ArrayDeque<>(); q.add(new TreeNode[]{root.left, root.right});', 'init'),
+        L('        while (!q.isEmpty()) {', 'pair'),
+        L('            TreeNode[] p = q.poll(); TreeNode a = p[0], b = p[1];', 'pair'),
+        L('            if (a == null && b == null) continue;', 'pair'),
+        L('            if (a == null || b == null || a.val != b.val) return false;', 'bad'),
+        L('            q.add(new TreeNode[]{a.left, b.right}); q.add(new TreeNode[]{a.right, b.left});', 'pair'),
+        L('        }'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const ok: number[] = [];
+      const steps: Step[] = [];
+      const view = (a: TNode | null, b: TNode | null) => snap(root, { done: [...ok], queued: [a, b].filter((x): x is TNode => !!x).map((x) => x.id) });
+      steps.push({ tag: 'init', trace: ['Queue the root’s two children as the first mirror pair.'], state: view(root.left, root.right) });
+      const q: [TNode | null, TNode | null][] = [[root.left, root.right]];
+      let symmetric = true;
+      while (q.length) {
+        const [a, b] = q.shift()!;
+        if (!a && !b) continue;
+        if (!a || !b || a.val !== b.val) {
+          symmetric = false;
+          steps.push({ tag: 'bad', trace: ['Mirror pair (', F(a ? a.val : 'null'), ', ', F(b ? b.val : 'null'), ') does not match — ', C('false'), '.'], state: view(a, b) });
+          break;
+        }
+        ok.push(a.id, b.id);
+        steps.push({ tag: 'pair', trace: ['Pair (', B(a.val), ', ', B(b.val), ') matches — enqueue the outer pair and the inner pair.'], state: view(a, b) });
+        q.push([a.left, b.right], [a.right, b.left]);
+      }
+      if (symmetric) steps.push({ tag: 'ret', trace: ['Every mirror pair matched — ', C('symmetric'), '.'], state: view(null, null) });
+      return { steps, result: symmetric ? 'true' : 'false' };
+    },
+    note: 'Same O(n) comparisons as the recursive mirror check, level by level. The queue holds at most a level’s worth of pairs, avoiding deep recursion on tall trees.',
+    complexity: { time: 'O(n)', space: 'O(w) queue' },
+  },
 };
 
 /* ================= Path Sum ================= */
@@ -665,6 +972,88 @@ const pathSum: ProblemDef = {
   },
   note: 'The leaf test must be "no left and no right" — checking only one side makes a node with a single child look like a leaf, which is the most common wrong answer here. Short-circuit || means the right subtree is skipped entirely once the left one succeeds.',
   complexity: { time: 'O(n)', space: 'O(h)' },
+  brute: {
+    label: 'BFS with running sums',
+    technique: 'Walk the tree with a queue of (node, sum so far) pairs and check the sum whenever a leaf is dequeued.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool hasPathSum(TreeNode* root, int target) {'),
+        L('        if (!root) return false;', 'init'),
+        L('        queue<pair<TreeNode*, int>> q; q.push({root, root->val});', 'init'),
+        L('        while (!q.empty()) {', 'step'),
+        L('            auto [n, s] = q.front(); q.pop();', 'step'),
+        L('            if (!n->left && !n->right && s == target) return true;', 'hit'),
+        L('            if (n->left) q.push({n->left, s + n->left->val});', 'step'),
+        L('            if (n->right) q.push({n->right, s + n->right->val});', 'step'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean hasPathSum(TreeNode root, int target) {'),
+        L('        if (root == null) return false;', 'init'),
+        L('        Deque<Object[]> q = new ArrayDeque<>(); q.add(new Object[]{root, root.val});', 'init'),
+        L('        while (!q.isEmpty()) {', 'step'),
+        L('            Object[] p = q.poll(); TreeNode n = (TreeNode) p[0]; int s = (int) p[1];', 'step'),
+        L('            if (n.left == null && n.right == null && s == target) return true;', 'hit'),
+        L('            if (n.left != null) q.add(new Object[]{n.left, s + n.left.val});', 'step'),
+        L('            if (n.right != null) q.add(new Object[]{n.right, s + n.right.val});', 'step'),
+        L('        }'),
+        L('        return false;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const target = parseInt1(values.target, 'Target sum');
+      if (typeof target === 'string') return { error: target };
+      const badges = new Map<number, string>();
+      const done: number[] = [];
+      const steps: Step[] = [];
+      const layout = layoutTree(root);
+      const view = (cur: TNode | null): TreeState => ({
+        nodes: layout.nodes.map((n) => ({ ...n, badge: badges.get(n.id) })),
+        edges: layout.edges,
+        current: cur ? cur.id : null,
+        done: [...done],
+        aggs: [{ label: 'target', value: String(target), c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['BFS carrying each node’s root-to-here sum (shown as badges).'], state: view(null) });
+      const q: [TNode, number][] = [[root, root.val]];
+      badges.set(root.id, `Σ${root.val}`);
+      let found = false;
+      while (q.length) {
+        const [n, s] = q.shift()!;
+        done.push(n.id);
+        if (!n.left && !n.right) {
+          if (s === target) {
+            found = true;
+            steps.push({ tag: 'hit', trace: ['Leaf ', B(n.val), ' has path sum ', C(s), ' = target — ', C('true'), '.'], state: view(n) });
+            break;
+          }
+          steps.push({ tag: 'step', trace: ['Leaf ', A(n.val), ' has path sum ', F(s), ' ≠ ', A(target), '.'], state: view(n) });
+          continue;
+        }
+        for (const c of [n.left, n.right]) if (c) {
+          badges.set(c.id, `Σ${s + c.val}`);
+          q.push([c, s + c.val]);
+        }
+        steps.push({ tag: 'step', trace: ['Dequeue ', A(n.val), ' (sum ', A(s), ') and pass the running sum to its children.'], state: view(n) });
+      }
+      if (!found) steps.push({ tag: 'ret', trace: ['No leaf matched — ', C('false'), '.'], state: view(null) });
+      return { steps, result: found ? 'true' : 'false' };
+    },
+    note: 'Same O(n) work as the recursive DFS; each queue entry carries its own sum so no backtracking is needed. BFS finds the shallowest matching leaf first.',
+    complexity: { time: 'O(n)', space: 'O(w) queue' },
+  },
 };
 
 /* ================= Path Sum II ================= */
@@ -783,6 +1172,79 @@ const pathSumII: ProblemDef = {
   },
   note: 'Storing a copy of the path on a hit is essential — the live array keeps mutating as the search continues, so pushing the reference would leave every recorded answer pointing at the same, eventually empty, list. That single missing copy is the classic bug in every backtracking problem.',
   complexity: { time: 'O(n·h) worst case', space: 'O(h)' },
+  brute: {
+    label: 'BFS carrying whole paths',
+    technique: 'Queue each node together with a full copy of its root-to-node path; record the path when a leaf hits the target.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> pathSum(TreeNode* root, int target) {'),
+        L('        vector<vector<int>> res; if (!root) return res;', 'init'),
+        L('        queue<tuple<TreeNode*, int, vector<int>>> q; q.push({root, root->val, {root->val}});', 'init'),
+        L('        while (!q.empty()) {', 'go'),
+        L('            auto [n, s, path] = q.front(); q.pop();', 'go'),
+        L('            if (!n->left && !n->right) { if (s == target) res.push_back(path); continue; }', 'hit'),
+        L('            for (TreeNode* c : {n->left, n->right}) if (c) {', 'go'),
+        L('                auto p = path; p.push_back(c->val);  // copy the whole path', 'go'),
+        L('                q.push({c, s + c->val, p});', 'go'),
+        L('            }'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<Integer>> pathSum(TreeNode root, int target) {'),
+        L('        List<List<Integer>> res = new ArrayList<>(); if (root == null) return res;', 'init'),
+        L('        Deque<Object[]> q = new ArrayDeque<>(); q.add(new Object[]{root, root.val, new ArrayList<>(List.of(root.val))});', 'init'),
+        L('        while (!q.isEmpty()) {', 'go'),
+        L('            Object[] e = q.poll(); TreeNode n = (TreeNode) e[0]; int s = (int) e[1]; List<Integer> path = (List<Integer>) e[2];', 'go'),
+        L('            if (n.left == null && n.right == null) { if (s == target) res.add(path); continue; }', 'hit'),
+        L('            for (TreeNode c : new TreeNode[]{n.left, n.right}) if (c != null) {', 'go'),
+        L('                List<Integer> p = new ArrayList<>(path); p.add(c.val);  // copy the whole path', 'go'),
+        L('                q.add(new Object[]{c, s + c.val, p});', 'go'),
+        L('            }'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const target = parseInt1(values.target, 'Target sum');
+      if (typeof target === 'string') return { error: target };
+      const res: number[][] = [];
+      let copied = 0;
+      const steps: Step[] = [];
+      const view = (path: TNode[]) =>
+        snap(root, { done: path.map((n) => n.id), current: path.length ? path[path.length - 1].id : null, aggs: [{ label: 'values copied into paths', value: String(copied), c: 'a' }, { label: 'found', value: res.map((p) => `[${p.join(',')}]`).join(' ') || '—', c: 'c' }] });
+      steps.push({ tag: 'init', trace: ['BFS where every queue entry owns a full copy of its path — no backtracking.'], state: view([]) });
+      const q: [TNode, number, TNode[]][] = [[root, root.val, [root]]];
+      while (q.length && steps.length < MAX_STEPS) {
+        const [n, s, path] = q.shift()!;
+        if (!n.left && !n.right) {
+          if (s === target) res.push(path.map((p) => p.val));
+          steps.push({ tag: 'hit', trace: ['Leaf ', A(n.val), ': path ', A(path.map((p) => p.val).join('→')), ' sums to ', s === target ? B(s) : F(s), s === target ? ' — keep it.' : '.'], state: view(path) });
+          continue;
+        }
+        for (const c of [n.left, n.right]) if (c) {
+          copied += path.length + 1;
+          q.push([c, s + c.val, [...path, c]]);
+        }
+        steps.push({ tag: 'go', trace: ['Dequeue ', A(n.val), ' — hand each child its own copy of the path.'], state: view(path) });
+      }
+      steps.push({ tag: 'ret', trace: [C(res.length), ' path(s) found; ', A(copied), ' values were copied along the way.'], state: view([]) });
+      return { steps, result: res.length ? res.map((p) => `[${p.join(',')}]`).join(', ') : 'none' };
+    },
+    note: 'Correct, but every queue entry holds its own copy of the path, costing O(n · h) memory. Backtracking DFS shares one path list, pushing on the way down and popping on the way up.',
+    complexity: { time: 'O(n · h)', space: 'O(n · h)' },
+  },
 };
 
 /* ================= Binary Tree Paths ================= */
@@ -877,6 +1339,70 @@ const binaryTreePaths: ProblemDef = {
   },
   note: 'Passing the path by value trades a little memory for much simpler code — there is no undo step to forget. Guarding each recursive call with a null check matters: recursing into a missing child would emit a phantom path ending at the present sibling.',
   complexity: { time: 'O(n·h)', space: 'O(h)' },
+  brute: {
+    label: 'BFS with path strings',
+    technique: 'Queue each node with the string of its path so far; when a leaf is dequeued, its string is a finished path.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<string> binaryTreePaths(TreeNode* root) {'),
+        L('        vector<string> res;', 'init'),
+        L('        queue<pair<TreeNode*, string>> q; q.push({root, to_string(root->val)});', 'init'),
+        L('        while (!q.empty()) {', 'go'),
+        L('            auto [n, s] = q.front(); q.pop();', 'go'),
+        L('            if (!n->left && !n->right) { res.push_back(s); continue; }', 'leaf'),
+        L('            if (n->left) q.push({n->left, s + "->" + to_string(n->left->val)});', 'go'),
+        L('            if (n->right) q.push({n->right, s + "->" + to_string(n->right->val)});', 'go'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<String> binaryTreePaths(TreeNode root) {'),
+        L('        List<String> res = new ArrayList<>();', 'init'),
+        L('        Deque<Object[]> q = new ArrayDeque<>(); q.add(new Object[]{root, String.valueOf(root.val)});', 'init'),
+        L('        while (!q.isEmpty()) {', 'go'),
+        L('            Object[] e = q.poll(); TreeNode n = (TreeNode) e[0]; String s = (String) e[1];', 'go'),
+        L('            if (n.left == null && n.right == null) { res.add(s); continue; }', 'leaf'),
+        L('            if (n.left != null) q.add(new Object[]{n.left, s + "->" + n.left.val});', 'go'),
+        L('            if (n.right != null) q.add(new Object[]{n.right, s + "->" + n.right.val});', 'go'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const res: string[] = [];
+      const done: number[] = [];
+      const steps: Step[] = [];
+      const view = (cur: TNode | null) => snap(root, { current: cur ? cur.id : null, done: [...done], aggs: [{ label: 'paths', value: res.join('  ') || '—', c: 'c' }] });
+      steps.push({ tag: 'init', trace: ['BFS where each entry carries the path string built so far.'], state: view(null) });
+      const q: [TNode, string][] = [[root, String(root.val)]];
+      while (q.length && steps.length < MAX_STEPS) {
+        const [n, s] = q.shift()!;
+        done.push(n.id);
+        if (!n.left && !n.right) {
+          res.push(s);
+          steps.push({ tag: 'leaf', trace: ['Leaf ', B(n.val), ' — path "', C(s), '" is complete.'], state: view(n) });
+          continue;
+        }
+        for (const c of [n.left, n.right]) if (c) q.push([c, `${s}->${c.val}`]);
+        steps.push({ tag: 'go', trace: ['Dequeue ', A(n.val), ' (', A(s), ') — extend the string for each child.'], state: view(n) });
+      }
+      steps.push({ tag: 'ret', trace: ['All root-to-leaf paths: ', C(res.join(', ')), '.'], state: view(null) });
+      return { steps, result: res.join(', ') };
+    },
+    note: 'Each queue entry builds its own string, so memory is O(n · h) and paths come out shortest-first rather than left-to-right. DFS with a shared path list outputs them in left-to-right order with O(h) extra space.',
+    complexity: { time: 'O(n · h)', space: 'O(n · h)' },
+  },
 };
 
 /* ================= Sum Root to Leaf Numbers ================= */
@@ -977,6 +1503,84 @@ const sumRootToLeaf: ProblemDef = {
   },
   note: 'Passing the partial number down as a parameter means no string building and no reversing at the end — the ×10 shift does the place-value work for free. Because cur is a value parameter, sibling branches never see each other\'s digits.',
   complexity: { time: 'O(n)', space: 'O(h)' },
+  brute: {
+    label: 'BFS with running numbers',
+    technique: 'Queue each node with the number formed so far (prefix × 10 + digit) and add it to the total at each leaf.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int sumNumbers(TreeNode* root) {'),
+        L('        int total = 0;', 'init'),
+        L('        queue<pair<TreeNode*, int>> q; q.push({root, root->val});', 'init'),
+        L('        while (!q.empty()) {', 'go'),
+        L('            auto [n, num] = q.front(); q.pop();', 'go'),
+        L('            if (!n->left && !n->right) { total += num; continue; }', 'leaf'),
+        L('            if (n->left) q.push({n->left, num * 10 + n->left->val});', 'go'),
+        L('            if (n->right) q.push({n->right, num * 10 + n->right->val});', 'go'),
+        L('        }'),
+        L('        return total;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int sumNumbers(TreeNode root) {'),
+        L('        int total = 0;', 'init'),
+        L('        Deque<Object[]> q = new ArrayDeque<>(); q.add(new Object[]{root, root.val});', 'init'),
+        L('        while (!q.isEmpty()) {', 'go'),
+        L('            Object[] e = q.poll(); TreeNode n = (TreeNode) e[0]; int num = (int) e[1];', 'go'),
+        L('            if (n.left == null && n.right == null) { total += num; continue; }', 'leaf'),
+        L('            if (n.left != null) q.add(new Object[]{n.left, num * 10 + n.left.val});', 'go'),
+        L('            if (n.right != null) q.add(new Object[]{n.right, num * 10 + n.right.val});', 'go'),
+        L('        }'),
+        L('        return total;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const layout = layoutTree(root);
+      const badges = new Map<number, string>();
+      const done: number[] = [];
+      const leaves: string[] = [];
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (cur: TNode | null): TreeState => ({
+        nodes: layout.nodes.map((n) => ({ ...n, badge: badges.get(n.id) })),
+        edges: layout.edges,
+        current: cur ? cur.id : null,
+        done: [...done],
+        aggs: [{ label: 'total', value: String(total), c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['BFS where each node carries the number spelled by its path (badge).'], state: view(null) });
+      const q: [TNode, number][] = [[root, root.val]];
+      badges.set(root.id, String(root.val));
+      while (q.length) {
+        const [n, num] = q.shift()!;
+        done.push(n.id);
+        if (!n.left && !n.right) {
+          total += num;
+          leaves.push(String(num));
+          steps.push({ tag: 'leaf', trace: ['Leaf ', A(n.val), ' finishes the number ', B(num), ' — total ', C(total), '.'], state: view(n) });
+          continue;
+        }
+        for (const c of [n.left, n.right]) if (c) {
+          badges.set(c.id, String(num * 10 + c.val));
+          q.push([c, num * 10 + c.val]);
+        }
+        steps.push({ tag: 'go', trace: ['Dequeue ', A(n.val), ' (', A(num), ') — each child extends it: ×10 + digit.'], state: view(n) });
+      }
+      steps.push({ tag: 'ret', trace: ['Sum of all root-to-leaf numbers: ', C(total), '.'], state: view(null) });
+      return { steps, result: String(total), resultDetail: leaves.join(' + ') };
+    },
+    note: 'Same O(n) work as the DFS, with each queue entry carrying its own prefix number. DFS keeps just one running number on the call stack, using O(h) memory instead of O(w).',
+    complexity: { time: 'O(n)', space: 'O(w) queue' },
+  },
 };
 
 /* ================= Maximum Width of Binary Tree ================= */
@@ -1129,6 +1733,78 @@ const maxWidth: ProblemDef = {
   },
   note: 'The rebasing step is not cosmetic — on a left-skewed tree of depth 50 the raw indices would exceed 64 bits, and this is exactly the case the judge tests. Subtracting the level\'s first index each round keeps every value bounded by the level width while leaving differences unchanged.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'DFS with leftmost index per depth',
+    technique: 'Number nodes like a heap (left = 2i, right = 2i + 1); DFS records the first index seen at each depth, and every node measures its distance from it.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    vector<unsigned long long> first; unsigned long long best = 0;'),
+        L('    void dfs(TreeNode* n, int d, unsigned long long idx) {', 'pop'),
+        L('        if (!n) return;', 'pop'),
+        L('        if (first.size() == d) first.push_back(idx);', 'level'),
+        L('        best = max(best, idx - first[d] + 1);', 'width'),
+        L('        dfs(n->left, d + 1, 2 * idx); dfs(n->right, d + 1, 2 * idx + 1);', 'push'),
+        L('    }'),
+        L('public:'),
+        L('    int widthOfBinaryTree(TreeNode* root) { dfs(root, 0, 0); return best; }', 'init', 'ret'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    List<Long> first = new ArrayList<>(); long best = 0;'),
+        L('    void dfs(TreeNode n, int d, long idx) {', 'pop'),
+        L('        if (n == null) return;', 'pop'),
+        L('        if (first.size() == d) first.add(idx);', 'level'),
+        L('        best = Math.max(best, idx - first.get(d) + 1);', 'width'),
+        L('        dfs(n.left, d + 1, 2 * idx); dfs(n.right, d + 1, 2 * idx + 1);', 'push'),
+        L('    }'),
+        L('    public int widthOfBinaryTree(TreeNode root) { dfs(root, 0, 0); return (int) best; }', 'init', 'ret'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const layout = layoutTree(root);
+      const badges = new Map<number, string>();
+      const first: number[] = [];
+      let best = 0;
+      let bestLevel = 0;
+      const steps: Step[] = [];
+      const view = (cur: TNode | null): TreeState => ({
+        nodes: layout.nodes.map((n) => ({ ...n, badge: badges.get(n.id) })),
+        edges: layout.edges,
+        current: cur ? cur.id : null,
+        done: [...badges.keys()],
+        aggs: [
+          { label: 'leftmost index per depth', value: first.join(', ') || '—', c: 'b' },
+          { label: 'max width', value: String(best), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Give each node a position index (children of i are 2i and 2i + 1) and remember the first index met at each depth.'], state: view(null) });
+      const dfs = (n: TNode | null, d: number, idx: number) => {
+        if (!n || steps.length > MAX_STEPS) return;
+        if (first.length === d) first.push(idx);
+        badges.set(n.id, `#${idx}`);
+        const w = idx - first[d] + 1;
+        if (w > best) {
+          best = w;
+          bestLevel = d + 1;
+        }
+        steps.push({ tag: 'width', trace: ['Node ', A(n.val), ' at depth ', A(d), ' has index ', A(idx), ' — width from the leftmost (', A(first[d]), ') is ', w === best ? B(w) : A(w), '.'], state: view(n) });
+        dfs(n.left, d + 1, 2 * idx);
+        dfs(n.right, d + 1, 2 * idx + 1);
+      };
+      dfs(root, 0, 0);
+      steps.push({ tag: 'ret', trace: ['Maximum width: ', C(best), '.'], state: view(null) });
+      return { steps, result: String(best), resultDetail: `at level ${bestLevel}` };
+    },
+    note: 'Same O(n) indexing idea as the BFS, but the leftmost index of each depth is stored in a small array instead of read off the front of a queue. Visiting left before right guarantees the first index recorded per depth is the leftmost.',
+    complexity: { time: 'O(n)', space: 'O(h)' },
+  },
 };
 
 /* ================= Count Complete Tree Nodes ================= */
@@ -1235,6 +1911,53 @@ const countCompleteNodes: ProblemDef = {
   },
   note: 'Only one child of any node can be imperfect, so the recursion follows a single path down the tree — O(log n) calls, each doing O(log n) spine work, for O(log² n) overall. Recognising that "complete" is a promise you can exploit is the whole point; ignoring it and traversing is correct but misses what the problem is testing.',
   complexity: { time: 'O(log² n)', space: 'O(log n)' },
+  brute: {
+    label: 'Count every node',
+    technique: 'Ignore completeness: count = 1 + count(left) + count(right), visiting every node.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int countNodes(TreeNode* root) {', 'init'),
+        L('        if (!root) return 0;', 'visit'),
+        L('        return 1 + countNodes(root->left) + countNodes(root->right);', 'visit', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int countNodes(TreeNode root) {', 'init'),
+        L('        if (root == null) return 0;', 'visit'),
+        L('        return 1 + countNodes(root.left) + countNodes(root.right);', 'visit', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const done: number[] = [];
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (cur: TNode | null) => snap(root, { current: cur ? cur.id : null, done: [...done], aggs: [{ label: 'counted', value: String(total), c: 'c' }] });
+      steps.push({ tag: 'init', trace: ['No shortcut: visit and count every node.'], state: view(null) });
+      const go = (n: TNode | null) => {
+        if (!n) return;
+        total++;
+        done.push(n.id);
+        steps.push({ tag: 'visit', trace: ['Count ', A(n.val), ' → ', B(total), '.'], state: view(n) });
+        go(n.left);
+        go(n.right);
+      };
+      go(root);
+      steps.push({ tag: 'ret', trace: [C(total), ' nodes, each visited once.'], state: view(null) });
+      return { steps, result: String(total) };
+    },
+    note: 'O(n), fine for any tree but it wastes the “complete” guarantee. Comparing the leftmost and rightmost depths spots perfect subtrees whose size is 2^h − 1 instantly, giving O(log² n).',
+    complexity: { time: 'O(n)', space: 'O(h)' },
+  },
 };
 
 function collectIds(n: TNode | null): number[] {
