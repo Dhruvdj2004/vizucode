@@ -122,6 +122,85 @@ const kthLargestArray: ProblemDef = {
   },
   note: 'Counter-intuitive but exact: to track the k *largest*, use a *min*-heap — the root is the weakest member of the elite, i.e. precisely the kth largest. n operations on a k-sized heap gives O(n log k), better than sorting when k ≪ n.',
   complexity: { time: 'O(n log k)', space: 'O(k)' },
+  brute: {
+    label: 'Quickselect',
+    technique: 'Partition around a pivot like quicksort, but recurse only into the side that holds position n − k: O(n) on average.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findKthLargest(vector<int>& a, int k) {'),
+        L('        int target = a.size() - k, lo = 0, hi = a.size() - 1;', 'init'),
+        L('        while (true) {'),
+        L('            int pivot = a[hi], p = lo;', 'part'),
+        L('            for (int i = lo; i < hi; i++)', 'part'),
+        L('                if (a[i] < pivot) swap(a[i], a[p++]);', 'part'),
+        L('            swap(a[p], a[hi]);', 'part'),
+        L('            if (p == target) return a[p];', 'found'),
+        L('            if (p < target) lo = p + 1; else hi = p - 1;', 'narrow'),
+        L('        }'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findKthLargest(int[] a, int k) {'),
+        L('        int target = a.length - k, lo = 0, hi = a.length - 1;', 'init'),
+        L('        while (true) {'),
+        L('            int pivot = a[hi], p = lo;', 'part'),
+        L('            for (int i = lo; i < hi; i++)', 'part'),
+        L('                if (a[i] < pivot) { int t = a[i]; a[i] = a[p]; a[p++] = t; }', 'part'),
+        L('            int t = a[p]; a[p] = a[hi]; a[hi] = t;', 'part'),
+        L('            if (p == target) return a[p];', 'found'),
+        L('            if (p < target) lo = p + 1; else hi = p - 1;', 'narrow'),
+        L('        }'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums, { maxLen: 12 });
+      if (typeof arr === 'string') return { error: arr };
+      const k = parseInt1(values.k, 'k', { min: 1 });
+      if (typeof k === 'string') return { error: k };
+      if (k > arr.length) return { error: 'k must be ≤ array length.' };
+      const a = [...arr];
+      const target = a.length - k;
+      const steps: Step[] = [];
+      const st = (lo: number, hi: number, hl: number[] = [], ok: number[] = []): HeapState => ({
+        heap: [...a],
+        hl,
+        ok,
+        label: `array, drawn level by level — searching index ${target} within [${lo}..${hi}]`,
+      });
+      steps.push({ tag: 'init', trace: ['In sorted order the kth largest sits at index n − k = ', A(target), '. Partition until the pivot lands exactly there.'], state: st(0, a.length - 1) });
+      let lo = 0;
+      let hi = a.length - 1;
+      let ans = a[0];
+      for (let guard = 0; guard < 50; guard++) {
+        const pivot = a[hi];
+        let p = lo;
+        for (let i = lo; i < hi; i++)
+          if (a[i] < pivot) {
+            [a[i], a[p]] = [a[p], a[i]];
+            p++;
+          }
+        [a[p], a[hi]] = [a[hi], a[p]];
+        steps.push({ tag: 'part', trace: ['Partition [', A(lo), '..', A(hi), '] around ', A(pivot), ': smaller values go left, so the pivot lands at index ', B(p), '.'], state: st(lo, hi, [p]) });
+        if (p === target) {
+          ans = a[p];
+          steps.push({ tag: 'found', trace: ['Pivot index ', B(p), ' = target — the ', C(k), 'th largest is ', C(ans), '.'], state: st(lo, hi, [], [p]) });
+          break;
+        }
+        if (p < target) lo = p + 1;
+        else hi = p - 1;
+        steps.push({ tag: 'narrow', trace: ['Target ', A(target), ' is to the ', A(p < target ? 'right' : 'left'), ' — only that side needs more work: [', A(lo), '..', A(hi), '].'], state: st(lo, hi) });
+      }
+      return { steps, result: String(ans), resultDetail: `${k}th largest element` };
+    },
+    note: 'Each partition throws away one side, so the expected work is n + n/2 + n/4 + … = O(n), beating the heap’s O(n log k). The worst case is O(n²) with unlucky pivots, which a random pivot makes vanishingly rare.',
+    complexity: { time: 'O(n) average, O(n²) worst', space: 'O(1)' },
+  },
 };
 
 /* ================= 80. Kth Largest Element in a Stream ================= */
@@ -209,6 +288,74 @@ const kthLargestStream: ProblemDef = {
   },
   note: 'A stream forbids re-sorting on every arrival. The capped heap is incremental by nature: each add() costs O(log k) and the answer is always sitting at the root, no recomputation.',
   complexity: { time: 'O(log k) per add', space: 'O(k)' },
+  brute: {
+    label: 'Sorted list',
+    technique: 'Keep every number seen in a sorted list; each add() inserts in place and reads position k − 1.',
+    code: {
+      cpp: [
+        L('class KthLargest {'),
+        L('    int k; vector<int> all;  // sorted descending'),
+        L('public:'),
+        L('    KthLargest(int k, vector<int>& nums) : k(k) {', 'ctor'),
+        L('        for (int x : nums) add(x);', 'ctor'),
+        L('    }'),
+        L('    int add(int val) {'),
+        L('        all.insert(upper_bound(all.begin(), all.end(), val, greater<int>()), val);', 'push'),
+        L('        return all[k - 1];', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class KthLargest {'),
+        L('    int k; List<Integer> all = new ArrayList<>();  // sorted descending'),
+        L('    public KthLargest(int k, int[] nums) {', 'ctor'),
+        L('        this.k = k;', 'ctor'),
+        L('        for (int x : nums) add(x);', 'ctor'),
+        L('    }'),
+        L('    public int add(int val) {'),
+        L('        int i = 0;', 'push'),
+        L('        while (i < all.size() && all.get(i) >= val) i++;', 'push'),
+        L('        all.add(i, val);', 'push'),
+        L('        return all.get(k - 1);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const k = parseInt1(values.k, 'k', { min: 1 });
+      if (typeof k === 'string') return { error: k };
+      const nums = parseIntArray(values.nums, { maxLen: 8 });
+      if (typeof nums === 'string') return { error: nums };
+      const adds = parseIntArray(values.adds, { maxLen: 8 });
+      if (typeof adds === 'string') return { error: adds };
+      const steps: Step[] = [];
+      const all: number[] = [];
+      const outputs: number[] = [];
+      const st = (hl: number[] = []): HeapState => ({
+        heap: [...all],
+        hl,
+        ok: all.length >= k ? [k - 1] : [],
+        label: 'every value, sorted descending (drawn level by level)',
+        aggs: [{ label: 'add() returns', value: outputs.join(', ') || '—', c: 'c' }],
+      });
+      steps.push({ tag: 'ctor', trace: ['Keep ', A('every'), ' value in one sorted list — nothing is ever dropped.'], state: st() });
+      const doAdd = (x: number, isSeed: boolean) => {
+        let i = 0;
+        while (i < all.length && all[i] >= x) i++;
+        all.splice(i, 0, x);
+        steps.push({ tag: 'push', trace: [isSeed ? 'Seed ' : 'add(', A(x), isSeed ? '' : ')', ': shift ', A(all.length - 1 - i), ' value(s) to insert it at position ', B(i), '.'], state: st([i]) });
+        if (!isSeed && all.length >= k) {
+          outputs.push(all[k - 1]);
+          steps.push({ tag: 'ret', trace: ['Position ', A(k - 1), ' holds ', C(all[k - 1]), '.'], state: st([k - 1]) });
+        }
+      };
+      for (const x of nums) doAdd(x, true);
+      for (const x of adds) doAdd(x, false);
+      return { steps, result: outputs.join(', '), resultDetail: 'returned after each add()' };
+    },
+    note: 'Inserting into a sorted list shifts up to n elements, and the list keeps growing forever. Only the top k values can ever matter, so a size-k min-heap does each add in O(log k) memory-bounded.',
+    complexity: { time: 'O(n) per add', space: 'O(n)' },
+  },
 };
 
 /* ================= 81. Last Stone Weight ================= */
@@ -279,6 +426,60 @@ const lastStone: ProblemDef = {
   },
   note: 'The rules always consume the two maxima — a max-heap serves exactly that query in O(log n), whereas re-sorting after every smash would cost O(n log n) each round.',
   complexity: { time: 'O(n log n)', space: 'O(n)' },
+  brute: {
+    label: 'Re-sort each round',
+    technique: 'Sort the stones every round, smash the two heaviest, and put any remainder back.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int lastStoneWeight(vector<int>& s) {'),
+        L('        while (s.size() > 1) {', 'take'),
+        L('            sort(s.begin(), s.end());', 'take'),
+        L('            int a = s.back(); s.pop_back();', 'take'),
+        L('            int b = s.back(); s.pop_back();', 'take'),
+        L('            if (a != b) s.push_back(a - b);', 'smash'),
+        L('        }'),
+        L('        return s.empty() ? 0 : s[0];', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int lastStoneWeight(int[] stones) {'),
+        L('        List<Integer> s = new ArrayList<>();'),
+        L('        for (int x : stones) s.add(x);'),
+        L('        while (s.size() > 1) {', 'take'),
+        L('            Collections.sort(s);', 'take'),
+        L('            int a = s.remove(s.size() - 1), b = s.remove(s.size() - 1);', 'take'),
+        L('            if (a != b) s.add(a - b);', 'smash'),
+        L('        }'),
+        L('        return s.isEmpty() ? 0 : s.get(0);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const stones = parseIntArray(values.stones, { min: 1, maxLen: 10 });
+      if (typeof stones === 'string') return { error: stones };
+      const s = [...stones];
+      const steps: Step[] = [];
+      const st = (label: string, hl: number[] = []): HeapState => ({ heap: [...s], hl, label });
+      while (s.length > 1) {
+        s.sort((x, y) => y - x);
+        steps.push({ tag: 'take', trace: ['Sort all ', A(s.length), ' stones (heaviest first) and take ', A(s[0]), ' and ', A(s[1]), '.'], state: st('stones, sorted heaviest first (drawn level by level)', [0, 1]) });
+        const a = s.shift()!;
+        const b = s.shift()!;
+        if (a !== b) s.push(a - b);
+        steps.push({ tag: 'smash', trace: [a === b ? ['Equal weights — both are destroyed.'].join('') : ['Smash: ', a, ' − ', b, ' = '].join(''), a === b ? '' : B(a - b), a === b ? '' : ' goes back in.'], state: st('stones left, unsorted') });
+      }
+      const result = s.length ? s[0] : 0;
+      steps.push({ tag: 'ret', trace: ['Last stone weighs ', C(result), '.'], state: st('done') });
+      return { steps, result: String(result) };
+    },
+    note: 'Correct, but every round pays a full O(n log n) sort just to find the top two, for O(n² log n) total. A max-heap exposes the heaviest in O(1) and restores order in O(log n).',
+    complexity: { time: 'O(n² log n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 82. K Closest Points to Origin ================= */
@@ -372,6 +573,63 @@ const kClosest: ProblemDef = {
   },
   note: 'Two tricks stack: squared distance preserves order (skip the sqrt), and a max-heap capped at k keeps eviction O(log k). For huge streams of points this beats sorting all n by a factor of log n / log k.',
   complexity: { time: 'O(n log k)', space: 'O(k)' },
+  brute: {
+    label: 'Sort all points',
+    technique: 'Compute every distance², sort all points by it, and take the first k.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> kClosest(vector<vector<int>>& p, int k) {'),
+        L('        sort(p.begin(), p.end(), [](auto& a, auto& b) {', 'dist', 'sort'),
+        L('            return a[0]*a[0] + a[1]*a[1] < b[0]*b[0] + b[1]*b[1];', 'dist', 'sort'),
+        L('        });'),
+        L('        return vector<vector<int>>(p.begin(), p.begin() + k);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[][] kClosest(int[][] p, int k) {'),
+        L('        Arrays.sort(p, (a, b) -> (a[0]*a[0] + a[1]*a[1]) - (b[0]*b[0] + b[1]*b[1]));', 'dist', 'sort'),
+        L('        return Arrays.copyOf(p, k);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const parts = (values.points ?? '').split(';').map((p) => p.trim()).filter(Boolean);
+      if (parts.length === 0) return { error: 'Enter points as "x y; x y; …".' };
+      if (parts.length > 10) return { error: 'Keep it to at most 10 points.' };
+      const pts: [number, number][] = [];
+      for (const p of parts) {
+        const m = p.split(/[\s,]+/).map(Number);
+        if (m.length !== 2 || m.some((x) => !Number.isInteger(x))) return { error: `Bad point "${p}".` };
+        pts.push([m[0], m[1]]);
+      }
+      const k = parseInt1(values.k, 'k', { min: 1 });
+      if (typeof k === 'string') return { error: k };
+      if (k > pts.length) return { error: 'k must be ≤ number of points.' };
+      const steps: Step[] = [];
+      const withD = pts.map((p) => ({ p, d: p[0] ** 2 + p[1] ** 2 }));
+      steps.push({
+        tag: 'dist',
+        trace: ['Distance² for every point: ', A(withD.map(({ p, d }) => `(${p[0]},${p[1]})→${d}`).join(', ')), '.'],
+        state: { heap: withD.map(({ p }) => `(${p[0]},${p[1]})`), label: 'all points, input order' },
+      });
+      const sorted = [...withD].sort((x, y) => x.d - y.d);
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort all ', A(pts.length), ' points by distance² — the first ', A(k), ' are the answer.'],
+        state: { heap: sorted.map(({ p }) => `(${p[0]},${p[1]})`), hl: sorted.slice(0, k).map((_, i) => i), label: 'sorted by distance (drawn level by level)' },
+      });
+      const res = sorted.slice(0, k).map(({ p }) => `[${p[0]},${p[1]}]`);
+      steps.push({ tag: 'ret', trace: ['The ', C(k), ' closest: ', C(res.join(', ')), '.'], state: { heap: res, ok: res.map((_, i) => i), label: 'result' } });
+      return { steps, result: `[${res.join(', ')}]` };
+    },
+    note: 'A full sort costs O(n log n) even when k is 1. The size-k max-heap costs O(n log k), and quickselect on distance can reach O(n) on average.',
+    complexity: { time: 'O(n log n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 83. Task Scheduler ================= */
@@ -499,6 +757,78 @@ const taskScheduler: ProblemDef = {
   },
   note: 'Idle slots are forced only by the most frequent task — its copies fence off the schedule into (maxCount−1) gaps of width n. Greedily running the busiest ready task fills those gaps as densely as possible, which is provably optimal.',
   complexity: { time: 'O(T · log 26)', space: 'O(26)' },
+  brute: {
+    label: 'Counting formula',
+    technique: 'The busiest task sets a frame of (maxCount − 1) blocks of length n + 1, plus one slot per task tied for the max; the answer is that or the task count, whichever is larger.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int leastInterval(vector<char>& tasks, int n) {'),
+        L('        int cnt[26] = {0}, mx = 0, tied = 0;', 'count'),
+        L('        for (char t : tasks) mx = max(mx, ++cnt[t - \'A\']);', 'count'),
+        L('        for (int c : cnt) tied += (c == mx);', 'tied'),
+        L('        int frame = (mx - 1) * (n + 1) + tied;', 'frame'),
+        L('        return max((int) tasks.size(), frame);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int leastInterval(char[] tasks, int n) {'),
+        L('        int[] cnt = new int[26]; int mx = 0, tied = 0;', 'count'),
+        L('        for (char t : tasks) mx = Math.max(mx, ++cnt[t - \'A\']);', 'count'),
+        L('        for (int c : cnt) if (c == mx) tied++;', 'tied'),
+        L('        int frame = (mx - 1) * (n + 1) + tied;', 'frame'),
+        L('        return Math.max(tasks.length, frame);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const tasks = (values.tasks ?? '').split(/[,\s]+/).map((t) => t.trim().toUpperCase()).filter(Boolean);
+      if (tasks.length === 0) return { error: 'Enter tasks (letters).' };
+      if (tasks.length > 14) return { error: 'Keep it to at most 14 tasks.' };
+      if (!tasks.every((t) => /^[A-Z]$/.test(t))) return { error: 'Tasks must be single letters A–Z.' };
+      const n = parseInt1(values.n, 'n', { min: 0, max: 6 });
+      if (typeof n === 'string') return { error: n };
+      const count = new Map<string, number>();
+      for (const t of tasks) count.set(t, (count.get(t) ?? 0) + 1);
+      const mx = Math.max(...count.values());
+      const tiedTasks = [...count.entries()].filter(([, c]) => c === mx).map(([t]) => t);
+      const frame = (mx - 1) * (n + 1) + tiedTasks.length;
+      const ans = Math.max(tasks.length, frame);
+      const steps: Step[] = [];
+      const counts = [...count.entries()].sort((a, b) => b[1] - a[1]);
+      const st = (rows: string[], label: string): StackState => ({
+        stack: rows.map((v, i) => ({ v, c: i === 0 ? ('a' as const) : undefined })),
+        stackLabel: label,
+        aggs: [
+          { label: 'max count', value: String(mx), c: 'a' },
+          { label: 'tied for max', value: tiedTasks.join(', '), c: 'b' },
+          { label: 'answer', value: String(ans), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'count', trace: ['Count tasks: ', A(counts.map(([t, c]) => `${t}×${c}`).join(', ')), '. The busiest appears ', A(mx), ' times.'], state: st(counts.map(([t, c]) => `${t} × ${c}`), 'task counts') });
+      steps.push({ tag: 'tied', trace: [B(tiedTasks.length), ' task(s) share that maximum: ', B(tiedTasks.join(', ')), '.'], state: st(counts.map(([t, c]) => `${t} × ${c}`), 'task counts') });
+      const blocks = [...Array(mx - 1)].map((_, i) => `block ${i + 1}: ${tiedTasks.join('')} + ${n + 1 - tiedTasks.length > 0 ? `${n + 1 - tiedTasks.length} slot(s)` : 'full'}`);
+      steps.push({
+        tag: 'frame',
+        trace: ['Between copies of the busiest task, ', A(n), ' other slots must pass: ', A(mx - 1), ' block(s) of ', A(n + 1), ' plus a final ', A(tiedTasks.length), ' → ', B(frame), ' slots.'],
+        state: st([...blocks, `last: ${tiedTasks.join('')}`], 'frame built around the busiest task'),
+      });
+      steps.push({
+        tag: 'ret',
+        trace: frame >= tasks.length
+          ? ['The frame (', C(frame), ') holds every task, with idles filling the gaps. Answer ', C(ans), '.']
+          : ['There are more tasks (', C(tasks.length), ') than frame slots — they fill every gap with no idling. Answer ', C(ans), '.'],
+        state: st([...blocks, `last: ${tiedTasks.join('')}`], 'frame built around the busiest task'),
+      });
+      return { steps, result: String(ans), resultDetail: `${ans - tasks.length} idle slot(s)` };
+    },
+    note: 'Better than simulating: the schedule length is decided entirely by the busiest task, so one counting pass gives the answer in O(T) with no heap and no timeline.',
+    complexity: { time: 'O(T)', space: 'O(26)' },
+  },
 };
 
 /* ================= 84. Find Median from Data Stream ================= */
@@ -598,6 +928,83 @@ const medianStream: ProblemDef = {
   },
   note: 'The median is a boundary, and the two heaps materialize it: each heap\'s root is one side of the cut. The push-through-then-rebalance dance maintains both invariants (partition + size) in O(log n), making the median itself a free read.',
   complexity: { time: 'O(log n) add, O(1) median', space: 'O(n)' },
+  brute: {
+    label: 'Sorted list',
+    technique: 'Keep all numbers in one sorted list: insertion shifts elements, and the median is read from the middle.',
+    code: {
+      cpp: [
+        L('class MedianFinder {'),
+        L('    vector<int> all;  // kept sorted', 'init'),
+        L('public:'),
+        L('    void addNum(int num) {'),
+        L('        all.insert(upper_bound(all.begin(), all.end(), num), num);', 'add'),
+        L('    }'),
+        L('    double findMedian() {'),
+        L('        int n = all.size();', 'odd', 'even'),
+        L('        return n % 2 ? all[n / 2] : (all[n / 2 - 1] + all[n / 2]) / 2.0;', 'odd', 'even'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class MedianFinder {'),
+        L('    List<Integer> all = new ArrayList<>();  // kept sorted', 'init'),
+        L('    public void addNum(int num) {'),
+        L('        int i = 0;', 'add'),
+        L('        while (i < all.size() && all.get(i) <= num) i++;', 'add'),
+        L('        all.add(i, num);', 'add'),
+        L('    }'),
+        L('    public double findMedian() {'),
+        L('        int n = all.size();', 'odd', 'even'),
+        L('        return n % 2 == 1 ? all.get(n / 2) : (all.get(n / 2 - 1) + all.get(n / 2)) / 2.0;', 'odd', 'even'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = (values.ops ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter operations.' };
+      if (raw.length > 14) return { error: 'Keep it to at most 14 operations.' };
+      const steps: Step[] = [];
+      const all: number[] = [];
+      const outputs: string[] = [];
+      let shifted = 0;
+      const view = (mid: number[] = []): StackState => ({
+        stack: all.map((v, i) => ({ v, c: mid.includes(i) ? ('b' as const) : undefined })),
+        stackLabel: 'All numbers, sorted (bottom → top)',
+        aggs: [
+          { label: 'elements shifted', value: String(shifted), c: 'a' },
+          { label: 'medians', value: outputs.join(', ') || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['One sorted list holds everything; the median is always in the middle.'], state: view() });
+      for (const op of raw) {
+        const mAdd = op.match(/^add\s+(-?\d+)$/i);
+        if (mAdd) {
+          const v = Number(mAdd[1]);
+          let i = 0;
+          while (i < all.length && all[i] <= v) i++;
+          shifted += all.length - i;
+          all.splice(i, 0, v);
+          steps.push({ tag: 'add', trace: ['add(', A(v), ') — insert at position ', A(i), ', shifting ', A(all.length - 1 - i), ' element(s).'], state: view([i]) });
+        } else if (/^median$/i.test(op)) {
+          if (!all.length) return { error: 'median before any add.' };
+          const n = all.length;
+          const med = n % 2 ? all[(n - 1) / 2] : (all[n / 2 - 1] + all[n / 2]) / 2;
+          outputs.push(String(med));
+          steps.push({
+            tag: n % 2 ? 'odd' : 'even',
+            trace: n % 2 ? ['Odd count — the middle element is ', C(med), '.'] : ['Even count — average the two middle elements: ', C(med), '.'],
+            state: view(n % 2 ? [(n - 1) / 2] : [n / 2 - 1, n / 2]),
+          });
+        } else {
+          return { error: `Unknown op "${op}". Use: add n, median.` };
+        }
+      }
+      return { steps, result: outputs.join(', '), resultDetail: 'O(n) insert, O(1) median' };
+    },
+    note: 'findMedian is O(1), but every addNum shifts up to n elements, so a long stream costs O(n²) overall. Two heaps keep just the two middle values at their roots, making each insert O(log n).',
+    complexity: { time: 'O(n) add, O(1) median', space: 'O(n)' },
+  },
 };
 
 export const heapProblems = [kthLargestArray, kthLargestStream, lastStone, kClosest, taskScheduler, medianStream];
