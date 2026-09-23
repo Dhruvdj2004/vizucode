@@ -67,6 +67,58 @@ const singleNumber: ProblemDef = {
   },
   note: 'XOR is associative and commutative, so the order of the array is irrelevant: conceptually all pairs slide together and vanish. One accumulator, no hash set, no sort — O(n) time, O(1) space, and it never overflows.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Hash count',
+    technique: 'Count every value in a hash map and return the one seen an odd number of times.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int singleNumber(vector<int>& nums) {'),
+        L('        unordered_map<int, int> cnt;', 'init'),
+        L('        for (int x : nums) cnt[x]++;', 'count'),
+        L('        for (auto& [v, c] : cnt) if (c == 1) return v;', 'ret'),
+        L('        return -1;'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int singleNumber(int[] nums) {'),
+        L('        Map<Integer, Integer> cnt = new HashMap<>();', 'init'),
+        L('        for (int x : nums) cnt.merge(x, 1, Integer::sum);', 'count'),
+        L('        for (var e : cnt.entrySet()) if (e.getValue() == 1) return e.getKey();', 'ret'),
+        L('        return -1;'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 255, maxLen: 11 });
+      if (typeof nums === 'string') return { error: nums };
+      const counts = new Map<number, number>();
+      for (const x of nums) counts.set(x, (counts.get(x) ?? 0) + 1);
+      const singles = [...counts.entries()].filter(([, c]) => c % 2 === 1);
+      if (singles.length !== 1) return { error: 'Exactly one value must appear an odd number of times.' };
+      const width = 8;
+      const steps: Step[] = [];
+      const seen = new Map<number, number>();
+      const view = (hl?: number): BitsState => ({
+        rows: [...seen.entries()].map(([v, c]) => ({ label: `${v} seen ×${c}`, bits: toBits(v, width), c: v === hl ? ('a' as const) : c % 2 ? ('b' as const) : ('c' as const) })),
+        aggs: [{ label: 'distinct values stored', value: String(seen.size), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['No XOR trick: just count every value in a hash map.'], state: view() });
+      for (const x of nums) {
+        seen.set(x, (seen.get(x) ?? 0) + 1);
+        steps.push({ tag: 'count', trace: ['Seen ', A(x), ' — count ', A(seen.get(x)!), '.'], state: view(x) });
+      }
+      const ans = singles[0][0];
+      steps.push({ tag: 'ret', trace: [C(ans), ' is the only value with an odd count.'], state: view(ans) });
+      return { steps, result: String(ans) };
+    },
+    note: 'Linear time, but the map holds up to n/2 entries — O(n) space. XOR cancels every pair in place and needs a single integer.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 141. Number of 1 Bits ================= */
@@ -133,6 +185,58 @@ const hammingWeight: ProblemDef = {
   },
   note: 'The naive loop checks all 32 positions; this loop runs once per set bit and not once more. The identity n & (n−1) is a bit-twiddling primitive worth memorizing — it also powers "is a power of two?" (result == 0).',
   complexity: { time: 'O(set bits)', space: 'O(1)' },
+  brute: {
+    label: 'Check every bit',
+    technique: 'Test the lowest bit and shift right, once for every bit position — 32 iterations regardless of how many 1s there are.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int hammingWeight(uint32_t n) {'),
+        L('        int count = 0;', 'init'),
+        L('        for (int i = 0; i < 32; i++) {', 'bit'),
+        L('            count += n & 1;', 'bit'),
+        L('            n >>= 1;', 'bit'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('public class Solution {'),
+        L('    public int hammingWeight(int n) {'),
+        L('        int count = 0;', 'init'),
+        L('        for (int i = 0; i < 32; i++) {', 'bit'),
+        L('            count += n & 1;', 'bit'),
+        L('            n >>>= 1;', 'bit'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const n0 = parseInt1(values.n, 'n', { min: 0, max: 65535 });
+      if (typeof n0 === 'string') return { error: n0 };
+      const width = n0 < 256 ? 8 : 16;
+      const steps: Step[] = [];
+      let count = 0;
+      const view = (i?: number): BitsState => ({
+        rows: [{ label: `n = ${n0}`, bits: toBits(n0, width), c: 'b', hl: i !== undefined ? [width - 1 - i] : [] }],
+        aggs: [{ label: 'count', value: String(count), c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['Look at each of the ', A(width), ' bit positions in turn (a real 32-bit int would take 32 checks).'], state: view() });
+      for (let i = 0; i < width; i++) {
+        const bit = (n0 >> i) & 1;
+        count += bit;
+        steps.push({ tag: 'bit', trace: ['Bit ', A(i), ' is ', bit ? B(1) : F(0), ' — count ', C(count), '.'], state: view(i) });
+      }
+      steps.push({ tag: 'ret', trace: [C(count), ' set bit(s).'], state: view() });
+      return { steps, result: String(count), resultDetail: `popcount(${n0})` };
+    },
+    note: 'Always does one iteration per bit of the word. n & (n − 1) clears the lowest set bit directly, so it loops only once per 1 — much faster for sparse numbers.',
+    complexity: { time: 'O(word bits)', space: 'O(1)' },
+  },
 };
 
 /* ================= 142. Counting Bits ================= */
@@ -194,6 +298,68 @@ const countingBits: ProblemDef = {
   },
   note: 'Dropping the last bit (i >> 1) yields a number already in the table — so each entry is one addition. The recursion mirrors binary representation itself, which is why the whole range costs O(n) instead of O(n log n).',
   complexity: { time: 'O(n)', space: 'O(n) output' },
+  brute: {
+    label: 'Popcount each number',
+    technique: 'For every i from 0 to n, count its set bits from scratch with n & (n − 1).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> countBits(int n) {'),
+        L('        vector<int> ans(n + 1);', 'init'),
+        L('        for (int i = 0; i <= n; i++) {', 'fill'),
+        L('            int x = i, c = 0;', 'fill'),
+        L('            while (x) { x &= x - 1; c++; }', 'fill'),
+        L('            ans[i] = c;', 'fill'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] countBits(int n) {'),
+        L('        int[] ans = new int[n + 1];', 'init'),
+        L('        for (int i = 0; i <= n; i++) {', 'fill'),
+        L('            int x = i, c = 0;', 'fill'),
+        L('            while (x != 0) { x &= x - 1; c++; }', 'fill'),
+        L('            ans[i] = c;', 'fill'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const n = parseInt1(values.n, 'n', { min: 1, max: 16 });
+      if (typeof n === 'string') return { error: n };
+      const ans: (number | string)[] = Array(n + 1).fill('·');
+      let ops = 0;
+      const steps: Step[] = [];
+      const st = (i: number | null): ArrayState => ({
+        arr: ans.map(String),
+        ptrs: i !== null ? [{ name: 'i', i, c: 'a' }] : [],
+        mark: i !== null ? { [i]: 'active' } : {},
+        aggs: [{ label: 'bit-clear operations', value: String(ops), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['No reuse: count every number’s bits independently.'], state: st(null) });
+      for (let i = 0; i <= n; i++) {
+        let x = i;
+        let c = 0;
+        while (x) {
+          x &= x - 1;
+          c++;
+          ops++;
+        }
+        ans[i] = c;
+        steps.push({ tag: 'fill', trace: [A(i), ' = ', A(i.toString(2)), '₂ has ', B(c), ' set bit(s).'], state: st(i) });
+      }
+      steps.push({ tag: 'ret', trace: ['Done: ', C(`[${ans.join(', ')}]`), '.'], state: st(null) });
+      return { steps, result: `[${ans.join(', ')}]` };
+    },
+    note: 'Each number is recounted from scratch, O(n log n) in total. The DP reuses bits(i >> 1), which is already known, and adds the last bit in O(1).',
+    complexity: { time: 'O(n log n)', space: 'O(n) output' },
+  },
 };
 
 /* ================= 143. Reverse Bits ================= */
@@ -264,6 +430,60 @@ const reverseBits: ProblemDef = {
   },
   note: 'Shifting res left before OR-ing in each new bit is what flips the order: the first bit extracted ends up shifted the furthest. The same loop, run 32 times, is the real 32-bit solution — width changes nothing structurally.',
   complexity: { time: 'O(32)', space: 'O(1)' },
+  brute: {
+    label: 'Swap mirror pairs',
+    technique: 'Swap bit i with bit (width − 1 − i) for each i in the left half.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    uint32_t reverseBits(uint32_t n) {'),
+        L('        for (int i = 0; i < 16; i++) {', 'swap'),
+        L('            int j = 31 - i;', 'swap'),
+        L('            uint32_t lo = (n >> i) & 1, hi = (n >> j) & 1;', 'swap'),
+        L('            if (lo != hi) n ^= (1u << i) | (1u << j);  // flip both', 'swap'),
+        L('        }'),
+        L('        return n;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('public class Solution {'),
+        L('    public int reverseBits(int n) {'),
+        L('        for (int i = 0; i < 16; i++) {', 'swap'),
+        L('            int j = 31 - i;', 'swap'),
+        L('            int lo = (n >>> i) & 1, hi = (n >>> j) & 1;', 'swap'),
+        L('            if (lo != hi) n ^= (1 << i) | (1 << j);  // flip both', 'swap'),
+        L('        }'),
+        L('        return n;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const bs = (values.bits ?? '').trim();
+      if (!/^[01]{1,12}$/.test(bs)) return { error: 'Enter 1–12 binary digits.' };
+      const width = bs.length;
+      let n = parseInt(bs, 2);
+      const steps: Step[] = [];
+      const view = (i?: number): BitsState => ({
+        rows: [{ label: 'n', bits: toBits(n, width), c: 'b', hl: i !== undefined ? [width - 1 - i, i] : [] }],
+      });
+      steps.push({ tag: 'swap', trace: ['Reverse in place: swap each bit with its mirror across the middle.'], state: view() });
+      for (let i = 0; i < Math.floor(width / 2); i++) {
+        const j = width - 1 - i;
+        const lo = (n >> i) & 1;
+        const hi = (n >> j) & 1;
+        if (lo !== hi) n ^= (1 << i) | (1 << j);
+        steps.push({ tag: 'swap', trace: ['Bits ', A(i), ' and ', A(j), ': ', lo !== hi ? B('different — flip both') : F('equal — nothing to do'), '.'], state: view(i) });
+      }
+      const resultBits = toBits(n, width).join('');
+      steps.push({ tag: 'ret', trace: ['Reversed: ', C(resultBits), '.'], state: view() });
+      return { steps, result: resultBits, resultDetail: `decimal ${n} (shown at ${width} bits)` };
+    },
+    note: 'Half as many iterations as peeling bits one by one, and it works in place. Both are O(word size); the fastest versions swap whole halves, quarters and bytes with masks in 5 steps.',
+    complexity: { time: 'O(word bits / 2)', space: 'O(1)' },
+  },
 };
 
 /* ================= 144. Missing Number ================= */
@@ -323,6 +543,62 @@ const missingNumber: ProblemDef = {
   },
   note: 'The multiset {0…n} ∪ {array values} contains every number twice except the missing one — XOR-folding the whole thing leaves exactly it. (Gauss\'s sum formula works too, but XOR cannot overflow.)',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Gauss sum',
+    technique: 'The numbers 0…n add up to n(n+1)/2; subtract the actual sum and what is left is the missing number.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int missingNumber(vector<int>& nums) {'),
+        L('        int n = nums.size();', 'init'),
+        L('        long expected = (long) n * (n + 1) / 2;', 'init'),
+        L('        long actual = 0;', 'sum'),
+        L('        for (int x : nums) actual += x;', 'sum'),
+        L('        return expected - actual;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int missingNumber(int[] nums) {'),
+        L('        int n = nums.length;', 'init'),
+        L('        long expected = (long) n * (n + 1) / 2;', 'init'),
+        L('        long actual = 0;', 'sum'),
+        L('        for (int x : nums) actual += x;', 'sum'),
+        L('        return (int) (expected - actual);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0 });
+      if (typeof nums === 'string') return { error: nums };
+      const n = nums.length;
+      if (new Set(nums).size !== n || nums.some((x) => x > n)) return { error: 'Values must be distinct numbers from 0…n with one missing.' };
+      const expected = (n * (n + 1)) / 2;
+      let actual = 0;
+      const steps: Step[] = [];
+      const st = (i?: number): ArrayState => ({
+        arr: nums,
+        ptrs: i !== undefined ? [{ name: 'i', i, c: 'a' }] : [],
+        aggs: [
+          { label: 'expected', value: String(expected), c: 'b' },
+          { label: 'actual', value: String(actual), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['0 + 1 + … + ', A(n), ' = ', B(expected), ' (Gauss).'], state: st() });
+      nums.forEach((x, i) => {
+        actual += x;
+        steps.push({ tag: 'sum', trace: ['Add ', A(x), ' → actual ', A(actual), '.'], state: st(i) });
+      });
+      const ans = expected - actual;
+      steps.push({ tag: 'ret', trace: [B(expected), ' − ', A(actual), ' = ', C(ans), '.'], state: st() });
+      return { steps, result: String(ans) };
+    },
+    note: 'Same O(n) time and O(1) space as the XOR version, and easier to explain. The only catch is overflow of the sum for large n in fixed-width integers, which XOR avoids entirely.',
+    complexity: { time: 'O(n)', space: 'O(1)' },
+  },
 };
 
 /* ================= 145. Sum of Two Integers ================= */
@@ -401,6 +677,71 @@ const sumTwoIntegers: ProblemDef = {
   },
   note: 'XOR and AND-shift decompose addition into its two physical parts (sum bits, carry bits) — exactly what a hardware adder does. The carry moves left every round, so it must die within the word width: the loop is bounded, not just hopeful.',
   complexity: { time: 'O(word bits)', space: 'O(1)' },
+  brute: {
+    label: 'Ripple-carry adder',
+    technique: 'Add bit by bit from the right like a hardware full adder: each sum bit is a ⊕ b ⊕ carry, and carry-out is the majority of the three.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int getSum(int a, int b) {'),
+        L('        int res = 0, carry = 0;', 'init'),
+        L('        for (int i = 0; i < 32; i++) {', 'bit'),
+        L('            int x = (a >> i) & 1, y = (b >> i) & 1;', 'bit'),
+        L('            res |= (x ^ y ^ carry) << i;', 'bit'),
+        L('            carry = (x & y) | (x & carry) | (y & carry);', 'bit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int getSum(int a, int b) {'),
+        L('        int res = 0, carry = 0;', 'init'),
+        L('        for (int i = 0; i < 32; i++) {', 'bit'),
+        L('            int x = (a >> i) & 1, y = (b >> i) & 1;', 'bit'),
+        L('            res |= (x ^ y ^ carry) << i;', 'bit'),
+        L('            carry = (x & y) | (x & carry) | (y & carry);', 'bit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseInt1(values.a, 'a', { min: 0, max: 255 });
+      if (typeof a === 'string') return { error: a };
+      const b = parseInt1(values.b, 'b', { min: 0, max: 255 });
+      if (typeof b === 'string') return { error: b };
+      const width = 9;
+      let res = 0;
+      let carry = 0;
+      const steps: Step[] = [];
+      const view = (i?: number): BitsState => ({
+        rows: [
+          { label: `a = ${a}`, bits: toBits(a, width), c: 'b', hl: i !== undefined ? [width - 1 - i] : [] },
+          { label: `b = ${b}`, bits: toBits(b, width), c: 'a', hl: i !== undefined ? [width - 1 - i] : [] },
+          { label: `sum = ${res}`, bits: toBits(res, width), c: 'c', hl: i !== undefined ? [width - 1 - i] : [] },
+        ],
+        aggs: [{ label: 'carry', value: String(carry), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['Walk the bit columns right to left, exactly like a chain of full adders.'], state: view() });
+      for (let i = 0; i < width; i++) {
+        const x = (a >> i) & 1;
+        const y = (b >> i) & 1;
+        const cin = carry;
+        const s = x ^ y ^ cin;
+        res |= s << i;
+        carry = (x & y) | (x & cin) | (y & cin);
+        steps.push({ tag: 'bit', trace: ['Column ', A(i), ': ', A(x), ' ⊕ ', A(y), ' ⊕ carry ', A(cin), ' = ', B(s), '; carry out ', A(carry), '.'], state: view(i) });
+      }
+      steps.push({ tag: 'ret', trace: [A(a), ' + ', A(b), ' = ', C(res), '.'], state: view() });
+      return { steps, result: String(res), resultDetail: `${a} + ${b} without + or −` };
+    },
+    note: 'Always processes every bit column. The XOR/AND-shift loop adds all columns in parallel and stops as soon as no carries remain, often in far fewer rounds.',
+    complexity: { time: 'O(word bits)', space: 'O(1)' },
+  },
 };
 
 /* ================= 146. Roman to Integer ================= */
@@ -477,6 +818,75 @@ const romanToInt: ProblemDef = {
   },
   note: 'Roman numerals are almost purely additive; the subtractive exception is fully characterized by one local test — "am I smaller than my right neighbor?" — so no lookahead beyond one character is ever needed.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Scan right to left',
+    technique: 'Walk from the right keeping the largest symbol seen: a symbol smaller than that is subtracted, otherwise added.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int romanToInt(string s) {'),
+        L('        unordered_map<char, int> v = {{\'I\',1},{\'V\',5},{\'X\',10},{\'L\',50},{\'C\',100},{\'D\',500},{\'M\',1000}};', 'init'),
+        L('        int total = 0, maxSeen = 0;', 'init'),
+        L('        for (int i = s.size() - 1; i >= 0; i--) {'),
+        L('            int x = v[s[i]];'),
+        L('            if (x < maxSeen) total -= x;', 'sub'),
+        L('            else { total += x; maxSeen = x; }', 'add'),
+        L('        }'),
+        L('        return total;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int romanToInt(String s) {'),
+        L('        Map<Character, Integer> v = Map.of(\'I\',1,\'V\',5,\'X\',10,\'L\',50,\'C\',100,\'D\',500,\'M\',1000);', 'init'),
+        L('        int total = 0, maxSeen = 0;', 'init'),
+        L('        for (int i = s.length() - 1; i >= 0; i--) {'),
+        L('            int x = v.get(s.charAt(i));'),
+        L('            if (x < maxSeen) total -= x;', 'sub'),
+        L('            else { total += x; maxSeen = x; }', 'add'),
+        L('        }'),
+        L('        return total;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toUpperCase();
+      if (!/^[IVXLCDM]{1,12}$/.test(s)) return { error: 'Roman numerals only (I V X L C D M), ≤ 12 chars.' };
+      const val: Record<string, number> = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+      const chars = s.split('');
+      let total = 0;
+      let maxSeen = 0;
+      const steps: Step[] = [];
+      const st = (i?: number, kind?: 'good' | 'dim'): ArrayState => ({
+        arr: chars,
+        ptrs: i !== undefined ? [{ name: 'i', i, c: 'a' }] : [],
+        mark: i !== undefined && kind ? { [i]: kind } : {},
+        aggs: [
+          { label: 'largest seen', value: String(maxSeen), c: 'b' },
+          { label: 'total', value: String(total), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Read right to left. Anything smaller than the largest symbol already passed is a subtractive prefix.'], state: st() });
+      for (let i = chars.length - 1; i >= 0; i--) {
+        const x = val[chars[i]];
+        if (x < maxSeen) {
+          total -= x;
+          steps.push({ tag: 'sub', trace: [F(chars[i]), ' (', F(x), ') is smaller than ', A(maxSeen), ' to its right — subtract. Total ', C(total), '.'], state: st(i, 'dim') });
+        } else {
+          total += x;
+          maxSeen = x;
+          steps.push({ tag: 'add', trace: [B(chars[i]), ' (', B(x), ') — add. Total ', C(total), '.'], state: st(i, 'good') });
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Value: ', C(total), '.'], state: st() });
+      return { steps, result: String(total) };
+    },
+    note: 'Also one O(n) pass, but it compares against the largest symbol seen so far instead of peeking at the next character. That makes it tolerant of the look-ahead boundary and easy to reason about.',
+    complexity: { time: 'O(n)', space: 'O(1)' },
+  },
 };
 
 /* ================= 147. Integer to Roman ================= */
@@ -555,6 +965,63 @@ const intToRoman: ProblemDef = {
   },
   note: 'Greedy change-making usually needs proof — here it is safe because listing the subtractive pairs as first-class denominations makes the system canonical: each symbol\'s value exceeds the largest amount expressible without it.',
   complexity: { time: 'O(13)', space: 'O(1)' },
+  brute: {
+    label: 'Digit lookup tables',
+    technique: 'Every decimal digit maps to a fixed Roman fragment; look up the thousands, hundreds, tens and ones and concatenate.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string intToRoman(int num) {'),
+        L('        const string M[] = {"", "M", "MM", "MMM"};', 'init'),
+        L('        const string C[] = {"", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM"};', 'init'),
+        L('        const string X[] = {"", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"};', 'init'),
+        L('        const string I[] = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"};', 'init'),
+        L('        return M[num / 1000] + C[num / 100 % 10] + X[num / 10 % 10] + I[num % 10];', 'digit', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String intToRoman(int num) {'),
+        L('        String[] M = {"", "M", "MM", "MMM"};', 'init'),
+        L('        String[] C = {"", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM"};', 'init'),
+        L('        String[] X = {"", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"};', 'init'),
+        L('        String[] I = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"};', 'init'),
+        L('        return M[num / 1000] + C[num / 100 % 10] + X[num / 10 % 10] + I[num % 10];', 'digit', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const num = parseInt1(values.num, 'Number', { min: 1, max: 3999 });
+      if (typeof num === 'string') return { error: num };
+      const tables: [string, number, string[]][] = [
+        ['thousands', 1000, ['', 'M', 'MM', 'MMM']],
+        ['hundreds', 100, ['', 'C', 'CC', 'CCC', 'CD', 'D', 'DC', 'DCC', 'DCCC', 'CM']],
+        ['tens', 10, ['', 'X', 'XX', 'XXX', 'XL', 'L', 'LX', 'LXX', 'LXXX', 'XC']],
+        ['ones', 1, ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX']],
+      ];
+      let res = '';
+      const steps: Step[] = [];
+      const view = (row?: number, digit?: number): ListState => ({
+        chains: [
+          ...tables.map(([name, , t], k) => ({ label: name, items: t.map((v, d) => ({ v: v || '∅', mark: k === row && d === digit ? ('active' as const) : undefined })), broken: true })),
+          { label: 'build', items: res === '' ? [{ v: '(empty)', mark: 'dim' as const }] : res.split('').map((c) => ({ v: c, mark: 'good' as const })), broken: true },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Precomputed fragments for each digit 0–9 in each decimal place.'], state: view() });
+      tables.forEach(([name, place, t], k) => {
+        const d = Math.floor(num / place) % 10;
+        res += t[d];
+        steps.push({ tag: 'digit', trace: [name, ' digit ', A(d), ' → "', B(t[d] || '∅'), '".'], state: view(k, d) });
+      });
+      steps.push({ tag: 'ret', trace: [A(num), ' = ', C(res), '.'], state: view() });
+      return { steps, result: res };
+    },
+    note: 'Four table lookups and no loop at all — the subtractive forms like CM and IX are baked into the tables. The greedy over 13 symbols is more general but does more comparisons.',
+    complexity: { time: 'O(1)', space: 'O(1)' },
+  },
 };
 
 /* ================= 148. Pow(x, n) ================= */
@@ -655,6 +1122,72 @@ const powXN: ProblemDef = {
   },
   note: 'x^n factors along n\'s binary digits: x¹⁰ = x⁸·x² because 10 = 1010₂. Squaring walks the base through x, x², x⁴, x⁸… so each bit costs one multiply — log n total, and negative n is just (1/x) positive-powered.',
   complexity: { time: 'O(log n)', space: 'O(1)' },
+  brute: {
+    label: 'Repeated multiplication',
+    technique: 'Multiply x into the result |n| times, then invert if n is negative.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    double myPow(double x, int n) {'),
+        L('        long e = n;', 'init'),
+        L('        if (e < 0) { x = 1 / x; e = -e; }', 'neg'),
+        L('        double result = 1;', 'init'),
+        L('        for (long i = 0; i < e; i++)', 'take'),
+        L('            result *= x;', 'take'),
+        L('        return result;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public double myPow(double x, int n) {'),
+        L('        long e = n;', 'init'),
+        L('        if (e < 0) { x = 1 / x; e = -e; }', 'neg'),
+        L('        double result = 1;', 'init'),
+        L('        for (long i = 0; i < e; i++)', 'take'),
+        L('            result *= x;', 'take'),
+        L('        return result;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const x0 = Number(values.x);
+      if (!Number.isFinite(x0)) return { error: 'x must be a number.' };
+      const n0 = parseInt1(values.n, 'n', { min: -64, max: 64 });
+      if (typeof n0 === 'string') return { error: n0 };
+      const round = (v: number) => (Math.abs(v) >= 1e6 || (Math.abs(v) < 1e-4 && v !== 0) ? v.toExponential(3) : String(Math.round(v * 1e6) / 1e6));
+      let x = x0;
+      let e = n0;
+      let result = 1;
+      const width = 7;
+      const steps: Step[] = [];
+      const view = (done: number): BitsState => ({
+        rows: [{ label: `|n| = ${Math.abs(n0)}`, bits: toBits(Math.abs(n0), width), c: 'a' }],
+        aggs: [
+          { label: 'multiplications done', value: `${done} / ${Math.abs(n0)}`, c: 'a' },
+          { label: 'result', value: round(result), c: 'b' },
+        ],
+      });
+      if (e < 0) {
+        x = 1 / x;
+        e = -e;
+        steps.push({ tag: 'neg', trace: ['Negative exponent — use base ', A(round(x)), ' instead.'], state: view(0) });
+      } else {
+        steps.push({ tag: 'init', trace: ['Multiply by ', A(round(x)), ' exactly ', A(e), ' times.'], state: view(0) });
+      }
+      for (let i = 0; i < e; i++) {
+        result *= x;
+        if (i < 12 || i === e - 1) steps.push({ tag: 'take', trace: ['Multiply #', A(i + 1), ': result = ', B(round(result)), '.'], state: view(i + 1) });
+        else if (i === 12) steps.push({ tag: 'take', trace: ['… and so on, one multiply per unit of the exponent …'], state: view(i + 1) });
+      }
+      steps.push({ tag: 'ret', trace: [A(`${x0}^${n0}`), ' = ', C(round(result)), ' after ', A(e), ' multiplications.'], state: view(e) });
+      return { steps, result: round(result), resultDetail: `${Math.abs(n0)} multiplies` };
+    },
+    note: 'O(|n|) multiplications — hopeless for n near 2³¹. Squaring the base along the bits of n needs only O(log n) multiplications.',
+    complexity: { time: 'O(|n|)', space: 'O(1)' },
+  },
 };
 
 /* ================= 149. Sqrt(x) ================= */
@@ -746,6 +1279,62 @@ const sqrtX: ProblemDef = {
   },
   note: 'k² ≤ x is a monotone predicate over k — true then false — which is the exact precondition for binary search on the answer. The same pattern as Koko and Ship Capacity, in its purest form.',
   complexity: { time: 'O(log x)', space: 'O(1)' },
+  brute: {
+    label: "Newton's method",
+    technique: 'Start from r = x and repeatedly replace r with ⌊(r + x/r) / 2⌋; the estimate falls onto ⌊√x⌋ in a handful of steps.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int mySqrt(int x) {'),
+        L('        if (x < 2) return x;', 'base'),
+        L('        long r = x;', 'init'),
+        L('        while (r * r > x)', 'check'),
+        L('            r = (r + x / r) / 2;', 'check'),
+        L('        return r;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int mySqrt(int x) {'),
+        L('        if (x < 2) return x;', 'base'),
+        L('        long r = x;', 'init'),
+        L('        while (r * r > x)', 'check'),
+        L('            r = (r + x / r) / 2;', 'check'),
+        L('        return (int) r;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const x = parseInt1(values.x, 'x', { min: 0, max: 10000 });
+      if (typeof x === 'string') return { error: x };
+      const steps: Step[] = [];
+      if (x < 2) {
+        steps.push({ tag: 'base', trace: ['√', A(x), ' is just ', C(x), ' for 0 and 1.'], state: { mode: 'answer', domain: [0, 2], lo: x, hi: x, best: x } satisfies BinarySearchState });
+        return { steps, result: String(x) };
+      }
+      const domain: [number, number] = [1, x];
+      const st = (r: number, s?: Partial<BinarySearchState>): BinarySearchState =>
+        ({ mode: 'answer', domain, domainLabel: 'estimate r', lo: 1, hi: r, mid: r, ...s }) as BinarySearchState;
+      let r = x;
+      steps.push({ tag: 'init', trace: ['Start with the over-estimate r = ', A(x), '.'], state: st(r) });
+      while (r * r > x) {
+        const next = Math.floor((r + Math.floor(x / r)) / 2);
+        steps.push({
+          tag: 'check',
+          trace: [A(r), '² = ', F(r * r), ' > ', A(x), ' — average r with x/r: ⌊(', A(r), ' + ', A(Math.floor(x / r)), ') / 2⌋ = ', B(next), '.'],
+          state: st(next, { probe: { text: `${r}² = ${r * r}`, verdict: 'no', verdictText: `${r * r} > ${x}` } }),
+        });
+        r = next;
+      }
+      steps.push({ tag: 'ret', trace: [A(r), '² = ', B(r * r), ' ≤ ', A(x), ' — ⌊√', A(x), '⌋ = ', C(r), '.'], state: st(r, { best: r }) });
+      return { steps, result: String(r), resultDetail: `${r}² = ${r * r} ≤ ${x} < ${(r + 1) * (r + 1)}` };
+    },
+    note: 'Newton’s method roughly doubles the number of correct digits each step, so it typically converges faster than binary search’s one bit per step. Both are logarithmic in x.',
+    complexity: { time: 'O(log x), faster in practice', space: 'O(1)' },
+  },
 };
 
 /* ================= 150. Happy Number ================= */
@@ -865,6 +1454,77 @@ const happyNumber: ProblemDef = {
   },
   note: 'The digit-square map sends every number below ~1000 quickly into a small range, so the sequence must eventually repeat — meaning "unhappy" is precisely "cycles without touching 1". Floyd\'s cycle detection answers that in O(1) space, the same trick as Linked List Cycle.',
   complexity: { time: 'O(log n) per step', space: 'O(1)' },
+  brute: {
+    label: 'Hash set',
+    technique: 'Follow the digit-square sequence, remembering every value seen; stop at 1 (happy) or at a repeat (a cycle).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isHappy(int n) {'),
+        L('        unordered_set<int> seen;', 'init'),
+        L('        while (n != 1 && !seen.count(n)) {', 'move'),
+        L('            seen.insert(n);', 'move'),
+        L('            n = next(n);', 'move', 'nextfn'),
+        L('        }'),
+        L('        return n == 1;', 'ret', 'meet'),
+        L('    }'),
+        L('    int next(int n) { int s = 0; while (n) { s += (n % 10) * (n % 10); n /= 10; } return s; }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isHappy(int n) {'),
+        L('        Set<Integer> seen = new HashSet<>();', 'init'),
+        L('        while (n != 1 && !seen.contains(n)) {', 'move'),
+        L('            seen.add(n);', 'move'),
+        L('            n = next(n);', 'move', 'nextfn'),
+        L('        }'),
+        L('        return n == 1;', 'ret', 'meet'),
+        L('    }'),
+        L('    private int next(int n) { int s = 0; while (n > 0) { s += (n % 10) * (n % 10); n /= 10; } return s; }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const n0 = parseInt1(values.n, 'n', { min: 1, max: 999 });
+      if (typeof n0 === 'string') return { error: n0 };
+      const next = (v: number): number => {
+        let s = 0;
+        while (v > 0) {
+          const d = v % 10;
+          s += d * d;
+          v = Math.floor(v / 10);
+        }
+        return s;
+      };
+      const seen = new Set<number>();
+      const seq: number[] = [n0];
+      let n = n0;
+      const steps: Step[] = [];
+      const view = (): ListState => ({
+        chains: [{ label: 'sequence', items: seq.map((v, i) => ({ v, mark: v === 1 ? ('final' as const) : i === seq.length - 1 && seen.has(v) ? ('dim' as const) : ('good' as const) })), broken: true }],
+        aggs: [{ label: 'seen set size', value: String(seen.size), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['Store every number visited in a set; a repeat means a cycle.'], state: view() });
+      while (n !== 1 && !seen.has(n) && seq.length < 40) {
+        seen.add(n);
+        const nx = next(n);
+        seq.push(nx);
+        steps.push({ tag: 'move', trace: [A(n), ' → sum of squared digits = ', B(nx), '.'], state: view() });
+        n = nx;
+      }
+      const happy = n === 1;
+      steps.push({
+        tag: happy ? 'ret' : 'meet',
+        trace: happy ? ['Reached ', C(1), ' — ', C(String(n0)), ' is happy.'] : [F(n), ' was already seen — a cycle without 1, so ', C(String(n0)), ' is not happy.'],
+        state: view(),
+      });
+      return { steps, result: String(happy), resultDetail: happy ? 'sequence reaches 1' : `cycle detected at ${n}` };
+    },
+    note: 'Straightforward and O(k) for a sequence of k values, but the set grows with the sequence. Floyd’s slow/fast pointers detect the same cycle with two integers.',
+    complexity: { time: 'O(log n) per step', space: 'O(sequence length)' },
+  },
 };
 
 export const mathBits = [singleNumber, hammingWeight, countingBits, reverseBits, missingNumber, sumTwoIntegers, romanToInt, intToRoman, powXN, sqrtX, happyNumber];
