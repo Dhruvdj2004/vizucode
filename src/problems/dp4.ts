@@ -2,6 +2,8 @@
 import type { ArrayState, MatrixState, ProblemDef, Step } from '../lib/types';
 import { parseInt1, parseIntArray } from '../lib/parse';
 import { A, B, C, F, L } from '../lib/trace';
+import { callsView } from './dp1';
+import { callGrid } from './dp2';
 
 const MAX_STEPS = 320;
 
@@ -118,6 +120,87 @@ const repeatedSubarray: ProblemDef = {
   },
   note: 'The answer is a maximum over the whole table, not dp[m][n] — a common run can end anywhere, unlike LCS where the bottom-right cell accumulates everything. That single difference is what separates "subarray" (contiguous) from "subsequence" problems.',
   complexity: { time: 'O(m·n)', space: 'O(m·n), reducible to O(n)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'For every pair of start positions (i, j), extend while A[i+k] = B[j+k] and keep the longest run.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findLength(vector<int>& a, vector<int>& b) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < a.size(); i++)', 'pair'),
+        L('            for (int j = 0; j < b.size(); j++) {', 'pair'),
+        L('                int k = 0;', 'pair'),
+        L('                while (i + k < a.size() && j + k < b.size() && a[i + k] == b[j + k]) k++;', 'pair'),
+        L('                best = max(best, k);', 'pair'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findLength(int[] a, int[] b) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < a.length; i++)', 'pair'),
+        L('            for (int j = 0; j < b.length; j++) {', 'pair'),
+        L('                int k = 0;', 'pair'),
+        L('                while (i + k < a.length && j + k < b.length && a[i + k] == b[j + k]) k++;', 'pair'),
+        L('                best = Math.max(best, k);', 'pair'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.a, { maxLen: 7 });
+      if (typeof a === 'string') return { error: a };
+      const b = parseIntArray(values.b, { maxLen: 7 });
+      if (typeof b === 'string') return { error: b };
+      const m = a.length;
+      const n = b.length;
+      const run = [...Array(m)].map(() => Array(n).fill(''));
+      let best = 0;
+      let bestAt: [number, number] = [0, 0];
+      let compares = 0;
+      const steps: Step[] = [];
+      const view = (act?: [number, number]): MatrixState => ({
+        grid: run.map((r) => [...r]),
+        rowLabels: a,
+        colLabels: b,
+        mark: act ? { [`${act[0]},${act[1]}`]: 'active' } : {},
+        aggs: [
+          { label: 'best', value: String(best), c: 'c' },
+          { label: 'comparisons', value: String(compares), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Cell (i, j) will hold the length of the common run starting at A[i] and B[j], found by walking forward.'], state: view() });
+      for (let i = 0; i < m; i++)
+        for (let j = 0; j < n; j++) {
+          let k = 0;
+          while (i + k < m && j + k < n && a[i + k] === b[j + k]) {
+            k++;
+            compares++;
+          }
+          compares++;
+          run[i][j] = k;
+          const better = k > best;
+          if (better) {
+            best = k;
+            bestAt = [i, j];
+          }
+          if (k > 0 && steps.length < MAX_STEPS)
+            steps.push({ tag: 'pair', trace: ['Start A[', A(i), '], B[', A(j), ']: the run lasts ', better ? B(k) : A(k), better ? ' — longest so far.' : '.'], state: view([i, j]) });
+        }
+      const sub = a.slice(bestAt[0], bestAt[0] + best);
+      steps.push({ tag: 'ret', trace: best ? ['Longest repeated subarray: ', C(best), ' [', C(sub.join(', ')), '] after ', A(compares), ' comparisons.'] : ['No common subarray.'], state: view() });
+      return { steps, result: String(best), resultDetail: best ? `[${sub.join(', ')}]` : undefined };
+    },
+    note: 'Runs that overlap are re-walked from every starting pair, giving O(m·n·min(m, n)). The DP extends the run ending at (i−1, j−1) by one in O(1).',
+    complexity: { time: 'O(m·n·min(m,n))', space: 'O(1)' },
+  },
 };
 
 /* ================= Longest Palindromic Subsequence ================= */
@@ -228,6 +311,62 @@ const longestPalinSubseq: ProblemDef = {
   },
   note: 'Iterating by interval length is what guarantees the smaller intervals a cell depends on are already filled — a plain row-by-row loop reads dp[i+1][j−1] before it exists. The LCS-with-reverse formulation gives the same answer and reuses code you already have.',
   complexity: { time: 'O(n²)', space: 'O(n²)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'lps(i, j): matching ends add 2 and shrink both sides; otherwise drop one end — recursed with no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int longestPalindromeSubseq(string s) { return lps(s, 0, s.size() - 1); }', 'init', 'ret'),
+        L('    int lps(string& s, int i, int j) {'),
+        L('        if (i > j) return 0;', 'base'),
+        L('        if (i == j) return 1;', 'base'),
+        L('        if (s[i] == s[j]) return 2 + lps(s, i + 1, j - 1);', 'match'),
+        L('        return max(lps(s, i + 1, j), lps(s, i, j - 1));', 'skip'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int longestPalindromeSubseq(String s) { return lps(s, 0, s.length() - 1); }', 'init', 'ret'),
+        L('    private int lps(String s, int i, int j) {'),
+        L('        if (i > j) return 0;', 'base'),
+        L('        if (i == j) return 1;', 'base'),
+        L('        if (s.charAt(i) == s.charAt(j)) return 2 + lps(s, i + 1, j - 1);', 'match'),
+        L('        return Math.max(lps(s, i + 1, j), lps(s, i, j - 1));', 'skip'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,8}$/.test(s)) return { error: 'Use 1–8 lowercase letters.' };
+      const n = s.length;
+      const calls = [...Array(n)].map(() => Array(n).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, s.split(''), s.split(''), act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how often lps(s[i…j]) is recomputed.'], state: view(null) });
+      const lps = (i: number, j: number): number => {
+        if (i > j) return 0;
+        total++;
+        calls[i][j]++;
+        if (i === j) return 1;
+        if (s[i] === s[j]) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'match', trace: ["Ends '", B(s[i]), "' match — they add 2; shrink both sides."], state: view([i, j]) });
+          return 2 + lps(i + 1, j - 1);
+        }
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'skip', trace: ["'", F(s[i]), "' ≠ '", F(s[j]), "' — branch: drop the left end, or drop the right end."], state: view([i, j]) });
+        return Math.max(lps(i + 1, j), lps(i, j - 1));
+      };
+      const res = lps(0, n - 1);
+      steps.push({ tag: 'ret', trace: ['Longest palindromic subsequence: ', C(res), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Each mismatch splits in two and the intervals overlap heavily, so the recursion is O(2ⁿ). There are only n² intervals, which the DP table fills once each.',
+    complexity: { time: 'O(2ⁿ)', space: 'O(n) stack' },
+  },
 };
 
 /* ================= Minimum Insertion Steps to Make a String Palindrome ================= */
@@ -337,6 +476,59 @@ const minInsertPalindrome: ProblemDef = {
   },
   note: 'The reduction is worth internalising: inserting characters can never destroy an existing palindromic subsequence, so the optimal plan keeps the longest one and mirrors the rest. Deleting to make a palindrome has the identical answer, which is why the two problems share a solution.',
   complexity: { time: 'O(n²)', space: 'O(n²)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'ins(i, j): matching ends cost nothing; otherwise insert a copy of one end (1 step) and recurse — no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int minInsertions(string s) { return ins(s, 0, s.size() - 1); }', 'init', 'ret'),
+        L('    int ins(string& s, int i, int j) {'),
+        L('        if (i >= j) return 0;', 'base'),
+        L('        if (s[i] == s[j]) return ins(s, i + 1, j - 1);', 'match'),
+        L('        return 1 + min(ins(s, i + 1, j), ins(s, i, j - 1));', 'skip'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int minInsertions(String s) { return ins(s, 0, s.length() - 1); }', 'init', 'ret'),
+        L('    private int ins(String s, int i, int j) {'),
+        L('        if (i >= j) return 0;', 'base'),
+        L('        if (s.charAt(i) == s.charAt(j)) return ins(s, i + 1, j - 1);', 'match'),
+        L('        return 1 + Math.min(ins(s, i + 1, j), ins(s, i, j - 1));', 'skip'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,8}$/.test(s)) return { error: 'Use 1–8 lowercase letters.' };
+      const n = s.length;
+      const calls = [...Array(n)].map(() => Array(n).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, s.split(''), s.split(''), act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how often "insertions needed for s[i…j]" is recomputed.'], state: view(null) });
+      const ins = (i: number, j: number): number => {
+        if (i >= j) return 0;
+        total++;
+        calls[i][j]++;
+        if (s[i] === s[j]) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'match', trace: ["Ends '", B(s[i]), "' already match — no insertion here."], state: view([i, j]) });
+          return ins(i + 1, j - 1);
+        }
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'skip', trace: ["'", F(s[i]), "' ≠ '", F(s[j]), "' — insert a mirror of one end (+1) and recurse both ways."], state: view([i, j]) });
+        return 1 + Math.min(ins(i + 1, j), ins(i, j - 1));
+      };
+      const ans = ins(0, n - 1);
+      steps.push({ tag: 'ret', trace: ['Minimum insertions: ', C(ans), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(ans), resultDetail: `keeps ${n - ans} of ${n}` };
+    },
+    note: 'The same inner intervals are reached by dropping characters in different orders, so the calls grow exponentially. The interval DP (or n − LPS) solves each interval once.',
+    complexity: { time: 'O(2ⁿ)', space: 'O(n) stack' },
+  },
 };
 
 /* ================= Delete Operation for Two Strings ================= */
@@ -442,6 +634,64 @@ const deleteOperation: ProblemDef = {
   },
   note: 'The 2× is the part people drop: each character outside the common subsequence must be deleted from its own word, and the two words are counted separately. This is also edit distance restricted to deletions — no substitutions allowed, which is why the answer is larger.',
   complexity: { time: 'O(m·n)', space: 'O(m·n)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'del(i, j): matching characters are kept for free; otherwise delete from one word (+1) and recurse — no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int minDistance(string a, string b) { return del(a, b, 0, 0); }', 'init', 'ret'),
+        L('    int del(string& a, string& b, int i, int j) {'),
+        L('        if (i == a.size()) return b.size() - j;', 'base'),
+        L('        if (j == b.size()) return a.size() - i;', 'base'),
+        L('        if (a[i] == b[j]) return del(a, b, i + 1, j + 1);', 'match'),
+        L('        return 1 + min(del(a, b, i + 1, j), del(a, b, i, j + 1));', 'skip'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int minDistance(String a, String b) { return del(a, b, 0, 0); }', 'init', 'ret'),
+        L('    private int del(String a, String b, int i, int j) {'),
+        L('        if (i == a.length()) return b.length() - j;', 'base'),
+        L('        if (j == b.length()) return a.length() - i;', 'base'),
+        L('        if (a.charAt(i) == b.charAt(j)) return del(a, b, i + 1, j + 1);', 'match'),
+        L('        return 1 + Math.min(del(a, b, i + 1, j), del(a, b, i, j + 1));', 'skip'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = (values.a ?? '').trim().toLowerCase();
+      const b = (values.b ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,7}$/.test(a) || !/^[a-z]{1,7}$/.test(b)) return { error: 'Both words: 1–7 lowercase letters.' };
+      const m = a.length;
+      const n = b.length;
+      const calls = [...Array(m + 1)].map(() => Array(n + 1).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, [...a.split(''), 'ε'], [...b.split(''), 'ε'], act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how often "deletions to equalise a[i…] and b[j…]" is recomputed.'], state: view(null) });
+      const del = (i: number, j: number): number => {
+        total++;
+        calls[i][j]++;
+        if (i === m) return n - j;
+        if (j === n) return m - i;
+        if (a[i] === b[j]) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'match', trace: ["'", B(a[i]), "' is in both — keep it."], state: view([i, j]) });
+          return del(i + 1, j + 1);
+        }
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'skip', trace: ["'", F(a[i]), "' ≠ '", F(b[j]), "' — delete from word 1 or word 2, try both."], state: view([i, j]) });
+        return 1 + Math.min(del(i + 1, j), del(i, j + 1));
+      };
+      const ans = del(0, 0);
+      steps.push({ tag: 'ret', trace: ['Minimum deletions: ', C(ans), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(ans), resultDetail: `LCS length ${(m + n - ans) / 2}` };
+    },
+    note: 'Two branches per mismatch give exponential work over only (m+1)(n+1) distinct suffix pairs. Computing the LCS table once gives the answer as m + n − 2·LCS.',
+    complexity: { time: 'O(2^(m+n))', space: 'O(m + n) stack' },
+  },
 };
 
 /* ================= Distinct Subsequences ================= */
@@ -551,6 +801,66 @@ const distinctSubsequences: ProblemDef = {
   },
   note: 'Adding rather than maxing is the whole difference from LCS — we are counting ways, not measuring length, so both branches contribute. Note the skip branch always applies: even on a match, ignoring that character is a legitimate way to build the same target.',
   complexity: { time: 'O(m·n)', space: 'O(m·n), reducible to O(n)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'count(i, j): on a match either use s[i] for t[j] or skip it; on a mismatch skip it — no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int numDistinct(string s, string t) { return count(s, t, 0, 0); }', 'init', 'ret'),
+        L('    int count(string& s, string& t, int i, int j) {'),
+        L('        if (j == t.size()) return 1;', 'base'),
+        L('        if (i == s.size()) return 0;', 'base'),
+        L('        int ways = count(s, t, i + 1, j);', 'skip', 'match'),
+        L('        if (s[i] == t[j]) ways += count(s, t, i + 1, j + 1);', 'match'),
+        L('        return ways;'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int numDistinct(String s, String t) { return count(s, t, 0, 0); }', 'init', 'ret'),
+        L('    private int count(String s, String t, int i, int j) {'),
+        L('        if (j == t.length()) return 1;', 'base'),
+        L('        if (i == s.length()) return 0;', 'base'),
+        L('        int ways = count(s, t, i + 1, j);', 'skip', 'match'),
+        L('        if (s.charAt(i) == t.charAt(j)) ways += count(s, t, i + 1, j + 1);', 'match'),
+        L('        return ways;'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      const t = (values.t ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,8}$/.test(s) || !/^[a-z]{1,6}$/.test(t)) return { error: 'Source: 1–8 letters, target: 1–6 letters, lowercase.' };
+      const m = s.length;
+      const n = t.length;
+      const calls = [...Array(m + 1)].map(() => Array(n + 1).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, [...s.split(''), 'ε'], [...t.split(''), 'ε'], act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how often "ways to form t[j…] from s[i…]" is recomputed.'], state: view(null) });
+      const count = (i: number, j: number): number => {
+        total++;
+        calls[i][j]++;
+        if (j === n) return 1;
+        if (i === m) return 0;
+        const match = s[i] === t[j];
+        if (steps.length < MAX_STEPS)
+          steps.push({ tag: match ? 'match' : 'skip', trace: match ? ["s[", A(i), "] = t[", A(j), "] = '", B(s[i]), "' — use it, or skip it: add both counts."] : ["'", F(s[i]), "' ≠ '", F(t[j]), "' — must skip s[", A(i), '].'], state: view([i, j]) });
+        let ways = count(i + 1, j);
+        if (match) ways += count(i + 1, j + 1);
+        return ways;
+      };
+      const res = count(0, 0);
+      steps.push({ tag: 'ret', trace: [C(res), ' distinct subsequence(s) — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Every matching character doubles the branching, and suffix pairs are revisited constantly. The DP table stores each (i, j) count once.',
+    complexity: { time: 'O(2ᵐ)', space: 'O(m) stack' },
+  },
 };
 
 /* ================= Wildcard Matching ================= */
@@ -693,6 +1003,69 @@ const wildcardMatching: ProblemDef = {
   },
   note: 'The * rule reads as a two-way choice, and expressing it as dp[i−1][j] || dp[i][j−1] is what keeps it O(1) per cell — the naive "try every split point" version is O(n) per cell and times out. Unlike regex matching, * here is standalone and never bound to the preceding character.',
   complexity: { time: 'O(m·n)', space: 'O(m·n)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'match(i, j): "?" eats one character; "*" either matches nothing or eats one more — backtracking with no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isMatch(string s, string p) { return match(s, p, 0, 0); }', 'init', 'ret'),
+        L('    bool match(string& s, string& p, int i, int j) {'),
+        L('        if (j == p.size()) return i == s.size();', 'base'),
+        L('        if (p[j] == \'*\')', 'star'),
+        L('            return match(s, p, i, j + 1) || (i < s.size() && match(s, p, i + 1, j));', 'star'),
+        L('        if (i < s.size() && (p[j] == \'?\' || p[j] == s[i]))', 'call'),
+        L('            return match(s, p, i + 1, j + 1);', 'call'),
+        L('        return false;', 'call'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isMatch(String s, String p) { return match(s, p, 0, 0); }', 'init', 'ret'),
+        L('    private boolean match(String s, String p, int i, int j) {'),
+        L('        if (j == p.length()) return i == s.length();', 'base'),
+        L('        if (p.charAt(j) == \'*\')', 'star'),
+        L('            return match(s, p, i, j + 1) || (i < s.length() && match(s, p, i + 1, j));', 'star'),
+        L('        if (i < s.length() && (p.charAt(j) == \'?\' || p.charAt(j) == s.charAt(i)))', 'call'),
+        L('            return match(s, p, i + 1, j + 1);', 'call'),
+        L('        return false;', 'call'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      const p = (values.p ?? '').trim().toLowerCase();
+      if (!/^[a-z]{0,8}$/.test(s)) return { error: 'String: up to 8 lowercase letters.' };
+      if (!/^[a-z?*]{1,8}$/.test(p)) return { error: 'Pattern: up to 8 characters from a–z, ? and *.' };
+      const m = s.length;
+      const n = p.length;
+      const calls = [...Array(m + 1)].map(() => Array(n + 1).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, [...s.split(''), 'ε'], [...p.split(''), 'ε'], act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how often "does s[i…] match p[j…]?" is asked.'], state: view(null) });
+      const match = (i: number, j: number): boolean => {
+        total++;
+        calls[i][j]++;
+        if (j === n) return i === m;
+        if (p[j] === '*') {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'star', trace: ['"', A('*'), '" at s[', A(i), ']: match nothing, or swallow one more character.'], state: view([i, j]) });
+          return match(i, j + 1) || (i < m && match(i + 1, j));
+        }
+        const ok = i < m && (p[j] === '?' || p[j] === s[i]);
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'call', trace: ["p[", A(j), "] = '", A(p[j]), "' vs s[", A(i), '] — ', ok ? B('match') : F('no match'), '.'], state: view([i, j]) });
+        return ok && match(i + 1, j + 1);
+      };
+      const res = match(0, 0);
+      steps.push({ tag: 'ret', trace: ['Answer: ', C(String(res)), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: res ? 'true' : 'false' };
+    },
+    note: 'Several stars can each absorb the same characters in many ways, so the backtracking revisits (i, j) states exponentially often. The DP table answers each state once.',
+    complexity: { time: 'O(2^(m+n)) worst case', space: 'O(m + n) stack' },
+  },
 };
 
 /* ================= Best Time to Buy and Sell Stock II ================= */
@@ -776,6 +1149,61 @@ const stockII: ProblemDef = {
   },
   note: 'The greedy is provably optimal because buying at a local minimum and selling at the next local maximum yields the same sum as taking each daily step — so no smarter grouping exists. The DP with two states (holding / not holding) gives the identical answer and is what generalises to the k-transaction versions.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'On each day, either wait or act (buy if empty-handed, sell if holding), recursing on every choice.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxProfit(vector<int>& p) { return best(p, 0, false); }', 'init', 'ret'),
+        L('    int best(vector<int>& p, int i, bool holding) {'),
+        L('        if (i == p.size()) return 0;', 'base'),
+        L('        int wait = best(p, i + 1, holding);', 'call'),
+        L('        int act = holding ? p[i] + best(p, i + 1, false)', 'call'),
+        L('                          : -p[i] + best(p, i + 1, true);', 'call'),
+        L('        return max(wait, act);'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxProfit(int[] p) { return best(p, 0, false); }', 'init', 'ret'),
+        L('    private int best(int[] p, int i, boolean holding) {'),
+        L('        if (i == p.length) return 0;', 'base'),
+        L('        int wait = best(p, i + 1, holding);', 'call'),
+        L('        int act = holding ? p[i] + best(p, i + 1, false)', 'call'),
+        L('                          : -p[i] + best(p, i + 1, true);', 'call'),
+        L('        return Math.max(wait, act);'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const p = parseIntArray(values.prices, { min: 0, maxLen: 14 });
+      if (typeof p === 'string') return { error: p };
+      const n = p.length;
+      const calls = Array(n).fill(0);
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (i: number | null) => callsView(p, calls, i, total);
+      steps.push({ tag: 'init', trace: ['best(day, holding): wait, or trade. Each box counts how often a day is re-examined.'], state: view(null) });
+      const best = (i: number, holding: boolean): number => {
+        total++;
+        if (i === n) return 0;
+        calls[i]++;
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'call', trace: ['Day ', A(i), holding ? ' holding: wait or sell at ' : ' empty: wait or buy at ', A(p[i]), '.'], state: view(i) });
+        const wait = best(i + 1, holding);
+        const act = holding ? p[i] + best(i + 1, false) : -p[i] + best(i + 1, true);
+        return Math.max(wait, act);
+      };
+      const res = best(0, false);
+      steps.push({ tag: 'ret', trace: ['Max profit: ', C(res), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Two choices a day means 2ⁿ call paths. With unlimited trades every upward step can be banked on its own, so a single greedy pass gives the same answer.',
+    complexity: { time: 'O(2ⁿ)', space: 'O(n) stack' },
+  },
 };
 
 /* ================= Best Time to Buy and Sell Stock III ================= */
@@ -870,6 +1298,60 @@ const stockIII: ProblemDef = {
   },
   note: 'Updating all four in the same pass looks like it lets you buy and sell on the same day, but that is harmless — such a trade earns zero and never beats the alternative. The negative sign on buy states is the trick that makes profit a single running balance instead of a pair of prices.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'Walk the days with a state 0–3 (buy #1, sell #1, buy #2, sell #2 next); each day either wait or advance the state.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxProfit(vector<int>& p) { return best(p, 0, 0); }', 'init', 'ret'),
+        L('    int best(vector<int>& p, int i, int st) {  // st even = next is a buy'),
+        L('        if (i == p.size() || st == 4) return 0;', 'base'),
+        L('        int wait = best(p, i + 1, st);', 'call'),
+        L('        int act = (st % 2 == 0 ? -p[i] : p[i]) + best(p, i + 1, st + 1);', 'call'),
+        L('        return max(wait, act);'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxProfit(int[] p) { return best(p, 0, 0); }', 'init', 'ret'),
+        L('    private int best(int[] p, int i, int st) {  // st even = next is a buy'),
+        L('        if (i == p.length || st == 4) return 0;', 'base'),
+        L('        int wait = best(p, i + 1, st);', 'call'),
+        L('        int act = (st % 2 == 0 ? -p[i] : p[i]) + best(p, i + 1, st + 1);', 'call'),
+        L('        return Math.max(wait, act);'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const p = parseIntArray(values.prices, { min: 0, maxLen: 12 });
+      if (typeof p === 'string') return { error: p };
+      const n = p.length;
+      const calls = Array(n).fill(0);
+      let total = 0;
+      const steps: Step[] = [];
+      const names = ['buy #1', 'sell #1', 'buy #2', 'sell #2'];
+      const view = (i: number | null) => callsView(p, calls, i, total);
+      steps.push({ tag: 'init', trace: ['State 0–3 says which of buy #1, sell #1, buy #2, sell #2 comes next. Each day: wait, or perform it.'], state: view(null) });
+      const best = (i: number, st: number): number => {
+        total++;
+        if (i === n || st === 4) return 0;
+        calls[i]++;
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'call', trace: ['Day ', A(i), ': wait, or do ', A(names[st]), ' at ', A(p[i]), '.'], state: view(i) });
+        const wait = best(i + 1, st);
+        const act = (st % 2 === 0 ? -p[i] : p[i]) + best(i + 1, st + 1);
+        return Math.max(wait, act);
+      };
+      const res = best(0, 0);
+      steps.push({ tag: 'ret', trace: ['Max profit with at most two trades: ', C(res), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Only 4n (day, state) combinations exist, but the recursion re-derives them along every path. The four running variables of the optimal solution are that same state machine, evaluated once per day.',
+    complexity: { time: 'O(C(n, 4)) ≈ O(n⁴)', space: 'O(n) stack' },
+  },
 };
 
 /* ================= Best Time to Buy and Sell Stock IV ================= */
@@ -979,6 +1461,62 @@ const stockIV: ProblemDef = {
   },
   note: 'The k ≥ n/2 shortcut is not an optimisation detail — without it, a large k (the problem allows 10⁹) blows up both time and memory. Each level reading sell[t−1] is what enforces that transactions cannot overlap.',
   complexity: { time: 'O(n·k)', space: 'O(k)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'The stock III recursion with 2k states instead of 4: each day wait or perform the next buy/sell.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxProfit(int k, vector<int>& p) { return best(p, k, 0, 0); }', 'init', 'ret'),
+        L('    int best(vector<int>& p, int k, int i, int st) {'),
+        L('        if (i == p.size() || st == 2 * k) return 0;', 'base'),
+        L('        int wait = best(p, k, i + 1, st);', 'call'),
+        L('        int act = (st % 2 == 0 ? -p[i] : p[i]) + best(p, k, i + 1, st + 1);', 'call'),
+        L('        return max(wait, act);'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxProfit(int k, int[] p) { return best(p, k, 0, 0); }', 'init', 'ret'),
+        L('    private int best(int[] p, int k, int i, int st) {'),
+        L('        if (i == p.length || st == 2 * k) return 0;', 'base'),
+        L('        int wait = best(p, k, i + 1, st);', 'call'),
+        L('        int act = (st % 2 == 0 ? -p[i] : p[i]) + best(p, k, i + 1, st + 1);', 'call'),
+        L('        return Math.max(wait, act);'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const p = parseIntArray(values.prices, { min: 0, maxLen: 10 });
+      if (typeof p === 'string') return { error: p };
+      const k = parseInt1(values.k, 'k', { min: 1, max: 4 });
+      if (typeof k === 'string') return { error: k };
+      const n = p.length;
+      const calls = [...Array(2 * k)].map(() => Array(n).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const labels = [...Array(2 * k)].map((_, st) => `${st % 2 === 0 ? 'buy' : 'sell'} #${Math.floor(st / 2) + 1}`);
+      const view = (act: [number, number] | null) => callGrid(calls, labels, p, act, total);
+      steps.push({ tag: 'init', trace: ['Row = the next action due, column = the day. Each cell counts how often that (state, day) is re-explored.'], state: view(null) });
+      const best = (i: number, st: number): number => {
+        total++;
+        if (i === n || st === 2 * k) return 0;
+        calls[st][i]++;
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'call', trace: ['Day ', A(i), ': wait, or do ', A(labels[st]), ' at ', A(p[i]), '.'], state: view([st, i]) });
+        const wait = best(i + 1, st);
+        const act = (st % 2 === 0 ? -p[i] : p[i]) + best(i + 1, st + 1);
+        return Math.max(wait, act);
+      };
+      const res = best(0, 0);
+      steps.push({ tag: 'ret', trace: ['Max profit with at most ', A(k), ' trades: ', C(res), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'The grid shows every (state, day) cell being solved many times. The DP keeps one buy and one sell value per transaction and updates them once per day: O(n·k).',
+    complexity: { time: 'O(2ⁿ) worst case', space: 'O(n) stack' },
+  },
 };
 
 /* ================= Best Time to Buy and Sell Stock with Transaction Fee ================= */
@@ -1067,6 +1605,64 @@ const stockFee: ProblemDef = {
   },
   note: 'Charging the fee on sale rather than on purchase keeps the buy state simple and matters only for consistency — either convention works as long as it is charged once per round trip. The fee is what kills the "take every up-step" greedy: small rises no longer cover their own cost.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'Each day: wait, buy (if empty-handed) or sell and pay the fee (if holding) — recursed with no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxProfit(vector<int>& p, int fee) { return best(p, fee, 0, false); }', 'init', 'ret'),
+        L('    int best(vector<int>& p, int fee, int i, bool holding) {'),
+        L('        if (i == p.size()) return 0;', 'base'),
+        L('        int wait = best(p, fee, i + 1, holding);', 'call'),
+        L('        int act = holding ? p[i] - fee + best(p, fee, i + 1, false)', 'call'),
+        L('                          : -p[i] + best(p, fee, i + 1, true);', 'call'),
+        L('        return max(wait, act);'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxProfit(int[] p, int fee) { return best(p, fee, 0, false); }', 'init', 'ret'),
+        L('    private int best(int[] p, int fee, int i, boolean holding) {'),
+        L('        if (i == p.length) return 0;', 'base'),
+        L('        int wait = best(p, fee, i + 1, holding);', 'call'),
+        L('        int act = holding ? p[i] - fee + best(p, fee, i + 1, false)', 'call'),
+        L('                          : -p[i] + best(p, fee, i + 1, true);', 'call'),
+        L('        return Math.max(wait, act);'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const p = parseIntArray(values.prices, { min: 0, maxLen: 12 });
+      if (typeof p === 'string') return { error: p };
+      if (p.length === 0) return { error: 'Enter at least one price.' };
+      const fee = parseInt1(values.fee, 'Transaction fee', { min: 0 });
+      if (typeof fee === 'string') return { error: fee };
+      const n = p.length;
+      const calls = Array(n).fill(0);
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (i: number | null) => callsView(p, calls, i, total, [{ label: 'fee', value: String(fee), c: 'c' }]);
+      steps.push({ tag: 'init', trace: ['best(day, holding): wait or trade. Each box counts how often a day is re-examined.'], state: view(null) });
+      const best = (i: number, holding: boolean): number => {
+        total++;
+        if (i === n) return 0;
+        calls[i]++;
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'call', trace: ['Day ', A(i), holding ? ' holding: wait, or sell at ' : ' empty: wait, or buy at ', A(p[i]), holding ? [' minus fee ', fee].join('') : '', '.'], state: view(i) });
+        const wait = best(i + 1, holding);
+        const act = holding ? p[i] - fee + best(i + 1, false) : -p[i] + best(i + 1, true);
+        return Math.max(wait, act);
+      };
+      const res = best(0, false);
+      steps.push({ tag: 'ret', trace: ['Max profit: ', C(res), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Exponential for the same reason as every stock recursion: only 2n (day, holding) states, but 2ⁿ paths through them. Two running variables (hold, free) visit each day once.',
+    complexity: { time: 'O(2ⁿ)', space: 'O(n) stack' },
+  },
 };
 
 /* ================= Number of Longest Increasing Subsequence ================= */
@@ -1195,6 +1791,78 @@ const numberOfLIS: ProblemDef = {
   },
   note: 'Replace-versus-add is the same distinction as in the shortest-path counting problem: a strictly longer route invalidates the old counts, an equal one contributes to them. Resetting total to zero when best increases is easy to forget and silently inflates the answer.',
   complexity: { time: 'O(n²)', space: 'O(n)' },
+  brute: {
+    label: 'Try every subsequence',
+    technique: 'Enumerate all 2ⁿ subsequences, keep the strictly increasing ones, and count those of maximum length.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findNumberOfLIS(vector<int>& a) {'),
+        L('        int n = a.size(), best = 0, count = 0;', 'init'),
+        L('        for (int mask = 1; mask < (1 << n); mask++) {', 'try'),
+        L('            int len = 0, last = INT_MIN; bool ok = true;', 'try'),
+        L('            for (int j = 0; j < n && ok; j++)', 'try'),
+        L('                if (mask >> j & 1) { ok = a[j] > last; last = a[j]; len++; }', 'try'),
+        L('            if (!ok) continue;', 'try'),
+        L('            if (len > best) { best = len; count = 1; }', 'better'),
+        L('            else if (len == best) count++;', 'tie'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findNumberOfLIS(int[] a) {'),
+        L('        int n = a.length, best = 0, count = 0;', 'init'),
+        L('        for (int mask = 1; mask < (1 << n); mask++) {', 'try'),
+        L('            int len = 0, last = Integer.MIN_VALUE; boolean ok = true;', 'try'),
+        L('            for (int j = 0; j < n && ok; j++)', 'try'),
+        L('                if ((mask >> j & 1) == 1) { ok = a[j] > last; last = a[j]; len++; }', 'try'),
+        L('            if (!ok) continue;', 'try'),
+        L('            if (len > best) { best = len; count = 1; }', 'better'),
+        L('            else if (len == best) count++;', 'tie'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.nums, { maxLen: 10 });
+      if (typeof a === 'string') return { error: a };
+      const n = a.length;
+      let best = 0;
+      let count = 0;
+      const steps: Step[] = [];
+      const st = (mask: number, m: 'good' | 'final' | 'active'): ArrayState => ({
+        arr: a,
+        mark: Object.fromEntries(a.map((_, j) => [j, mask >> j & 1 ? m : undefined]).filter(([, x]) => x)),
+        aggs: [
+          { label: 'LIS length', value: String(best), c: 'b' },
+          { label: 'how many', value: String(count), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Try all ', A(2 ** n - 1), ' non-empty subsequences; keep only strictly increasing ones.'], state: st(0, 'active') });
+      for (let mask = 1; mask < 1 << n; mask++) {
+        const sub = a.filter((_, j) => mask >> j & 1);
+        if (!sub.every((v, i) => i === 0 || v > sub[i - 1])) continue;
+        if (sub.length > best) {
+          best = sub.length;
+          count = 1;
+          steps.push({ tag: 'better', trace: ['[', B(sub.join(', ')), '] is increasing with length ', B(best), ' — a new record; count resets to 1.'], state: st(mask, 'good') });
+        } else if (sub.length === best) {
+          count++;
+          steps.push({ tag: 'tie', trace: ['[', B(sub.join(', ')), '] also has length ', A(best), ' — count ', C(count), '.'], state: st(mask, 'good') });
+        }
+      }
+      steps.push({ tag: 'ret', trace: [C(count), ' longest increasing subsequence(s) of length ', A(best), '.'], state: st(0, 'active') });
+      return { steps, result: String(count), resultDetail: `LIS length ${best}` };
+    },
+    note: 'Exponential: 2ⁿ subsequences, each checked in O(n). The DP carries, for every index, both the best length ending there and how many subsequences reach it, in O(n²).',
+    complexity: { time: 'O(n · 2ⁿ)', space: 'O(1)' },
+  },
 };
 
 /* ================= Minimum Cost to Cut a Stick ================= */
@@ -1315,6 +1983,75 @@ const cutStick: ProblemDef = {
   },
   note: 'The order of cuts matters because each cut costs the length of the piece it splits, so this is not greedy — the cheapest-first heuristic genuinely fails. Padding with 0 and n is what makes every subproblem a well-formed interval, removing all the boundary special cases.',
   complexity: { time: 'O(m³)', space: 'O(m²)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'cost(i, j) = length of the piece + the best split over every cut inside it, recursed with no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int minCost(int n, vector<int>& cuts) {'),
+        L('        cuts.push_back(0); cuts.push_back(n);', 'init'),
+        L('        sort(cuts.begin(), cuts.end());', 'init'),
+        L('        return cost(cuts, 0, cuts.size() - 1);', 'init', 'ret'),
+        L('    }'),
+        L('    int cost(vector<int>& c, int i, int j) {'),
+        L('        if (j - i < 2) return 0;', 'base'),
+        L('        int best = INT_MAX;', 'call'),
+        L('        for (int k = i + 1; k < j; k++)', 'call'),
+        L('            best = min(best, c[j] - c[i] + cost(c, i, k) + cost(c, k, j));', 'call'),
+        L('        return best;'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int minCost(int n, int[] cuts) {'),
+        L('        int[] c = new int[cuts.length + 2];', 'init'),
+        L('        System.arraycopy(cuts, 0, c, 1, cuts.length); c[c.length - 1] = n;', 'init'),
+        L('        Arrays.sort(c);', 'init'),
+        L('        return cost(c, 0, c.length - 1);', 'init', 'ret'),
+        L('    }'),
+        L('    private int cost(int[] c, int i, int j) {'),
+        L('        if (j - i < 2) return 0;', 'base'),
+        L('        int best = Integer.MAX_VALUE;', 'call'),
+        L('        for (int k = i + 1; k < j; k++)', 'call'),
+        L('            best = Math.min(best, c[j] - c[i] + cost(c, i, k) + cost(c, k, j));', 'call'),
+        L('        return best;'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const n = parseInt1(values.n, 'Stick length', { min: 2, max: 20 });
+      if (typeof n === 'string') return { error: n };
+      const raw = parseIntArray(values.cuts, { min: 1, maxLen: 5 });
+      if (typeof raw === 'string') return { error: raw };
+      if (raw.some((c) => c >= n)) return { error: `Cut positions must be strictly between 0 and ${n}.` };
+      if (new Set(raw).size !== raw.length) return { error: 'Cut positions must be distinct.' };
+      const c = [0, ...[...raw].sort((x, y) => x - y), n];
+      const m = c.length;
+      const calls = [...Array(m)].map(() => Array(m).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, c, c, act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how often the piece between marks ', A('c[i]'), ' and ', A('c[j]'), ' is re-solved.'], state: view(null) });
+      const cost = (i: number, j: number): number => {
+        if (j - i < 2) return 0;
+        total++;
+        calls[i][j]++;
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'call', trace: ['Piece ', A(`${c[i]}…${c[j]}`), ' (length ', A(c[j] - c[i]), '): try each inner cut first.'], state: view([i, j]) });
+        let best = Infinity;
+        for (let k = i + 1; k < j; k++) best = Math.min(best, c[j] - c[i] + cost(i, k) + cost(k, j));
+        return best;
+      };
+      const res = cost(0, m - 1);
+      steps.push({ tag: 'ret', trace: ['Minimum total cost: ', C(res), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Every cut order is explored, which is factorial in the number of cuts, and the same sub-pieces are solved again and again. The interval DP solves each (i, j) piece once.',
+    complexity: { time: 'O(m!)', space: 'O(m) stack' },
+  },
 };
 
 /* ================= Burst Balloons ================= */
@@ -1425,6 +2162,71 @@ const burstBalloons: ProblemDef = {
   },
   note: 'Choosing the last balloon is what makes the subproblems independent: once k is last in (i, j), nothing outside that interval can ever be its neighbour, so the two halves never interact. Framed as "which bursts first" the state is not well-defined at all — this reversal is the entire problem.',
   complexity: { time: 'O(n³)', space: 'O(n²)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'best(i, j) = max over the last balloon k burst between i and j of a[i]·a[k]·a[j] + best(i, k) + best(k, j), no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxCoins(vector<int>& nums) {'),
+        L('        vector<int> a = {1};', 'init'),
+        L('        a.insert(a.end(), nums.begin(), nums.end()); a.push_back(1);', 'init'),
+        L('        return best(a, 0, a.size() - 1);', 'init', 'ret'),
+        L('    }'),
+        L('    int best(vector<int>& a, int i, int j) {'),
+        L('        if (j - i < 2) return 0;', 'base'),
+        L('        int res = 0;', 'call'),
+        L('        for (int k = i + 1; k < j; k++)', 'call'),
+        L('            res = max(res, a[i] * a[k] * a[j] + best(a, i, k) + best(a, k, j));', 'call'),
+        L('        return res;'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxCoins(int[] nums) {'),
+        L('        int[] a = new int[nums.length + 2];', 'init'),
+        L('        a[0] = a[a.length - 1] = 1;', 'init'),
+        L('        System.arraycopy(nums, 0, a, 1, nums.length);', 'init'),
+        L('        return best(a, 0, a.length - 1);', 'init', 'ret'),
+        L('    }'),
+        L('    private int best(int[] a, int i, int j) {'),
+        L('        if (j - i < 2) return 0;', 'base'),
+        L('        int res = 0;', 'call'),
+        L('        for (int k = i + 1; k < j; k++)', 'call'),
+        L('            res = Math.max(res, a[i] * a[k] * a[j] + best(a, i, k) + best(a, k, j));', 'call'),
+        L('        return res;'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 20, maxLen: 5 });
+      if (typeof nums === 'string') return { error: nums };
+      const a = [1, ...nums, 1];
+      const m = a.length;
+      const calls = [...Array(m)].map(() => Array(m).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, a, a, act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how often the open interval between balloons i and j is re-solved.'], state: view(null) });
+      const best = (i: number, j: number): number => {
+        if (j - i < 2) return 0;
+        total++;
+        calls[i][j]++;
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'call', trace: ['Interval (', A(i), ', ', A(j), '): try each balloon inside as the last to burst.'], state: view([i, j]) });
+        let res = 0;
+        for (let k = i + 1; k < j; k++) res = Math.max(res, a[i] * a[k] * a[j] + best(i, k) + best(k, j));
+        return res;
+      };
+      const res = best(0, m - 1);
+      steps.push({ tag: 'ret', trace: ['Most coins: ', C(res), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Trying every "last balloon" recursively explores a Catalan-sized tree, re-solving the same intervals. The interval DP fills each of the O(n²) intervals once with an O(n) choice.',
+    complexity: { time: 'Exponential (Catalan)', space: 'O(n) stack' },
+  },
 };
 
 /* ================= Palindrome Partitioning II ================= */
@@ -1553,6 +2355,68 @@ const palindromePartitioningII: ProblemDef = {
   },
   note: 'Splitting the work in two is what makes this tractable: the palindrome table is O(n²) once, after which each cut decision is an O(1) lookup. Checking palindromes inside the cut loop instead would push it to O(n³) and time out on the judge\'s longer strings.',
   complexity: { time: 'O(n²)', space: 'O(n²)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'cuts(i) = 0 if s[i…] is a palindrome, else 1 + the best cuts(j + 1) over every palindrome s[i…j] — no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int minCut(string s) { return cuts(s, 0); }', 'init', 'ret'),
+        L('    int cuts(string& s, int i) {'),
+        L('        if (isPal(s, i, s.size() - 1)) return 0;', 'base'),
+        L('        int best = INT_MAX;', 'call'),
+        L('        for (int j = i; j < s.size() - 1; j++)', 'call'),
+        L('            if (isPal(s, i, j)) best = min(best, 1 + cuts(s, j + 1));', 'call'),
+        L('        return best;'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int minCut(String s) { return cuts(s, 0); }', 'init', 'ret'),
+        L('    private int cuts(String s, int i) {'),
+        L('        if (isPal(s, i, s.length() - 1)) return 0;', 'base'),
+        L('        int best = Integer.MAX_VALUE;', 'call'),
+        L('        for (int j = i; j < s.length() - 1; j++)', 'call'),
+        L('            if (isPal(s, i, j)) best = Math.min(best, 1 + cuts(s, j + 1));', 'call'),
+        L('        return best;'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,8}$/.test(s)) return { error: 'Use 1–8 lowercase letters.' };
+      const n = s.length;
+      const isPal = (i: number, j: number) => {
+        while (i < j) if (s[i++] !== s[j--]) return false;
+        return true;
+      };
+      const calls = [Array(n).fill(0)];
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (i: number | null) => callGrid(calls, ['calls'], s.split(''), i === null ? null : [0, i], total);
+      steps.push({ tag: 'init', trace: ['Each column is a start position i; it counts how often cuts(s[i…]) is recomputed.'], state: view(null) });
+      const cuts = (i: number): number => {
+        total++;
+        calls[0][i]++;
+        if (isPal(i, n - 1)) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'base', trace: ['"', B(s.slice(i)), '" is already a palindrome — 0 more cuts.'], state: view(i) });
+          return 0;
+        }
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'call', trace: ['cuts(', A(i), '): try every palindromic first piece starting at "', A(s[i]), '".'], state: view(i) });
+        let best = Infinity;
+        for (let j = i; j < n - 1; j++) if (isPal(i, j)) best = Math.min(best, 1 + cuts(j + 1));
+        return best;
+      };
+      const res = cuts(0);
+      steps.push({ tag: 'ret', trace: ['Minimum cuts: ', C(res), ' — after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'The same suffixes are re-solved after every different first cut, and each palindrome test costs O(n). Precomputing the palindrome table and filling dp over cut positions gives O(n²).',
+    complexity: { time: 'O(n · 2ⁿ)', space: 'O(n) stack' },
+  },
 };
 
 export const dp4: ProblemDef[] = [
