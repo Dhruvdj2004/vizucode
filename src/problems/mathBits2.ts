@@ -94,6 +94,67 @@ const singleNumberII: ProblemDef = {
   },
   note: 'Each bit position runs through the same 3-state cycle independently, so ones ends up holding exactly the bits of whichever value did not appear a multiple of three times. The general k-times version replaces the two accumulators with k−1 of them, using the same masking pattern.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Count each bit mod 3',
+    technique: 'For every bit position, count how many numbers have it set; tripled values contribute multiples of 3, so count % 3 is the loner’s bit.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int singleNumber(vector<int>& nums) {'),
+        L('        int res = 0;', 'init'),
+        L('        for (int b = 0; b < 32; b++) {', 'bit'),
+        L('            int cnt = 0;', 'bit'),
+        L('            for (int x : nums) cnt += (x >> b) & 1;', 'bit'),
+        L('            if (cnt % 3) res |= 1 << b;', 'bit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int singleNumber(int[] nums) {'),
+        L('        int res = 0;', 'init'),
+        L('        for (int b = 0; b < 32; b++) {', 'bit'),
+        L('            int cnt = 0;', 'bit'),
+        L('            for (int x : nums) cnt += (x >> b) & 1;', 'bit'),
+        L('            if (cnt % 3 != 0) res |= 1 << b;', 'bit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 255, maxLen: 10 });
+      if (typeof nums === 'string') return { error: nums };
+      const counts = new Map<number, number>();
+      for (const x of nums) counts.set(x, (counts.get(x) ?? 0) + 1);
+      const singles = [...counts.entries()].filter(([, c]) => c % 3 !== 0);
+      if (singles.length !== 1 || singles[0][1] % 3 !== 1) return { error: 'Every value must appear exactly three times, except one that appears once.' };
+      const width = 8;
+      let res = 0;
+      const steps: Step[] = [];
+      const view = (b?: number, cnt?: number): BitsState => ({
+        rows: [
+          ...nums.map((x) => ({ label: String(x), bits: toBits(x, width), c: 'a' as const, hl: b !== undefined ? [width - 1 - b] : [] })),
+          { label: `result = ${res}`, bits: toBits(res, width), c: 'c' as const, hl: b !== undefined ? [width - 1 - b] : [] },
+        ],
+        aggs: cnt !== undefined ? [{ label: 'ones in this column', value: String(cnt), c: 'b' }] : [],
+      });
+      steps.push({ tag: 'init', trace: ['Work column by column: in every bit position, the tripled values add a multiple of 3.'], state: view() });
+      for (let b = 0; b < width; b++) {
+        const cnt = nums.reduce((acc, x) => acc + ((x >> b) & 1), 0);
+        if (cnt % 3) res |= 1 << b;
+        steps.push({ tag: 'bit', trace: ['Bit ', A(b), ': ', A(cnt), ' one(s); ', A(cnt), ' mod 3 = ', cnt % 3 ? B(1) : F(0), ' → the loner’s bit is ', cnt % 3 ? B('1') : F('0'), '.'], state: view(b, cnt) });
+      }
+      steps.push({ tag: 'ret', trace: ['The loner is ', C(res), '.'], state: view() });
+      return { steps, result: String(res) };
+    },
+    note: 'Easy to prove and O(1) space, but it makes 32 passes over the array. The ones/twos state machine performs the same mod-3 counting for all bits at once in a single pass.',
+    complexity: { time: 'O(32 · n)', space: 'O(1)' },
+  },
 };
 
 /* ================= Single Number III ================= */
@@ -191,6 +252,58 @@ const singleNumberIII: ProblemDef = {
   },
   note: 'The splitting bit works because a and b differ there by definition of XOR, so it partitions the array into two groups each containing exactly one of them plus complete pairs. Any set bit of xorAll would work — isolating the lowest one is just the simplest to compute.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Hash count',
+    technique: 'Count every value; the two values seen an odd number of times are the answer.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> singleNumber(vector<int>& nums) {'),
+        L('        unordered_map<int, int> cnt;', 'init'),
+        L('        for (int x : nums) cnt[x]++;', 'count'),
+        L('        vector<int> res;', 'ret'),
+        L('        for (auto& [v, c] : cnt) if (c % 2) res.push_back(v);', 'ret'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] singleNumber(int[] nums) {'),
+        L('        Map<Integer, Integer> cnt = new HashMap<>();', 'init'),
+        L('        for (int x : nums) cnt.merge(x, 1, Integer::sum);', 'count'),
+        L('        return cnt.entrySet().stream().filter(e -> e.getValue() % 2 == 1)', 'ret'),
+        L('                  .mapToInt(Map.Entry::getKey).toArray();', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 127, maxLen: 10 });
+      if (typeof nums === 'string') return { error: nums };
+      const counts = new Map<number, number>();
+      for (const x of nums) counts.set(x, (counts.get(x) ?? 0) + 1);
+      if ([...counts.values()].filter((c) => c % 2 === 1).length !== 2) return { error: 'Exactly two values must appear an odd number of times.' };
+      const width = 8;
+      const seen = new Map<number, number>();
+      const steps: Step[] = [];
+      const view = (hl?: number): BitsState => ({
+        rows: [...seen.entries()].map(([v, c]) => ({ label: `${v} seen ×${c}`, bits: toBits(v, width), c: v === hl ? ('a' as const) : c % 2 ? ('b' as const) : ('c' as const) })),
+        aggs: [{ label: 'distinct values stored', value: String(seen.size), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['No XOR split: count every value in a hash map.'], state: view() });
+      for (const x of nums) {
+        seen.set(x, (seen.get(x) ?? 0) + 1);
+        steps.push({ tag: 'count', trace: ['Seen ', A(x), ' — count ', A(seen.get(x)!), '.'], state: view(x) });
+      }
+      const res = [...seen.entries()].filter(([, c]) => c % 2 === 1).map(([v]) => v);
+      steps.push({ tag: 'ret', trace: [C(res.join(' and ')), ' have odd counts.'], state: view() });
+      return { steps, result: `[${res.join(', ')}]` };
+    },
+    note: 'O(n) time but O(n) space for the map. XORing everything and splitting on a bit where the two answers differ finds both with two integers.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Divide Two Integers ================= */
@@ -288,6 +401,67 @@ const divideIntegers: ProblemDef = {
   },
   note: 'Doubling the divisor before each subtraction is what turns O(quotient) repeated subtraction into O(log quotient) — each outer iteration removes at least half of what remains, the same idea as binary search. The INT_MIN / −1 overflow case is the one edge case worth remembering even though this visualizer works in plain numbers.',
   complexity: { time: 'O(log² (dividend))', space: 'O(1)' },
+  brute: {
+    label: 'Repeated subtraction',
+    technique: 'Subtract the divisor from the dividend one copy at a time, counting how many times it fits.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int divide(int a, int b) {'),
+        L('        long dvd = labs(a), dvs = labs(b), q = 0;', 'init'),
+        L('        while (dvd >= dvs) {', 'subtract'),
+        L('            dvd -= dvs;', 'subtract'),
+        L('            q++;', 'subtract'),
+        L('        }'),
+        L('        return (a < 0) == (b < 0) ? q : -q;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int divide(int a, int b) {'),
+        L('        long dvd = Math.abs((long) a), dvs = Math.abs((long) b), q = 0;', 'init'),
+        L('        while (dvd >= dvs) {', 'subtract'),
+        L('            dvd -= dvs;', 'subtract'),
+        L('            q++;', 'subtract'),
+        L('        }'),
+        L('        return (int) ((a < 0) == (b < 0) ? q : -q);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseInt1(values.a, 'Dividend', { min: -1000, max: 1000 });
+      if (typeof a === 'string') return { error: a };
+      const b = parseInt1(values.b, 'Divisor', { min: -1000, max: 1000 });
+      if (typeof b === 'string') return { error: b };
+      if (b === 0) return { error: 'Divisor cannot be 0.' };
+      let dvd = Math.abs(a);
+      const dvs = Math.abs(b);
+      let q = 0;
+      const steps: Step[] = [];
+      const st = (): ArrayState => ({
+        arr: [dvd],
+        aggs: [
+          { label: 'divisor', value: String(dvs), c: 'a' },
+          { label: 'quotient so far', value: String(q), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Take off one copy of ', A(dvs), ' at a time from ', A(dvd), '.'], state: st() });
+      while (dvd >= dvs) {
+        dvd -= dvs;
+        q++;
+        if (q <= 12) steps.push({ tag: 'subtract', trace: ['Subtract ', A(dvs), ' → remaining ', B(dvd), ', quotient ', C(q), '.'], state: st() });
+        else if (q === 13) steps.push({ tag: 'subtract', trace: ['… one subtraction per unit of the quotient …'], state: st() });
+      }
+      const ans = (a < 0) === (b < 0) ? q : -q;
+      steps.push({ tag: 'ret', trace: ['Result ', C(ans), ' after ', A(q), ' subtractions.'], state: st() });
+      return { steps, result: String(ans) };
+    },
+    note: 'The loop runs once per unit of the quotient — about 2³¹ times for INT_MIN ÷ 1. Subtracting the largest doubled copy of the divisor that fits brings it down to O(log²) steps.',
+    complexity: { time: 'O(quotient)', space: 'O(1)' },
+  },
 };
 
 /* ================= Count Primes ================= */
@@ -379,6 +553,83 @@ const countPrimes: ProblemDef = {
   },
   note: 'Starting each inner loop at i·i rather than 2i is what keeps the sieve near-linear — every smaller multiple of i already has a smaller prime factor and was crossed off earlier. Stopping the outer loop once i·i ≥ n is safe for the same reason: any larger composite has already been found through a smaller factor.',
   complexity: { time: 'O(n log log n)', space: 'O(n)' },
+  brute: {
+    label: 'Trial division',
+    technique: 'Test each number below n separately by trying every divisor up to its square root.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    bool isPrime(int x) {'),
+        L('        for (int d = 2; d * d <= x; d++) if (x % d == 0) return false;'),
+        L('        return true;'),
+        L('    }'),
+        L('public:'),
+        L('    int countPrimes(int n) {'),
+        L('        int count = 0;', 'outer'),
+        L('        for (int x = 2; x < n; x++)', 'test'),
+        L('            if (isPrime(x)) count++;', 'test', 'prime'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    boolean isPrime(int x) {'),
+        L('        for (int d = 2; d * d <= x; d++) if (x % d == 0) return false;'),
+        L('        return true;'),
+        L('    }'),
+        L('    public int countPrimes(int n) {'),
+        L('        int count = 0;', 'outer'),
+        L('        for (int x = 2; x < n; x++)', 'test'),
+        L('            if (isPrime(x)) count++;', 'test', 'prime'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const n = parseInt1(values.n, 'n', { min: 0, max: 60 });
+      if (typeof n === 'string') return { error: n };
+      const steps: Step[] = [];
+      if (n < 3) {
+        steps.push({ tag: 'outer', trace: ['n = ', A(n), ' is too small for any prime below it — the answer is ', C(0), '.'], state: { arr: [] } });
+        return { steps, result: '0' };
+      }
+      const status: (number | string)[] = [...Array(n)].map((_, i) => (i < 2 ? '·' : i));
+      let count = 0;
+      let divisions = 0;
+      const view = (hi?: number, m?: 'good' | 'dim'): ArrayState => ({
+        arr: status,
+        mark: hi !== undefined && m ? { [hi]: m } : {},
+        aggs: [
+          { label: 'primes', value: String(count), c: 'c' },
+          { label: 'divisions tried', value: String(divisions), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'outer', trace: ['No sieve: test each number on its own.'], state: view() });
+      for (let x = 2; x < n; x++) {
+        let divisor = 0;
+        for (let d = 2; d * d <= x; d++) {
+          divisions++;
+          if (x % d === 0) {
+            divisor = d;
+            break;
+          }
+        }
+        if (divisor) {
+          status[x] = '✗';
+          steps.push({ tag: 'test', trace: [F(x), ' is divisible by ', A(divisor), ' — composite.'], state: view(x, 'dim') });
+        } else {
+          count++;
+          steps.push({ tag: 'prime', trace: [B(x), ' has no divisor up to √', A(x), ' — prime. Count ', C(count), '.'], state: view(x, 'good') });
+        }
+      }
+      steps.push({ tag: 'ret', trace: [C(count), ' primes below ', A(n), ' (', A(divisions), ' divisions).'], state: view() });
+      return { steps, result: String(count) };
+    },
+    note: 'Each number costs up to √x divisions, so the total is O(n√n). The sieve crosses out composites by marking multiples, reaching O(n log log n).',
+    complexity: { time: 'O(n √n)', space: 'O(1)' },
+  },
 };
 
 /* ================= Reverse Integer ================= */
@@ -461,6 +712,54 @@ const reverseInteger: ProblemDef = {
   },
   note: 'Checking for overflow after every digit, not just at the end, matters: the running total can spike past the limit mid-computation and then wrap back into range if you only check at the very end. Using x % 10 works for negative x directly in languages that truncate toward zero, so no separate sign handling is needed.',
   complexity: { time: 'O(log x)', space: 'O(1)' },
+  brute: {
+    label: 'String reversal',
+    technique: 'Turn the absolute value into a string, reverse it, parse it back, restore the sign, and reject anything outside 32 bits.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int reverse(int x) {'),
+        L('        string s = to_string(labs((long) x));', 'init'),
+        L('        std::reverse(s.begin(), s.end());', 'rev'),
+        L('        long r = stol(s) * (x < 0 ? -1 : 1);', 'rev'),
+        L('        if (r < INT_MIN || r > INT_MAX) return 0;', 'overflow'),
+        L('        return r;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int reverse(int x) {'),
+        L('        String s = new StringBuilder(String.valueOf(Math.abs((long) x))).reverse().toString();', 'init', 'rev'),
+        L('        long r = Long.parseLong(s) * (x < 0 ? -1 : 1);', 'rev'),
+        L('        if (r < Integer.MIN_VALUE || r > Integer.MAX_VALUE) return 0;', 'overflow'),
+        L('        return (int) r;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const x = parseInt1(values.x, 'Integer', { min: -999999999, max: 999999999 });
+      if (typeof x === 'string') return { error: x };
+      const INT_MIN = -(2 ** 31);
+      const INT_MAX = 2 ** 31 - 1;
+      const digits = String(Math.abs(x));
+      const steps: Step[] = [];
+      steps.push({ tag: 'init', trace: ['Write |x| as text: "', A(digits), '".'], state: { arr: digits.split('') } });
+      const rev = digits.split('').reverse().join('');
+      const r = Number(rev) * (x < 0 ? -1 : 1);
+      steps.push({ tag: 'rev', trace: ['Reverse the characters: "', B(rev), '", parse it and restore the sign → ', B(r), '.'], state: { arr: rev.split(''), mark: Object.fromEntries(rev.split('').map((_, i) => [i, 'good' as const])) } });
+      if (r < INT_MIN || r > INT_MAX) {
+        steps.push({ tag: 'overflow', trace: [F(r), ' does not fit in 32 bits — return ', C(0), '.'], state: { arr: rev.split('') } });
+        return { steps, result: '0', resultDetail: 'overflow' };
+      }
+      steps.push({ tag: 'ret', trace: ['Result: ', C(r), '.'], state: { arr: String(r).split('') } });
+      return { steps, result: String(r) };
+    },
+    note: 'Short and clear, but it relies on a 64-bit integer to hold the reversed value before checking the range — which the problem forbids. The digit-by-digit version checks for overflow before each multiply, staying within 32 bits.',
+    complexity: { time: 'O(log x)', space: 'O(log x)' },
+  },
 };
 
 /* ================= Palindrome Number ================= */
@@ -559,6 +858,56 @@ const palindromeNumber: ProblemDef = {
   },
   note: 'The loop stops once x ≤ rev, meaning exactly half the digits (or half minus the middle one) have moved — dividing rev by 10 discards that middle digit for an odd-length number without ever needing to count the digits up front. Rejecting trailing zeros early is what stops a number like 10 from spuriously passing.',
   complexity: { time: 'O(log x)', space: 'O(1)' },
+  brute: {
+    label: 'Convert to string',
+    technique: 'Turn the number into text and compare characters from both ends toward the middle.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isPalindrome(int x) {'),
+        L('        string s = to_string(x);', 'init'),
+        L('        for (int i = 0, j = s.size() - 1; i < j; i++, j--)', 'cmp'),
+        L('            if (s[i] != s[j]) return false;', 'cmp', 'reject'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isPalindrome(int x) {'),
+        L('        String s = String.valueOf(x);', 'init'),
+        L('        for (int i = 0, j = s.length() - 1; i < j; i++, j--)', 'cmp'),
+        L('            if (s.charAt(i) != s.charAt(j)) return false;', 'cmp', 'reject'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const x = parseInt1(values.x, 'Integer', { min: -99999, max: 99999 });
+      if (typeof x === 'string') return { error: x };
+      const s = String(x);
+      const steps: Step[] = [];
+      const st = (i?: number, j?: number, m: 'active' | 'dim' = 'active'): ArrayState => ({
+        arr: s.split(''),
+        ptrs: i !== undefined && j !== undefined ? [{ name: 'i', i, c: 'a' }, { name: 'j', i: j, c: 'b' }] : [],
+        mark: i !== undefined && j !== undefined ? { [i]: m, [j]: m } : {},
+      });
+      steps.push({ tag: 'init', trace: ['Write it as text: "', A(s), '".'], state: st() });
+      for (let i = 0, j = s.length - 1; i < j; i++, j--) {
+        if (s[i] !== s[j]) {
+          steps.push({ tag: 'reject', trace: ["'", F(s[i]), "' ≠ '", F(s[j]), "' — ", C('false'), '.'], state: st(i, j, 'dim') });
+          return { steps, result: 'false' };
+        }
+        steps.push({ tag: 'cmp', trace: ["'", B(s[i]), "' = '", B(s[j]), "'."], state: st(i, j) });
+      }
+      steps.push({ tag: 'ret', trace: ['All mirrored characters match — ', C('true'), '.'], state: st() });
+      return { steps, result: 'true' };
+    },
+    note: 'Simple and correct (the minus sign automatically fails), but the follow-up asks for no string conversion. Reversing just the second half of the digits arithmetically needs O(1) extra space.',
+    complexity: { time: 'O(log x)', space: 'O(log x)' },
+  },
 };
 
 /* ================= Factorial Trailing Zeroes ================= */
@@ -632,6 +981,58 @@ const factorialTrailingZeroes: ProblemDef = {
   },
   note: 'Summing ⌊n/5⌋ + ⌊n/25⌋ + ⌊n/125⌋ + … is Legendre\'s formula: each term recounts numbers like 25 or 125 that contribute more than one factor of 5, since dividing by 25 catches them a second time. Actually computing n! first would overflow almost immediately — this sidesteps big-integer arithmetic entirely.',
   complexity: { time: 'O(log₅ n)', space: 'O(1)' },
+  brute: {
+    label: 'Count 5s in every factor',
+    technique: 'For each k from 1 to n, count how many times 5 divides it and add them all up.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int trailingZeroes(int n) {'),
+        L('        int count = 0;', 'init'),
+        L('        for (int k = 5; k <= n; k += 5)', 'term'),
+        L('            for (int x = k; x % 5 == 0; x /= 5) count++;', 'term'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int trailingZeroes(int n) {'),
+        L('        int count = 0;', 'init'),
+        L('        for (int k = 5; k <= n; k += 5)', 'term'),
+        L('            for (int x = k; x % 5 == 0; x /= 5) count++;', 'term'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const n = parseInt1(values.n, 'n', { min: 0, max: 10000 });
+      if (typeof n === 'string') return { error: n };
+      let count = 0;
+      const steps: Step[] = [];
+      const st = (k?: number, f?: number): ArrayState => ({
+        arr: [n],
+        aggs: [
+          ...(k !== undefined ? [{ label: `factors of 5 in ${k}`, value: String(f), c: 'a' as const }] : []),
+          { label: 'total trailing zeroes', value: String(count), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Every trailing zero needs a 5 (2s are plentiful). Visit every multiple of 5 up to ', A(n), ' and count its 5s.'], state: st() });
+      let shown = 0;
+      for (let k = 5; k <= n; k += 5) {
+        let f = 0;
+        for (let x = k; x % 5 === 0; x /= 5) f++;
+        count += f;
+        if (shown++ < 14 || f > 1) steps.push({ tag: 'term', trace: [A(k), ' contributes ', B(f), ' five(s) → total ', C(count), '.'], state: st(k, f) });
+      }
+      steps.push({ tag: 'ret', trace: [A(n), '! ends in ', C(count), ' zero(s).'], state: st() });
+      return { steps, result: String(count) };
+    },
+    note: 'Visits n/5 numbers, so it is O(n). Counting them in bulk — ⌊n/5⌋ multiples of 5, plus ⌊n/25⌋ extra, plus ⌊n/125⌋… — gives the same total in O(log₅ n).',
+    complexity: { time: 'O(n)', space: 'O(1)' },
+  },
 };
 
 /* ================= Minimum Bit Flips to Convert Number ================= */
@@ -721,6 +1122,64 @@ const minBitFlips: ProblemDef = {
   },
   note: 'No search or simulation is needed because bit flips are independent of each other — flipping one position never affects another, so the answer is simply the Hamming distance between the two numbers. Popcount instructions compute this in a single CPU cycle on most hardware.',
   complexity: { time: 'O(log(max))', space: 'O(1)' },
+  brute: {
+    label: 'Compare bit by bit',
+    technique: 'Shift both numbers right together and count the positions where their lowest bits differ.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int minBitFlips(int start, int goal) {'),
+        L('        int count = 0;', 'xor'),
+        L('        while (start || goal) {', 'bit'),
+        L('            if ((start & 1) != (goal & 1)) count++;', 'bit'),
+        L('            start >>= 1; goal >>= 1;', 'bit'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int minBitFlips(int start, int goal) {'),
+        L('        int count = 0;', 'xor'),
+        L('        while (start != 0 || goal != 0) {', 'bit'),
+        L('            if ((start & 1) != (goal & 1)) count++;', 'bit'),
+        L('            start >>= 1; goal >>= 1;', 'bit'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const start = parseInt1(values.start, 'Start', { min: 0, max: 255 });
+      if (typeof start === 'string') return { error: start };
+      const goal = parseInt1(values.goal, 'Goal', { min: 0, max: 255 });
+      if (typeof goal === 'string') return { error: goal };
+      const width = 8;
+      let count = 0;
+      const steps: Step[] = [];
+      const view = (i?: number): BitsState => ({
+        rows: [
+          { label: `start = ${start}`, bits: toBits(start, width), c: 'a', hl: i !== undefined ? [width - 1 - i] : [] },
+          { label: `goal = ${goal}`, bits: toBits(goal, width), c: 'b', hl: i !== undefined ? [width - 1 - i] : [] },
+        ],
+        aggs: [{ label: 'flips', value: String(count), c: 'c' }],
+      });
+      steps.push({ tag: 'xor', trace: ['No XOR: compare the two numbers one column at a time.'], state: view() });
+      for (let i = 0; (start >> i) || (goal >> i); i++) {
+        const x = (start >> i) & 1;
+        const y = (goal >> i) & 1;
+        if (x !== y) count++;
+        steps.push({ tag: 'bit', trace: ['Bit ', A(i), ': ', A(x), ' vs ', A(y), x !== y ? [' — differ, flips = ', count].join('') : ' — same.'], state: view(i) });
+      }
+      steps.push({ tag: 'ret', trace: ['Minimum flips: ', C(count), '.'], state: view() });
+      return { steps, result: String(count) };
+    },
+    note: 'Walks every bit position up to the longer number. XOR marks all differing bits at once, and popcount with n & (n − 1) then loops only once per difference.',
+    complexity: { time: 'O(log(max))', space: 'O(1)' },
+  },
 };
 
 export const mathBits2: ProblemDef[] = [
