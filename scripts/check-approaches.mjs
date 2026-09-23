@@ -32,6 +32,26 @@ await build({
 });
 const { problemRegistry } = await import(pathToFileURL(out).href);
 
+// Top-level items of a "[a, b, [c, d]]" result, sorted — lets two results that
+// list the same items in a different order count as equivalent.
+function items(r) {
+  if (typeof r !== 'string' || !r.startsWith('[') || !r.endsWith(']')) return null;
+  const out = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of r.slice(1, -1)) {
+    if (ch === '[') depth++;
+    if (ch === ']') depth--;
+    if (ch === ',' && depth === 0) {
+      out.push(cur.trim());
+      cur = '';
+    } else cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out.sort().join('\u0000');
+}
+const sameItems = (a, b) => a === b || (items(a) !== null && items(a) === items(b));
+
 if (args[0] === '--missing') {
   const missing = Object.values(problemRegistry).filter((p) => !p.brute).map((p) => p.slug);
   console.log(missing.join('\n'));
@@ -48,13 +68,15 @@ if (args[0] === '--cases') {
     const v = { ...Object.fromEntries(p.inputs.map((f) => [f.key, f.defaultValue])), ...vals };
     const a = p.run(v);
     const b = p.brute.run(v);
-    const same = a.result === b.result && !a.error === !b.error;
+    const same = sameItems(a.result, b.result) && !a.error === !b.error;
     if (!same) bad++;
-    console.log(`${same ? '  ok' : 'DIFF'} ${slug} ${JSON.stringify(vals)} → ${a.result ?? a.error} | ${b.result ?? b.error}`);
+    const tag = !same ? 'DIFF' : a.result === b.result ? '  ok' : '  ok (order)';
+    console.log(`${tag} ${slug} ${JSON.stringify(vals)} → ${a.result ?? a.error} | ${b.result ?? b.error}`);
   }
   console.log(`\n${cases.length - bad}/${cases.length} cases agree.`);
   process.exit(bad ? 1 : 0);
 }
+
 
 const slugs = args.length ? args : Object.keys(problemRegistry).filter((s) => problemRegistry[s].brute);
 const failures = [];
@@ -75,7 +97,7 @@ for (const slug of slugs) {
     if (bad.length) failures.push([slug, `${lang}: untagged step tag(s) ${bad.join(', ')}`]);
   }
   const opt = p.run(values);
-  if (!opt.error && opt.result !== r.result) mismatches.push([slug, `optimal ${opt.result} vs ${p.brute.label} ${r.result}`]);
+  if (!opt.error && !sameItems(opt.result, r.result)) mismatches.push([slug, `optimal ${opt.result} vs ${p.brute.label} ${r.result}`]);
 }
 
 for (const [s, m] of mismatches) console.log(`~ ${s}: ${m}`);
