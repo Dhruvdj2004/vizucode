@@ -110,6 +110,92 @@ const numIslands: ProblemDef = {
   },
   note: 'Sinking (overwriting 1→0) makes the grid its own visited-set: an island is counted exactly once because by the time the scan reaches its other cells, they are already water. Every cell is touched a constant number of times — O(R·C).',
   complexity: { time: 'O(R·C)', space: 'O(R·C) recursion worst case' },
+  brute: {
+    label: 'Union-Find',
+    technique: 'Treat every land cell as its own set and union it with land to its right and below; the number of sets left is the number of islands.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    vector<int> parent;'),
+        L('    int find(int x) { return parent[x] == x ? x : parent[x] = find(parent[x]); }'),
+        L('public:'),
+        L('    int numIslands(vector<vector<char>>& g) {'),
+        L('        int R = g.size(), C = g[0].size(), count = 0;', 'init'),
+        L('        parent.resize(R * C);', 'init'),
+        L('        for (int i = 0; i < R * C; i++) parent[i] = i;', 'init'),
+        L('        for (int r = 0; r < R; r++)', 'scan'),
+        L('            for (int c = 0; c < C; c++) if (g[r][c] == \'1\') {', 'scan'),
+        L('                count++;', 'found'),
+        L('                for (auto [nr, nc] : {pair{r + 1, c}, pair{r, c + 1}})', 'union'),
+        L('                    if (nr < R && nc < C && g[nr][nc] == \'1\' && find(r * C + c) != find(nr * C + nc)) {', 'union'),
+        L('                        parent[find(r * C + c)] = find(nr * C + nc);', 'union'),
+        L('                        count--;', 'union'),
+        L('                    }'),
+        L('            }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    int[] parent;'),
+        L('    int find(int x) { return parent[x] == x ? x : (parent[x] = find(parent[x])); }'),
+        L('    public int numIslands(char[][] g) {'),
+        L('        int R = g.length, C = g[0].length, count = 0;', 'init'),
+        L('        parent = new int[R * C];', 'init'),
+        L('        for (int i = 0; i < R * C; i++) parent[i] = i;', 'init'),
+        L('        for (int r = 0; r < R; r++)', 'scan'),
+        L('            for (int c = 0; c < C; c++) if (g[r][c] == \'1\') {', 'scan'),
+        L('                count++;', 'found'),
+        L('                int[][] nbrs = {{r + 1, c}, {r, c + 1}};', 'union'),
+        L('                for (int[] nb : nbrs)', 'union'),
+        L('                    if (nb[0] < R && nb[1] < C && g[nb[0]][nb[1]] == \'1\' && find(r * C + c) != find(nb[0] * C + nb[1])) {', 'union'),
+        L('                        parent[find(r * C + c)] = find(nb[0] * C + nb[1]);', 'union'),
+        L('                        count--;', 'union'),
+        L('                    }'),
+        L('            }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = parseGrid(values.grid, { maxR: 7, maxC: 8 });
+      if (typeof g === 'string') return { error: g };
+      if (!g.every((r) => r.every((c) => c === '0' || c === '1'))) return { error: 'Grid must contain only 0 and 1.' };
+      const R = g.length;
+      const Cn = g[0].length;
+      const parent = [...Array(R * Cn)].map((_, i) => i);
+      const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x])));
+      let count = 0;
+      const steps: Step[] = [];
+      const snap = (active: number[] = []): MatrixState => ({
+        grid: g.map((row, r) => row.map((c, k) => (c === '1' ? `●${find(r * Cn + k)}` : '·'))),
+        ...gridLabels(R, Cn),
+        mark: Object.fromEntries(active.map((i) => [`${Math.floor(i / Cn)},${i % Cn}`, 'active' as const])),
+        aggs: [{ label: 'islands (sets)', value: String(count), c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['Each land cell shows ', A('●set id'), '. Start with every land cell as its own island, then merge neighbours.'], state: snap() });
+      for (let r = 0; r < R; r++)
+        for (let c = 0; c < Cn; c++) {
+          if (g[r][c] !== '1') continue;
+          count++;
+          const me = r * Cn + c;
+          for (const [nr, nc] of [[r + 1, c], [r, c + 1]]) {
+            if (nr < R && nc < Cn && g[nr][nc] === '1' && find(me) !== find(nr * Cn + nc)) {
+              parent[find(me)] = find(nr * Cn + nc);
+              count--;
+              steps.push({ tag: 'union', trace: ['(', A(r), ',', A(c), ') touches (', A(nr), ',', A(nc), ') — union their sets. Islands: ', C(count), '.'], state: snap([me, nr * Cn + nc]) });
+            }
+          }
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'found', trace: ['Land at (', A(r), ',', A(c), ') processed. Islands so far: ', C(count), '.'], state: snap([me]) });
+        }
+      steps.push({ tag: 'ret', trace: [C(count), ' island(s) — one per remaining set.'], state: snap() });
+      return { steps, result: String(count) };
+    },
+    note: 'Same O(R·C) (times a near-constant α) as flood fill, without recursion depth issues. Union-Find shines when land is added over time (Number of Islands II), where re-running a flood fill each time would be far slower.',
+    complexity: { time: 'O(R·C · α)', space: 'O(R·C)' },
+  },
 };
 
 /* ================= 97. Max Area of Island ================= */
@@ -209,6 +295,104 @@ const maxAreaIsland: ProblemDef = {
   },
   note: 'The only change from counting islands is the return value: the recursion 1 + Σ(neighbors) accumulates the fill size on the way back up — the traversal itself is untouched.',
   complexity: { time: 'O(R·C)', space: 'O(R·C) recursion worst case' },
+  brute: {
+    label: 'BFS with a queue',
+    technique: 'Measure each island with a breadth-first flood using an explicit queue instead of recursion.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxAreaOfIsland(vector<vector<int>>& g) {'),
+        L('        int R = g.size(), C = g[0].size(), best = 0;', 'init'),
+        L('        for (int r = 0; r < R; r++)', 'scan'),
+        L('            for (int c = 0; c < C; c++) if (g[r][c] == 1) {', 'scan'),
+        L('                int area = 0; queue<pair<int,int>> q; q.push({r, c}); g[r][c] = 0;', 'found'),
+        L('                while (!q.empty()) {', 'sink'),
+        L('                    auto [x, y] = q.front(); q.pop(); area++;', 'sink'),
+        L('                    for (auto [dx, dy] : {pair{1,0}, {-1,0}, {0,1}, {0,-1}}) {', 'sink'),
+        L('                        int nx = x + dx, ny = y + dy;', 'sink'),
+        L('                        if (nx >= 0 && ny >= 0 && nx < R && ny < C && g[nx][ny] == 1) { g[nx][ny] = 0; q.push({nx, ny}); }', 'sink'),
+        L('                    }'),
+        L('                }'),
+        L('                best = max(best, area);', 'best'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxAreaOfIsland(int[][] g) {'),
+        L('        int R = g.length, C = g[0].length, best = 0;', 'init'),
+        L('        int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};', 'init'),
+        L('        for (int r = 0; r < R; r++)', 'scan'),
+        L('            for (int c = 0; c < C; c++) if (g[r][c] == 1) {', 'scan'),
+        L('                int area = 0; Deque<int[]> q = new ArrayDeque<>(); q.add(new int[]{r, c}); g[r][c] = 0;', 'found'),
+        L('                while (!q.isEmpty()) {', 'sink'),
+        L('                    int[] p = q.poll(); area++;', 'sink'),
+        L('                    for (int[] d : dirs) {', 'sink'),
+        L('                        int nx = p[0] + d[0], ny = p[1] + d[1];', 'sink'),
+        L('                        if (nx >= 0 && ny >= 0 && nx < R && ny < C && g[nx][ny] == 1) { g[nx][ny] = 0; q.add(new int[]{nx, ny}); }', 'sink'),
+        L('                    }'),
+        L('                }'),
+        L('                best = Math.max(best, area);', 'best'),
+        L('            }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g0 = parseGrid(values.grid, { maxR: 7, maxC: 8 });
+      if (typeof g0 === 'string') return { error: g0 };
+      if (!g0.every((r) => r.every((c) => c === '0' || c === '1'))) return { error: 'Grid must contain only 0 and 1.' };
+      const g = g0.map((r) => [...r]);
+      const R = g.length;
+      const Cn = g[0].length;
+      let best = 0;
+      const done = new Set<string>();
+      const steps: Step[] = [];
+      const snap = (active?: string, queued: string[] = []): MatrixState => ({
+        grid: g0.map((row) => row.map((c) => (c === '1' ? '●' : '·'))),
+        ...gridLabels(R, Cn),
+        mark: {
+          ...Object.fromEntries([...done].map((k) => [k, 'dim' as const])),
+          ...Object.fromEntries(queued.map((k) => [k, 'win' as const])),
+          ...(active ? { [active]: 'active' as const } : {}),
+        },
+        aggs: [{ label: 'largest area', value: String(best), c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['Measure every island with a queue-based flood (no recursion).'], state: snap() });
+      for (let r = 0; r < R; r++)
+        for (let c = 0; c < Cn; c++) {
+          if (g[r][c] !== '1') continue;
+          let area = 0;
+          const q: [number, number][] = [[r, c]];
+          g[r][c] = '0';
+          steps.push({ tag: 'found', trace: ['New island at (', A(r), ',', A(c), ') — start a BFS.'], state: snap(`${r},${c}`) });
+          while (q.length) {
+            const [x, y] = q.shift()!;
+            area++;
+            done.add(`${x},${y}`);
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && ny >= 0 && nx < R && ny < Cn && g[nx][ny] === '1') {
+                g[nx][ny] = '0';
+                q.push([nx, ny]);
+              }
+            }
+            if (steps.length < MAX_STEPS) steps.push({ tag: 'sink', trace: ['Dequeue (', A(x), ',', A(y), ') — area ', B(area), ', ', A(q.length), ' cell(s) waiting.'], state: snap(`${x},${y}`, q.map(([a, b]) => `${a},${b}`)) });
+          }
+          if (area > best) best = area;
+          steps.push({ tag: 'best', trace: ['Island done: area ', B(area), '. Best so far ', C(best), '.'], state: snap() });
+        }
+      steps.push({ tag: 'ret', trace: ['Largest island: ', C(best), '.'], state: snap() });
+      return { steps, result: String(best) };
+    },
+    note: 'Same O(R·C) work as the recursive DFS, but the explicit queue avoids stack overflow on huge islands (a 1000×1000 all-land grid recurses a million levels deep).',
+    complexity: { time: 'O(R·C)', space: 'O(R·C) queue' },
+  },
 };
 
 /* ================= 98. Pacific Atlantic Water Flow ================= */
@@ -348,6 +532,95 @@ const pacificAtlantic: ProblemDef = {
   },
   note: 'Simulating water from every cell is O((R·C)²). Reversing gravity — climbing from the coasts — computes each ocean\'s entire reachable set in one flood, because "can flow from X to ocean" equals "ocean can climb to X".',
   complexity: { time: 'O(R·C)', space: 'O(R·C)' },
+  brute: {
+    label: 'Search from every cell',
+    technique: 'For each cell, run a downhill search to see whether water starting there can reach the Pacific edge and the Atlantic edge.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> pacificAtlantic(vector<vector<int>>& h) {'),
+        L('        vector<vector<int>> res;', 'init'),
+        L('        for (int r = 0; r < h.size(); r++)', 'cell'),
+        L('            for (int c = 0; c < h[0].size(); c++) {', 'cell'),
+        L('                auto [pac, atl] = flowFrom(h, r, c);  // fresh DFS each time', 'cell'),
+        L('                if (pac && atl) res.push_back({r, c});', 'both'),
+        L('            }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('    // flowFrom: DFS to neighbours with height ≤ current, noting which edges it touches'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<Integer>> pacificAtlantic(int[][] h) {'),
+        L('        List<List<Integer>> res = new ArrayList<>();', 'init'),
+        L('        for (int r = 0; r < h.length; r++)', 'cell'),
+        L('            for (int c = 0; c < h[0].length; c++) {', 'cell'),
+        L('                boolean[] reach = flowFrom(h, r, c);  // fresh DFS each time', 'cell'),
+        L('                if (reach[0] && reach[1]) res.add(List.of(r, c));', 'both'),
+        L('            }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('    // flowFrom: DFS to neighbours with height ≤ current, noting which edges it touches'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g0 = parseGrid(values.grid, { maxR: 6, maxC: 6 });
+      if (typeof g0 === 'string') return { error: g0 };
+      const h = g0.map((r) => r.map(Number));
+      if (h.some((r) => r.some((v) => !Number.isFinite(v)))) return { error: 'Heights must be numbers.' };
+      const R = h.length;
+      const Cn = h[0].length;
+      const both = new Set<string>();
+      let visits = 0;
+      const steps: Step[] = [];
+      const snap = (active?: string, reached: string[] = []): MatrixState => ({
+        grid: h.map((row, r) => row.map((v, c) => (both.has(`${r},${c}`) ? `${v}★` : v))),
+        ...gridLabels(R, Cn),
+        mark: { ...Object.fromEntries(reached.map((k) => [k, 'win' as const])), ...Object.fromEntries([...both].map((k) => [k, 'final' as const])), ...(active ? { [active]: 'active' as const } : {}) },
+        aggs: [{ label: 'cells visited in total', value: String(visits), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['No reverse flood: pour water on every cell and follow it downhill.'], state: snap() });
+      const res: string[] = [];
+      for (let r = 0; r < R; r++)
+        for (let c = 0; c < Cn; c++) {
+          const seen = new Set<string>();
+          let pac = false;
+          let atl = false;
+          const stack: [number, number][] = [[r, c]];
+          seen.add(`${r},${c}`);
+          while (stack.length) {
+            const [x, y] = stack.pop()!;
+            visits++;
+            if (x === 0 || y === 0) pac = true;
+            if (x === R - 1 || y === Cn - 1) atl = true;
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && ny >= 0 && nx < R && ny < Cn && !seen.has(`${nx},${ny}`) && h[nx][ny] <= h[x][y]) {
+                seen.add(`${nx},${ny}`);
+                stack.push([nx, ny]);
+              }
+            }
+          }
+          if (pac && atl) {
+            both.add(`${r},${c}`);
+            res.push(`[${r},${c}]`);
+          }
+          steps.push({
+            tag: pac && atl ? 'both' : 'cell',
+            trace: ['From (', A(r), ',', A(c), ') water reaches ', A(seen.size), ' cell(s): ', pac ? B('Pacific') : F('no Pacific'), ', ', atl ? B('Atlantic') : F('no Atlantic'), '.'],
+            state: snap(`${r},${c}`, [...seen]),
+          });
+        }
+      steps.push({ tag: 'ret', trace: [C(res.length), ' cell(s) drain to both oceans, after ', A(visits), ' cell visits.'], state: snap() });
+      return { steps, result: `[${res.join(', ')}]`, resultDetail: `${res.length} cells reach both oceans` };
+    },
+    note: 'Every cell launches its own search over up to the whole grid, so the cost is O((R·C)²). Flooding uphill from each ocean once and intersecting the two reachable sets needs only O(R·C).',
+    complexity: { time: 'O((R·C)²)', space: 'O(R·C)' },
+  },
 };
 
 /* ================= 99. Surrounded Regions ================= */
@@ -466,6 +739,90 @@ const surroundedRegions: ProblemDef = {
   },
   note: 'Deciding "is this region surrounded?" per region requires knowing where it ends — but the *complement* is trivial: any O reachable from the border survives. Marking survivors turns the final pass into a blind, per-cell rewrite.',
   complexity: { time: 'O(R·C)', space: 'O(R·C)' },
+  brute: {
+    label: 'Check each region',
+    technique: 'Flood each O-region on its own; if the flood ever touches the border, keep the region, otherwise flip it to X.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    void solve(vector<vector<char>>& b) {'),
+        L('        int R = b.size(), C = b[0].size();', 'border'),
+        L('        vector<vector<bool>> seen(R, vector<bool>(C));', 'border'),
+        L('        for (int r = 0; r < R; r++)', 'save'),
+        L('            for (int c = 0; c < C; c++) if (b[r][c] == \'O\' && !seen[r][c]) {', 'save'),
+        L('                vector<pair<int,int>> region; bool edge = false;', 'save'),
+        L('                flood(b, r, c, seen, region, edge);  // collect the region', 'save'),
+        L('                if (!edge) for (auto [x, y] : region) b[x][y] = \'X\';', 'capture'),
+        L('            }'),
+        L('    }', 'sweep'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public void solve(char[][] b) {'),
+        L('        int R = b.length, C = b[0].length;', 'border'),
+        L('        boolean[][] seen = new boolean[R][C];', 'border'),
+        L('        for (int r = 0; r < R; r++)', 'save'),
+        L('            for (int c = 0; c < C; c++) if (b[r][c] == \'O\' && !seen[r][c]) {', 'save'),
+        L('                List<int[]> region = new ArrayList<>(); boolean[] edge = {false};', 'save'),
+        L('                flood(b, r, c, seen, region, edge);  // collect the region', 'save'),
+        L('                if (!edge[0]) for (int[] p : region) b[p[0]][p[1]] = \'X\';', 'capture'),
+        L('            }'),
+        L('    }', 'sweep'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g0 = parseGrid(values.grid, { maxR: 6, maxC: 6 });
+      if (typeof g0 === 'string') return { error: g0 };
+      const b: string[][] = g0.map((r) => r.map((c) => c.toUpperCase()));
+      if (!b.every((r) => r.every((c) => /^[XO]$/.test(c)))) return { error: 'Board must contain only X and O.' };
+      const R = b.length;
+      const Cn = b[0].length;
+      const seen = new Set<string>();
+      let captured = 0;
+      const steps: Step[] = [];
+      const snap = (region: string[] = [], m: 'good' | 'dim' | 'active' = 'active'): MatrixState => ({
+        grid: b.map((r) => [...r]),
+        ...gridLabels(R, Cn),
+        mark: Object.fromEntries(region.map((k) => [k, m])),
+      });
+      steps.push({ tag: 'border', trace: ['Look at every O-region as a whole and ask: does it reach the border?'], state: snap() });
+      for (let r = 0; r < R; r++)
+        for (let c = 0; c < Cn; c++) {
+          if (b[r][c] !== 'O' || seen.has(`${r},${c}`)) continue;
+          const region: [number, number][] = [];
+          let edge = false;
+          const stack: [number, number][] = [[r, c]];
+          seen.add(`${r},${c}`);
+          while (stack.length) {
+            const [x, y] = stack.pop()!;
+            region.push([x, y]);
+            if (x === 0 || y === 0 || x === R - 1 || y === Cn - 1) edge = true;
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && ny >= 0 && nx < R && ny < Cn && b[nx][ny] === 'O' && !seen.has(`${nx},${ny}`)) {
+                seen.add(`${nx},${ny}`);
+                stack.push([nx, ny]);
+              }
+            }
+          }
+          const keys = region.map(([x, y]) => `${x},${y}`);
+          steps.push({ tag: 'save', trace: ['Region of ', A(region.length), ' O(s) starting at (', A(r), ',', A(c), ') ', edge ? B('touches the border — keep it') : F('is fully enclosed'), '.'], state: snap(keys, edge ? 'good' : 'active') });
+          if (!edge) {
+            for (const [x, y] of region) b[x][y] = 'X';
+            captured += region.length;
+            steps.push({ tag: 'capture', trace: ['Flip all ', F(region.length), ' of them to X.'], state: snap(keys, 'dim') });
+          }
+        }
+      steps.push({ tag: 'sweep', trace: ['Final board: ', C(b.map((r) => r.join('')).join(' ; ')), '.'], state: snap() });
+      return { steps, result: b.map((r) => r.join('')).join(' ; '), resultDetail: `${captured} cell(s) captured` };
+    },
+    note: 'Also O(R·C), but every region must be fully collected before its fate is known, which needs a per-region list. Flooding only from the border marks the survivors directly, so everything else can be captured in one sweep.',
+    complexity: { time: 'O(R·C)', space: 'O(R·C)' },
+  },
 };
 
 /* ================= 100. Rotting Oranges ================= */
@@ -604,6 +961,90 @@ const rottingOranges: ProblemDef = {
   },
   note: 'Starting BFS from *all* rotten oranges simultaneously makes each BFS level exactly one minute of real time — the level structure is the clock. A single-source loop per orange would badly overcount.',
   complexity: { time: 'O(R·C)', space: 'O(R·C)' },
+  brute: {
+    label: 'Rescan every minute',
+    technique: 'Each minute, scan the whole grid and rot every fresh orange next to one that was rotten at the start of that minute.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int orangesRotting(vector<vector<int>>& g) {'),
+        L('        int R = g.size(), C = g[0].size(), minutes = 0;', 'init'),
+        L('        while (true) {', 'tick'),
+        L('            vector<pair<int,int>> rot;', 'tick'),
+        L('            for (int r = 0; r < R; r++) for (int c = 0; c < C; c++)  // full scan', 'tick'),
+        L('                if (g[r][c] == 1 && hasRottenNeighbour(g, r, c)) rot.push_back({r, c});', 'rot'),
+        L('            if (rot.empty()) break;', 'tick'),
+        L('            for (auto [r, c] : rot) g[r][c] = 2;', 'rot'),
+        L('            minutes++;', 'rot'),
+        L('        }'),
+        L('        for (auto& row : g) for (int v : row) if (v == 1) return -1;', 'ret'),
+        L('        return minutes;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int orangesRotting(int[][] g) {'),
+        L('        int R = g.length, C = g[0].length, minutes = 0;', 'init'),
+        L('        while (true) {', 'tick'),
+        L('            List<int[]> rot = new ArrayList<>();', 'tick'),
+        L('            for (int r = 0; r < R; r++) for (int c = 0; c < C; c++)  // full scan', 'tick'),
+        L('                if (g[r][c] == 1 && hasRottenNeighbour(g, r, c)) rot.add(new int[]{r, c});', 'rot'),
+        L('            if (rot.isEmpty()) break;', 'tick'),
+        L('            for (int[] p : rot) g[p[0]][p[1]] = 2;', 'rot'),
+        L('            minutes++;', 'rot'),
+        L('        }'),
+        L('        for (int[] row : g) for (int v : row) if (v == 1) return -1;', 'ret'),
+        L('        return minutes;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g0 = parseGrid(values.grid, { maxR: 6, maxC: 6 });
+      if (typeof g0 === 'string') return { error: g0 };
+      const g = g0.map((r) => r.map(Number));
+      if (!g.every((r) => r.every((v) => v === 0 || v === 1 || v === 2))) return { error: 'Grid must contain only 0, 1, 2.' };
+      const R = g.length;
+      const Cn = g[0].length;
+      let minutes = 0;
+      let scanned = 0;
+      const steps: Step[] = [];
+      const snap = (just: [number, number][] = []): MatrixState => ({
+        grid: g.map((row) => row.map((v) => (v === 2 ? '●' : v === 1 ? '○' : '·'))),
+        ...gridLabels(R, Cn),
+        mark: Object.fromEntries(just.map(([r, c]) => [`${r},${c}`, 'active' as const])),
+        aggs: [
+          { label: 'minute', value: String(minutes), c: 'b' },
+          { label: 'cells scanned', value: String(scanned), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['No queue: every minute, look at every cell to decide what rots next. ● rotten, ○ fresh.'], state: snap() });
+      while (true) {
+        const rot: [number, number][] = [];
+        for (let r = 0; r < R; r++)
+          for (let c = 0; c < Cn; c++) {
+            scanned++;
+            if (g[r][c] !== 1) continue;
+            if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dr, dc]) => g[r + dr]?.[c + dc] === 2)) rot.push([r, c]);
+          }
+        if (!rot.length) {
+          steps.push({ tag: 'tick', trace: ['A full scan finds nothing new to rot — stop.'], state: snap() });
+          break;
+        }
+        for (const [r, c] of rot) g[r][c] = 2;
+        minutes++;
+        steps.push({ tag: 'rot', trace: ['Minute ', A(minutes), ': a full scan rots ', B(rot.length), ' orange(s).'], state: snap(rot) });
+      }
+      const fresh = g.flat().filter((v) => v === 1).length;
+      const result = fresh === 0 ? minutes : -1;
+      steps.push({ tag: 'ret', trace: fresh === 0 ? ['All rotten after ', C(minutes), ' minute(s).'] : [F(fresh), ' orange(s) never rot — ', C('-1'), '.'], state: snap() });
+      return { steps, result: String(result), resultDetail: fresh === 0 ? undefined : 'some oranges isolated' };
+    },
+    note: 'Each minute rescans all R·C cells, and there can be up to R·C minutes, so the worst case is O((R·C)²). Multi-source BFS touches every cell exactly once.',
+    complexity: { time: 'O((R·C)²)', space: 'O(1)' },
+  },
 };
 
 export const graphs1 = [numIslands, maxAreaIsland, pacificAtlantic, surroundedRegions, rottingOranges];
