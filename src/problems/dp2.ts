@@ -6,6 +6,22 @@ import { parseNumGrid } from './arraysHashing2';
 
 const MAX_STEPS = 320;
 
+/** Matrix view for a plain-recursion brute force over (i, j) subproblems: each
+ *  cell shows how many times that subproblem has been solved so far, and cells
+ *  solved more than once are highlighted — the repetition the DP table removes. */
+export function callGrid(calls: number[][], rowLabels: (string | number)[], colLabels: (string | number)[], active: [number, number] | null, total: number): MatrixState {
+  const mark: MatrixState['mark'] = {};
+  calls.forEach((row, r) => row.forEach((c, k) => { if (c > 1) mark[`${r},${k}`] = 'win'; }));
+  if (active) mark[`${active[0]},${active[1]}`] = 'active';
+  return {
+    grid: calls.map((row) => row.map((c) => (c ? `×${c}` : ''))),
+    rowLabels,
+    colLabels,
+    mark,
+    aggs: [{ label: 'total calls', value: String(total), c: 'a' }],
+  };
+}
+
 /* ================= 110. Longest Palindromic Substring ================= */
 const longestPalindrome: ProblemDef = {
   slug: 'longest-palindromic-substring',
@@ -114,6 +130,103 @@ const longestPalindrome: ProblemDef = {
   },
   note: 'Enumerating centers instead of substrings flips the cost structure: each center\'s expansion is paid only as far as the palindrome actually reaches. Even-length palindromes have their center *between* characters — forgetting them is the classic bug.',
   complexity: { time: 'O(n²)', space: 'O(1)' },
+  brute: {
+    label: "Manacher's algorithm",
+    technique: 'Reuse the mirror image inside the rightmost palindrome found so far, so no character is ever re-compared: O(n).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string longestPalindrome(string s) {'),
+        L('        string t = "#";', 'init'),
+        L('        for (char c : s) { t += c; t += \'#\'; }', 'init'),
+        L('        int n = t.size(), C = 0, R = 0, best = 0, at = 0;', 'init'),
+        L('        vector<int> P(n, 0);', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'center'),
+        L('            if (i < R) P[i] = min(R - i, P[2 * C - i]);', 'mirror'),
+        L('            while (i - P[i] - 1 >= 0 && i + P[i] + 1 < n &&', 'grow'),
+        L('                   t[i - P[i] - 1] == t[i + P[i] + 1]) P[i]++;', 'grow'),
+        L('            if (i + P[i] > R) { C = i; R = i + P[i]; }', 'center'),
+        L('            if (P[i] > best) { best = P[i]; at = i; }', 'record'),
+        L('        }'),
+        L('        return s.substr((at - best) / 2, best);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String longestPalindrome(String s) {'),
+        L('        StringBuilder sb = new StringBuilder("#");', 'init'),
+        L('        for (char c : s.toCharArray()) sb.append(c).append(\'#\');', 'init'),
+        L('        char[] t = sb.toString().toCharArray();', 'init'),
+        L('        int n = t.length, C = 0, R = 0, best = 0, at = 0;', 'init'),
+        L('        int[] P = new int[n];', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'center'),
+        L('            if (i < R) P[i] = Math.min(R - i, P[2 * C - i]);', 'mirror'),
+        L('            while (i - P[i] - 1 >= 0 && i + P[i] + 1 < n &&', 'grow'),
+        L('                   t[i - P[i] - 1] == t[i + P[i] + 1]) P[i]++;', 'grow'),
+        L('            if (i + P[i] > R) { C = i; R = i + P[i]; }', 'center'),
+        L('            if (P[i] > best) { best = P[i]; at = i; }', 'record'),
+        L('        }'),
+        L('        return s.substring((at - best) / 2, (at - best) / 2 + best);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,12}$/.test(s)) return { error: 'Lowercase letters, 1–12 characters.' };
+      const t = ['#', ...s.split('').flatMap((c) => [c, '#'])];
+      const n = t.length;
+      const P = Array(n).fill(0);
+      let ctr = 0;
+      let R = 0;
+      let best = 0;
+      let at = 0;
+      const steps: Step[] = [];
+      const st = (i: number | null, mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: t.map((c, k) => (k <= (i ?? -1) ? `${c}｜${P[k]}` : c)),
+        window: i !== null && P[i] > 0 ? [i - P[i], i + P[i]] : null,
+        ptrs: i !== null ? [{ name: 'i', i, c: 'a' }] : [],
+        mark,
+        aggs: [
+          { label: 'right edge R', value: String(R), c: 'b' },
+          { label: 'best', value: `"${s.slice((at - best) / 2, (at - best) / 2 + best)}"`, c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Insert ', A('#'), ' between letters so odd and even palindromes both have a single center. Each box will show ', A('char｜radius'), '.'], state: st(null) });
+      for (let i = 0; i < n; i++) {
+        let reused = 0;
+        if (i < R) {
+          P[i] = Math.min(R - i, P[2 * ctr - i]);
+          reused = P[i];
+        }
+        while (i - P[i] - 1 >= 0 && i + P[i] + 1 < n && t[i - P[i] - 1] === t[i + P[i] + 1]) P[i]++;
+        if (i + P[i] > R) {
+          ctr = i;
+          R = i + P[i];
+        }
+        const improved = P[i] > best;
+        if (improved) {
+          best = P[i];
+          at = i;
+        }
+        steps.push({
+          tag: improved ? 'record' : reused > 0 ? 'mirror' : 'grow',
+          trace: [
+            'Center ', A(i), reused > 0 ? [': the mirror at ', 2 * ctr - i, ' gives radius ', reused, ' for free'].join('') : '',
+            ' → radius ', B(P[i]), improved ? ' — longest so far.' : '.',
+          ],
+          state: st(i, { [i]: improved ? 'good' : 'active' }),
+        });
+      }
+      const res = s.slice((at - best) / 2, (at - best) / 2 + best);
+      steps.push({ tag: 'ret', trace: ['Longest palindrome: ', C(`"${res}"`), ' (length ', C(best), ').'], state: st(n - 1) });
+      return { steps, result: `"${res}"`, resultDetail: `length ${best}` };
+    },
+    note: 'Expanding around centers can redo up to O(n) comparisons per center. Inside the rightmost palindrome, a center’s radius is at least its mirror’s, so the right edge R only ever moves forward, which makes the whole scan linear.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 111. Palindromic Substrings ================= */
@@ -208,6 +321,83 @@ const palindromicSubstrings: ProblemDef = {
   },
   note: 'Identical machinery to Longest Palindromic Substring, but the aggregate changes: every successful widening step *is* one distinct palindrome (distinct because its span differs), so counting steps counts substrings.',
   complexity: { time: 'O(n²)', space: 'O(1)' },
+  brute: {
+    label: "Manacher's algorithm",
+    technique: 'Compute every center’s palindrome radius in O(n) with Manacher, then each radius r contributes ⌈r / 2⌉ palindromes.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int countSubstrings(string s) {'),
+        L('        string t = "#";', 'init'),
+        L('        for (char c : s) { t += c; t += \'#\'; }', 'init'),
+        L('        int n = t.size(), C = 0, R = 0, count = 0;', 'init'),
+        L('        vector<int> P(n, 0);', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'center'),
+        L('            if (i < R) P[i] = min(R - i, P[2 * C - i]);', 'center'),
+        L('            while (i - P[i] - 1 >= 0 && i + P[i] + 1 < n &&', 'center'),
+        L('                   t[i - P[i] - 1] == t[i + P[i] + 1]) P[i]++;', 'center'),
+        L('            if (i + P[i] > R) { C = i; R = i + P[i]; }', 'center'),
+        L('            count += (P[i] + 1) / 2;', 'center'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int countSubstrings(String s) {'),
+        L('        StringBuilder sb = new StringBuilder("#");', 'init'),
+        L('        for (char c : s.toCharArray()) sb.append(c).append(\'#\');', 'init'),
+        L('        char[] t = sb.toString().toCharArray();', 'init'),
+        L('        int n = t.length, C = 0, R = 0, count = 0;', 'init'),
+        L('        int[] P = new int[n];', 'init'),
+        L('        for (int i = 0; i < n; i++) {', 'center'),
+        L('            if (i < R) P[i] = Math.min(R - i, P[2 * C - i]);', 'center'),
+        L('            while (i - P[i] - 1 >= 0 && i + P[i] + 1 < n &&', 'center'),
+        L('                   t[i - P[i] - 1] == t[i + P[i] + 1]) P[i]++;', 'center'),
+        L('            if (i + P[i] > R) { C = i; R = i + P[i]; }', 'center'),
+        L('            count += (P[i] + 1) / 2;', 'center'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,10}$/.test(s)) return { error: 'Lowercase letters, 1–10 characters.' };
+      const t = ['#', ...s.split('').flatMap((c) => [c, '#'])];
+      const n = t.length;
+      const P = Array(n).fill(0);
+      let ctr = 0;
+      let R = 0;
+      let count = 0;
+      const steps: Step[] = [];
+      const st = (i: number | null): ArrayState => ({
+        arr: t.map((c, k) => (k <= (i ?? -1) ? `${c}｜${P[k]}` : c)),
+        window: i !== null && P[i] > 0 ? [i - P[i], i + P[i]] : null,
+        ptrs: i !== null ? [{ name: 'i', i, c: 'a' }] : [],
+        aggs: [{ label: 'count', value: String(count), c: 'c' }],
+      });
+      steps.push({ tag: 'init', trace: ['Transform with ', A('#'), ' separators and find each center’s radius. A radius r means ', A('⌈r/2⌉'), ' palindromes share that center.'], state: st(null) });
+      for (let i = 0; i < n; i++) {
+        if (i < R) P[i] = Math.min(R - i, P[2 * ctr - i]);
+        while (i - P[i] - 1 >= 0 && i + P[i] + 1 < n && t[i - P[i] - 1] === t[i + P[i] + 1]) P[i]++;
+        if (i + P[i] > R) {
+          ctr = i;
+          R = i + P[i];
+        }
+        const add = Math.floor((P[i] + 1) / 2);
+        count += add;
+        steps.push({ tag: 'center', trace: ['Center ', A(i), ' has radius ', B(P[i]), ' → ', A(add), ' palindrome(s). Total ', C(count), '.'], state: st(i) });
+      }
+      steps.push({ tag: 'ret', trace: [C(count), ' palindromic substrings.'], state: st(n - 1) });
+      return { steps, result: String(count) };
+    },
+    note: 'Counting by expansion re-compares characters that an enclosing palindrome already proved equal. Manacher reuses the mirror radius, so the total work is O(n) instead of O(n²).',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 117. Partition Equal Subset Sum ================= */
@@ -304,6 +494,93 @@ const partitionSubset: ProblemDef = {
   },
   note: 'Equal partition ⇔ some subset hits total/2 (the rest is automatically the other half). The right-to-left sweep is the 0/1-knapsack trick: it reads only *last* round\'s values, preventing one item from being counted twice.',
   complexity: { time: 'O(n · total)', space: 'O(total)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'For each number, try putting it in the subset and leaving it out, until some choice hits half the total.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool canPartition(vector<int>& nums) {'),
+        L('        int total = accumulate(nums.begin(), nums.end(), 0);', 'init'),
+        L('        if (total % 2) return false;', 'oddsum'),
+        L('        return can(nums, 0, total / 2);', 'init', 'ret'),
+        L('    }'),
+        L('    bool can(vector<int>& nums, int i, int need) {'),
+        L('        if (need == 0) return true;', 'hit'),
+        L('        if (i == nums.size() || need < 0) return false;', 'dead'),
+        L('        return can(nums, i + 1, need - nums[i])', 'take'),
+        L('            || can(nums, i + 1, need);', 'take'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean canPartition(int[] nums) {'),
+        L('        int total = 0;', 'init'),
+        L('        for (int x : nums) total += x;', 'init'),
+        L('        if (total % 2 == 1) return false;', 'oddsum'),
+        L('        return can(nums, 0, total / 2);', 'init', 'ret'),
+        L('    }'),
+        L('    private boolean can(int[] nums, int i, int need) {'),
+        L('        if (need == 0) return true;', 'hit'),
+        L('        if (i == nums.length || need < 0) return false;', 'dead'),
+        L('        return can(nums, i + 1, need - nums[i])', 'take'),
+        L('            || can(nums, i + 1, need);', 'take'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 1, maxLen: 8 });
+      if (typeof nums === 'string') return { error: nums };
+      const total = nums.reduce((a, b) => a + b, 0);
+      const steps: Step[] = [];
+      const chosen = new Set<number>();
+      let calls = 0;
+      const view = (i: number | null, need: number): MatrixState => ({
+        grid: [nums],
+        rowLabels: ['nums'],
+        colLabels: nums.map((_, k) => k),
+        mark: {
+          ...Object.fromEntries([...chosen].map((k) => [`0,${k}`, 'good' as const])),
+          ...(i !== null && i < nums.length ? { [`0,${i}`]: 'active' as const } : {}),
+        },
+        aggs: [
+          { label: 'still needed', value: String(need), c: 'a' },
+          { label: 'calls', value: String(calls), c: 'b' },
+        ],
+      });
+      if (total % 2 !== 0) {
+        steps.push({ tag: 'oddsum', trace: ['Total is ', F(total), ' — odd, so return ', C('false'), '.'], state: view(null, total) });
+        return { steps, result: 'false', resultDetail: 'odd total' };
+      }
+      const target = total / 2;
+      steps.push({ tag: 'init', trace: ['Look for a subset summing to ', C(target), ' by trying every take/skip choice.'], state: view(null, target) });
+      const can = (i: number, need: number): boolean => {
+        calls++;
+        if (need === 0) {
+          steps.push({ tag: 'hit', trace: ['Chosen numbers sum to exactly ', C(target), ' — ', C('true'), '.'], state: view(null, 0) });
+          return true;
+        }
+        if (i === nums.length || need < 0) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'dead', trace: [need < 0 ? 'Overshot' : 'Ran out of numbers', ' — dead end, back up.'], state: view(null, need) });
+          return false;
+        }
+        chosen.add(i);
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'take', trace: ['Take ', A(nums[i]), ' → still need ', A(need - nums[i]), '.'], state: view(i, need - nums[i]) });
+        if (can(i + 1, need - nums[i])) return true;
+        chosen.delete(i);
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'take', trace: ['Skip ', F(nums[i]), ' instead → still need ', A(need), '.'], state: view(i, need) });
+        return can(i + 1, need);
+      };
+      const ok = can(0, target);
+      steps.push({ tag: 'ret', trace: ['Answer: ', C(String(ok)), ' after ', A(calls), ' calls.'], state: view(null, ok ? 0 : target) });
+      return { steps, result: String(ok), resultDetail: ok ? `subset sums to ${target}` : `no subset sums to ${target}` };
+    },
+    note: 'Up to 2ⁿ take/skip combinations are tried. The subset-sum table observes that only the sum reached matters, not which numbers produced it, so there are at most n × (total/2) distinct states.',
+    complexity: { time: 'O(2ⁿ)', space: 'O(n) stack' },
+  },
 };
 
 /* ================= 118. Unique Paths ================= */
@@ -381,6 +658,64 @@ const uniquePaths: ProblemDef = {
   },
   note: 'Every path enters a cell from above or from the left — those two sets are disjoint and exhaustive, so addition is exact. (The closed form is C(m+n−2, m−1); the DP is that binomial coefficient computed as Pascal\'s triangle.)',
   complexity: { time: 'O(m·n)', space: 'O(m·n)' },
+  brute: {
+    label: 'Combinatorics',
+    technique: 'Every path is m−1 downs and n−1 rights in some order, so the answer is C(m+n−2, m−1).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int uniquePaths(int m, int n) {'),
+        L('        long long res = 1;', 'init'),
+        L('        for (int k = 1; k < m; k++)', 'mul'),
+        L('            res = res * (n - 1 + k) / k;', 'mul'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int uniquePaths(int m, int n) {'),
+        L('        long res = 1;', 'init'),
+        L('        for (int k = 1; k < m; k++)', 'mul'),
+        L('            res = res * (n - 1 + k) / k;', 'mul'),
+        L('        return (int) res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const m = parseInt1(values.m, 'm', { min: 2, max: 7 });
+      if (typeof m === 'string') return { error: m };
+      const n = parseInt1(values.n, 'n', { min: 2, max: 8 });
+      if (typeof n === 'string') return { error: n };
+      const steps: Step[] = [];
+      let res = 1;
+      const view = (): MatrixState => ({
+        grid: [...Array(m)].map((_, r) => [...Array(n)].map((_, c) => (r === 0 && c === 0 ? 'S' : r === m - 1 && c === n - 1 ? 'E' : ''))),
+        rowLabels: [...Array(m)].map((_, i) => i),
+        colLabels: [...Array(n)].map((_, i) => i),
+        mark: { '0,0': 'good', [`${m - 1},${n - 1}`]: 'final' },
+        aggs: [
+          { label: 'moves', value: `${m - 1} down + ${n - 1} right`, c: 'b' },
+          { label: 'result so far', value: String(res), c: 'c' },
+        ],
+      });
+      steps.push({
+        tag: 'init',
+        trace: ['Any path is a sequence of ', A(m + n - 2), ' moves, of which ', A(m - 1), ' are "down". Choosing where the downs go gives C(', A(m + n - 2), ', ', A(m - 1), ').'],
+        state: view(),
+      });
+      for (let k = 1; k < m; k++) {
+        res = (res * (n - 1 + k)) / k;
+        steps.push({ tag: 'mul', trace: ['× ', A(n - 1 + k), ' / ', A(k), ' → ', B(res), ' (always a whole number).'], state: view() });
+      }
+      steps.push({ tag: 'ret', trace: ['C(', A(m + n - 2), ', ', A(m - 1), ') = ', C(res), ' paths.'], state: view() });
+      return { steps, result: String(res), resultDetail: `${m}×${n} grid` };
+    },
+    note: 'The grid DP counts paths cell by cell in O(m·n). Recognising that a path is just an arrangement of downs and rights gives a closed-form binomial coefficient, computed in O(min(m, n)).',
+    complexity: { time: 'O(min(m, n))', space: 'O(1)' },
+  },
 };
 
 /* ================= 119. Longest Common Subsequence ================= */
@@ -480,6 +815,61 @@ const lcs: ProblemDef = {
   },
   note: 'The recurrence mirrors an editor\'s three options at each character pair — and the diagonal move is only legal on a match, which is precisely what makes the counted characters a *common* subsequence. This table is the backbone of diff tools.',
   complexity: { time: 'O(m·n)', space: 'O(m·n)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'lcs(i, j): if the characters match take 1 + lcs(i+1, j+1), else the better of skipping one character — no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int longestCommonSubsequence(string a, string b) { return lcs(a, b, 0, 0); }', 'init', 'ret'),
+        L('    int lcs(string& a, string& b, int i, int j) {'),
+        L('        if (i == a.size() || j == b.size()) return 0;', 'base'),
+        L('        if (a[i] == b[j]) return 1 + lcs(a, b, i + 1, j + 1);', 'match'),
+        L('        return max(lcs(a, b, i + 1, j), lcs(a, b, i, j + 1));', 'skip'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int longestCommonSubsequence(String a, String b) { return lcs(a, b, 0, 0); }', 'init', 'ret'),
+        L('    private int lcs(String a, String b, int i, int j) {'),
+        L('        if (i == a.length() || j == b.length()) return 0;', 'base'),
+        L('        if (a.charAt(i) == b.charAt(j)) return 1 + lcs(a, b, i + 1, j + 1);', 'match'),
+        L('        return Math.max(lcs(a, b, i + 1, j), lcs(a, b, i, j + 1));', 'skip'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = (values.a ?? '').trim().toLowerCase();
+      const b = (values.b ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,7}$/.test(a) || !/^[a-z]{1,7}$/.test(b)) return { error: 'Both strings: lowercase, 1–7 characters.' };
+      const m = a.length;
+      const n = b.length;
+      const calls = [...Array(m + 1)].map(() => Array(n + 1).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, [...a.split(''), 'ε'], [...b.split(''), 'ε'], act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how many times lcs of the suffixes a[i…], b[j…] is solved.'], state: view(null) });
+      const lcs = (i: number, j: number): number => {
+        total++;
+        calls[i][j]++;
+        if (i === m || j === n) return 0;
+        if (a[i] === b[j]) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'match', trace: ["'", B(a[i]), "' matches — take it and move both on."], state: view([i, j]) });
+          return 1 + lcs(i + 1, j + 1);
+        }
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'skip', trace: ["'", F(a[i]), "' ≠ '", F(b[j]), "' — branch: skip from a, or skip from b."], state: view([i, j]) });
+        return Math.max(lcs(i + 1, j), lcs(i, j + 1));
+      };
+      const res = lcs(0, 0);
+      steps.push({ tag: 'ret', trace: ['LCS length ', C(res), ' — after ', C(total), ' calls for only ', A((m + 1) * (n + 1)), ' distinct subproblems.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Every mismatch doubles the work, and the same (i, j) pair is solved along many different paths. The DP table stores each of the (m+1)(n+1) answers once.',
+    complexity: { time: 'O(2^(m+n))', space: 'O(m + n) stack' },
+  },
 };
 
 /* ================= 121. Target Sum ================= */
@@ -580,6 +970,78 @@ const targetSum: ProblemDef = {
   },
   note: 'The state is not "which numbers were used" (2ⁿ histories) but only "what is the running sum" — many histories collapse into one bucket, and their counts add. That collapse is the entire speedup of DP over brute force.',
   complexity: { time: 'O(n · total)', space: 'O(total)' },
+  brute: {
+    label: 'Try every sign',
+    technique: 'Recursively give each number a + or − sign and count the assignments that land on the target.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int findTargetSumWays(vector<int>& nums, int target) {'),
+        L('        return count(nums, 0, 0, target);', 'init', 'ret'),
+        L('    }'),
+        L('    int count(vector<int>& nums, int i, int sum, int target) {'),
+        L('        if (i == nums.size()) return sum == target ? 1 : 0;', 'leaf', 'hit'),
+        L('        return count(nums, i + 1, sum + nums[i], target)'),
+        L('             + count(nums, i + 1, sum - nums[i], target);'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int findTargetSumWays(int[] nums, int target) {'),
+        L('        return count(nums, 0, 0, target);', 'init', 'ret'),
+        L('    }'),
+        L('    private int count(int[] nums, int i, int sum, int target) {'),
+        L('        if (i == nums.length) return sum == target ? 1 : 0;', 'leaf', 'hit'),
+        L('        return count(nums, i + 1, sum + nums[i], target)'),
+        L('             + count(nums, i + 1, sum - nums[i], target);'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 5, maxLen: 6 });
+      if (typeof nums === 'string') return { error: nums };
+      const target = parseInt1(values.target, 'Target');
+      if (typeof target === 'string') return { error: target };
+      const steps: Step[] = [];
+      const signs: number[] = [];
+      let ways = 0;
+      let leaves = 0;
+      const view = (hit: boolean): MatrixState => ({
+        grid: [nums.map((v, k) => (k < signs.length ? `${signs[k] > 0 ? '+' : '−'}${v}` : String(v)))],
+        rowLabels: ['signs'],
+        colLabels: nums.map((_, k) => k),
+        mark: Object.fromEntries(signs.map((_, k) => [`0,${k}`, hit ? ('final' as const) : ('active' as const)])),
+        aggs: [
+          { label: 'assignments tried', value: `${leaves} / ${2 ** nums.length}`, c: 'a' },
+          { label: 'ways', value: String(ways), c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['There are ', A(2 ** nums.length), ' ways to assign signs. Try them all.'], state: view(false) });
+      const go = (i: number, sum: number) => {
+        if (i === nums.length) {
+          leaves++;
+          const hit = sum === target;
+          if (hit) ways++;
+          if (hit || steps.length < MAX_STEPS)
+            steps.push({ tag: hit ? 'hit' : 'leaf', trace: ['Signs give ', hit ? B(sum) : F(sum), hit ? [' = target — ways = ', ways, '.'].join('') : [' ≠ ', target, '.'].join('')], state: view(hit) });
+          return;
+        }
+        signs.push(1);
+        go(i + 1, sum + nums[i]);
+        signs[signs.length - 1] = -1;
+        go(i + 1, sum - nums[i]);
+        signs.pop();
+      };
+      go(0, 0);
+      steps.push({ tag: 'ret', trace: [C(ways), ' of the ', A(leaves), ' assignments hit ', C(target), '.'], state: view(false) });
+      return { steps, result: String(ways), resultDetail: `${ways} sign assignments` };
+    },
+    note: 'Always 2ⁿ leaves. The DP notices that after i numbers only the running sum matters, and there are at most 2·total + 1 possible sums, so it counts ways per sum instead.',
+    complexity: { time: 'O(2ⁿ)', space: 'O(n) stack' },
+  },
 };
 
 /* ================= 122. Edit Distance ================= */
@@ -689,6 +1151,67 @@ const editDistance: ProblemDef = {
   },
   note: 'The three table moves correspond exactly to the three edits — diagonal = replace, up = delete, left = insert — and a match makes the diagonal free. Every spell-checker and DNA aligner runs on this recurrence.',
   complexity: { time: 'O(m·n)', space: 'O(m·n)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'ed(i, j): if characters match move both on, else 1 + the best of insert, delete or replace — no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int minDistance(string a, string b) { return ed(a, b, 0, 0); }', 'init', 'ret'),
+        L('    int ed(string& a, string& b, int i, int j) {'),
+        L('        if (i == a.size()) return b.size() - j;', 'base'),
+        L('        if (j == b.size()) return a.size() - i;', 'base'),
+        L('        if (a[i] == b[j]) return ed(a, b, i + 1, j + 1);', 'match'),
+        L('        return 1 + min({ed(a, b, i, j + 1),      // insert', 'edit'),
+        L('                        ed(a, b, i + 1, j),      // delete', 'edit'),
+        L('                        ed(a, b, i + 1, j + 1)}); // replace', 'edit'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int minDistance(String a, String b) { return ed(a, b, 0, 0); }', 'init', 'ret'),
+        L('    private int ed(String a, String b, int i, int j) {'),
+        L('        if (i == a.length()) return b.length() - j;', 'base'),
+        L('        if (j == b.length()) return a.length() - i;', 'base'),
+        L('        if (a.charAt(i) == b.charAt(j)) return ed(a, b, i + 1, j + 1);', 'match'),
+        L('        return 1 + Math.min(ed(a, b, i, j + 1),', 'edit'),
+        L('                   Math.min(ed(a, b, i + 1, j), ed(a, b, i + 1, j + 1)));', 'edit'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = (values.a ?? '').trim().toLowerCase();
+      const b = (values.b ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,7}$/.test(a) || !/^[a-z]{1,7}$/.test(b)) return { error: 'Both words: lowercase, 1–7 characters.' };
+      const m = a.length;
+      const n = b.length;
+      const calls = [...Array(m + 1)].map(() => Array(n + 1).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, [...a.split(''), 'ε'], [...b.split(''), 'ε'], act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how many times the edit distance of suffixes a[i…], b[j…] is recomputed.'], state: view(null) });
+      const ed = (i: number, j: number): number => {
+        total++;
+        calls[i][j]++;
+        if (i === m) return n - j;
+        if (j === n) return m - i;
+        if (a[i] === b[j]) {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'match', trace: ["'", B(a[i]), "' = '", B(b[j]), "' — free, move both on."], state: view([i, j]) });
+          return ed(i + 1, j + 1);
+        }
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'edit', trace: ["'", F(a[i]), "' ≠ '", F(b[j]), "' — branch three ways: insert, delete, replace."], state: view([i, j]) });
+        return 1 + Math.min(ed(i, j + 1), ed(i + 1, j), ed(i + 1, j + 1));
+      };
+      const res = ed(0, 0);
+      steps.push({ tag: 'ret', trace: ['Edit distance ', C(res), ' — after ', C(total), ' calls for ', A((m + 1) * (n + 1)), ' distinct subproblems.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Each mismatch branches three ways, so the call tree grows like 3^min(m, n). The DP table computes each of the (m+1)(n+1) cells once from its three neighbours.',
+    complexity: { time: 'O(3^(m+n))', space: 'O(m + n) stack' },
+  },
 };
 
 /* ================= 123. Maximal Square ================= */
@@ -785,6 +1308,86 @@ const maximalSquare: ProblemDef = {
   },
   note: 'A k-square ending at (r,c) needs (k−1)-squares ending at all three neighbors — the *minimum* of the three is the binding constraint, which is why one weak neighbor caps the square. Area falls out as best².',
   complexity: { time: 'O(R·C)', space: 'O(R·C)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'From every 1-cell, grow a square one size at a time for as long as the new row and column are all 1s.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maximalSquare(vector<vector<char>>& g) {'),
+        L('        int R = g.size(), C = g[0].size(), best = 0;', 'init'),
+        L('        for (int r = 0; r < R; r++)', 'cell'),
+        L('            for (int c = 0; c < C; c++) {', 'cell'),
+        L('                int k = 0;', 'cell'),
+        L('                while (r + k < R && c + k < C && allOnes(g, r, c, k)) k++;', 'grow'),
+        L('                best = max(best, k);', 'grow'),
+        L('            }'),
+        L('        return best * best;', 'ret'),
+        L('    }'),
+        L('    // allOnes: the new bottom row and right column of size k + 1 are all 1'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maximalSquare(char[][] g) {'),
+        L('        int R = g.length, C = g[0].length, best = 0;', 'init'),
+        L('        for (int r = 0; r < R; r++)', 'cell'),
+        L('            for (int c = 0; c < C; c++) {', 'cell'),
+        L('                int k = 0;', 'cell'),
+        L('                while (r + k < R && c + k < C && allOnes(g, r, c, k)) k++;', 'grow'),
+        L('                best = Math.max(best, k);', 'grow'),
+        L('            }'),
+        L('        return best * best;', 'ret'),
+        L('    }'),
+        L('    // allOnes: the new bottom row and right column of size k + 1 are all 1'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = parseNumGrid(values.matrix, 6, 6);
+      if (typeof g === 'string') return { error: g };
+      if (!g.every((r) => r.every((v) => v === 0 || v === 1))) return { error: 'Matrix must contain only 0 and 1.' };
+      const R = g.length;
+      const Cn = g[0].length;
+      const steps: Step[] = [];
+      let best = 0;
+      let bestAt: [number, number] = [0, 0];
+      const view = (mark: MatrixState['mark'] = {}): MatrixState => ({
+        grid: g,
+        rowLabels: [...Array(R)].map((_, i) => i),
+        colLabels: [...Array(Cn)].map((_, i) => i),
+        mark,
+        aggs: [{ label: 'largest side', value: String(best), c: 'c' }],
+      });
+      const square = (r: number, c: number, k: number, m: 'active' | 'final') => {
+        const out: MatrixState['mark'] = {};
+        for (let dr = 0; dr < k; dr++) for (let dc = 0; dc < k; dc++) out[`${r + dr},${c + dc}`] = m;
+        return out;
+      };
+      steps.push({ tag: 'init', trace: ['From every cell holding 1, grow a square outward and see how big it can get.'], state: view() });
+      for (let r = 0; r < R; r++)
+        for (let c = 0; c < Cn; c++) {
+          if (g[r][c] !== 1) continue;
+          let k = 0;
+          const fits = (kk: number) => {
+            for (let d = 0; d <= kk; d++) if (g[r + kk][c + d] !== 1 || g[r + d][c + kk] !== 1) return false;
+            return true;
+          };
+          while (r + k < R && c + k < Cn && fits(k)) k++;
+          const improved = k > best;
+          if (improved) {
+            best = k;
+            bestAt = [r, c];
+          }
+          steps.push({ tag: 'grow', trace: ['From (', A(r), ',', A(c), ') the square grows to side ', improved ? B(k) : A(k), improved ? ' — largest so far.' : '.'], state: view(square(r, c, k, 'active')) });
+        }
+      steps.push({ tag: 'ret', trace: ['Largest square has side ', C(best), ', area ', C(best * best), '.'], state: view(square(bestAt[0], bestAt[1], best, 'final')) });
+      return { steps, result: String(best * best), resultDetail: `side ${best}` };
+    },
+    note: 'Each growth step re-reads a whole row and column, and every cell starts its own growth, so the cost is roughly O((R·C)·min(R,C)²). The DP gets each cell’s largest square from its three neighbours in O(1).',
+    complexity: { time: 'O(R·C·min(R,C)²)', space: 'O(1)' },
+  },
 };
 
 /* ================= 124. Minimum Path Sum ================= */
@@ -874,6 +1477,63 @@ const minPathSum: ProblemDef = {
   },
   note: 'Down/right-only movement gives the grid a topological order for free — by the time a cell is filled, both cells it depends on are final. Greedy "step to the cheaper neighbor" fails; only accumulated bests are safe.',
   complexity: { time: 'O(R·C)', space: 'O(R·C)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'cost(r, c) = grid[r][c] + the cheaper of going down or right, recursed without memoisation.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int minPathSum(vector<vector<int>>& g) { return cost(g, 0, 0); }', 'init', 'ret'),
+        L('    int cost(vector<vector<int>>& g, int r, int c) {'),
+        L('        int R = g.size(), C = g[0].size();'),
+        L('        if (r == R - 1 && c == C - 1) return g[r][c];', 'base'),
+        L('        if (r == R - 1) return g[r][c] + cost(g, r, c + 1);', 'call'),
+        L('        if (c == C - 1) return g[r][c] + cost(g, r + 1, c);', 'call'),
+        L('        return g[r][c] + min(cost(g, r + 1, c), cost(g, r, c + 1));', 'call'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int minPathSum(int[][] g) { return cost(g, 0, 0); }', 'init', 'ret'),
+        L('    private int cost(int[][] g, int r, int c) {'),
+        L('        int R = g.length, C = g[0].length;'),
+        L('        if (r == R - 1 && c == C - 1) return g[r][c];', 'base'),
+        L('        if (r == R - 1) return g[r][c] + cost(g, r, c + 1);', 'call'),
+        L('        if (c == C - 1) return g[r][c] + cost(g, r + 1, c);', 'call'),
+        L('        return g[r][c] + Math.min(cost(g, r + 1, c), cost(g, r, c + 1));', 'call'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = parseNumGrid(values.grid, 6, 6);
+      if (typeof g === 'string') return { error: g };
+      const R = g.length;
+      const Cn = g[0].length;
+      const calls = [...Array(R)].map(() => Array(Cn).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, [...Array(R)].map((_, i) => i), [...Array(Cn)].map((_, i) => i), act, total);
+      steps.push({ tag: 'init', trace: ['Cell (r, c) counts how many times the cheapest path from that cell is recomputed.'], state: view(null) });
+      const cost = (r: number, c: number): number => {
+        total++;
+        calls[r][c]++;
+        if (r === R - 1 && c === Cn - 1) return g[r][c];
+        if (steps.length < MAX_STEPS)
+          steps.push({ tag: 'call', trace: ['cost(', A(r), ',', A(c), ') = ', A(g[r][c]), ' + the cheaper way onward', calls[r][c] > 1 ? [' — solved ', calls[r][c], ' times now'].join('') : '', '.'], state: view([r, c]) });
+        if (r === R - 1) return g[r][c] + cost(r, c + 1);
+        if (c === Cn - 1) return g[r][c] + cost(r + 1, c);
+        return g[r][c] + Math.min(cost(r + 1, c), cost(r, c + 1));
+      };
+      const res = cost(0, 0);
+      steps.push({ tag: 'ret', trace: ['Cheapest path costs ', C(res), ' — after ', C(total), ' calls for ', A(R * Cn), ' cells.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'The recursion enumerates every down/right path, and there are C(R+C−2, R−1) of them. The DP fills each cell once from its top and left neighbours.',
+    complexity: { time: 'O(2^(R+C))', space: 'O(R + C) stack' },
+  },
 };
 
 /* ================= 126. Regular Expression Matching ================= */
@@ -1005,6 +1665,68 @@ const regexMatch: ProblemDef = {
   },
   note: 'The "*" never stands alone — it forms a unit with the previous character, and that unit has exactly two behaviors: disappear (look two pattern columns left) or absorb one more character (look one string row up). Encoding those two arrows correctly is the whole problem.',
   complexity: { time: 'O(m·n)', space: 'O(m·n)' },
+  brute: {
+    label: 'Plain recursion',
+    technique: 'match(i, j): a "x*" either matches nothing (skip it) or eats one more matching character; recursed with no memo.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isMatch(string s, string p) { return match(s, p, 0, 0); }', 'init', 'ret'),
+        L('    bool match(string& s, string& p, int i, int j) {'),
+        L('        if (j == p.size()) return i == s.size();', 'base'),
+        L('        bool first = i < s.size() && (p[j] == s[i] || p[j] == \'.\');', 'call'),
+        L('        if (j + 1 < p.size() && p[j + 1] == \'*\')', 'star'),
+        L('            return match(s, p, i, j + 2) || (first && match(s, p, i + 1, j));', 'star'),
+        L('        return first && match(s, p, i + 1, j + 1);', 'call'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isMatch(String s, String p) { return match(s, p, 0, 0); }', 'init', 'ret'),
+        L('    private boolean match(String s, String p, int i, int j) {'),
+        L('        if (j == p.length()) return i == s.length();', 'base'),
+        L('        boolean first = i < s.length() && (p.charAt(j) == s.charAt(i) || p.charAt(j) == \'.\');', 'call'),
+        L('        if (j + 1 < p.length() && p.charAt(j + 1) == \'*\')', 'star'),
+        L('            return match(s, p, i, j + 2) || (first && match(s, p, i + 1, j));', 'star'),
+        L('        return first && match(s, p, i + 1, j + 1);', 'call'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim();
+      const p = (values.p ?? '').trim();
+      if (!/^[a-z]{0,7}$/.test(s)) return { error: 's: lowercase letters, ≤ 7.' };
+      if (!/^[a-z.*]{1,7}$/.test(p)) return { error: 'p: lowercase, "." and "*", ≤ 7.' };
+      if (/^\*/.test(p) || /\*\*/.test(p)) return { error: 'Invalid pattern: "*" must follow a character.' };
+      const m = s.length;
+      const n = p.length;
+      const calls = [...Array(m + 1)].map(() => Array(n + 1).fill(0));
+      let total = 0;
+      const steps: Step[] = [];
+      const view = (act: [number, number] | null) => callGrid(calls, [...s.split(''), 'ε'], [...p.split(''), 'ε'], act, total);
+      steps.push({ tag: 'init', trace: ['Cell (i, j) counts how often "does s[i…] match p[j…]?" gets asked.'], state: view(null) });
+      const match = (i: number, j: number): boolean => {
+        total++;
+        calls[i][j]++;
+        if (j === n) return i === m;
+        const first = i < m && (p[j] === s[i] || p[j] === '.');
+        if (j + 1 < n && p[j + 1] === '*') {
+          if (steps.length < MAX_STEPS) steps.push({ tag: 'star', trace: ['"', A(p[j] + '*'), '" at s[', A(i), ']: try matching zero copies', first ? ', or eat one more character' : '', '.'], state: view([i, j]) });
+          return match(i, j + 2) || (first && match(i + 1, j));
+        }
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'call', trace: ["p[", A(j), "] = '", A(p[j]), "' vs s[", A(i), '] — ', first ? B('match') : F('no match'), '.'], state: view([i, j]) });
+        return first && match(i + 1, j + 1);
+      };
+      const res = match(0, 0);
+      steps.push({ tag: 'ret', trace: ['Answer: ', C(String(res)), ' after ', C(total), ' calls.'], state: view(null) });
+      return { steps, result: String(res) };
+    },
+    note: 'Patterns with several stars (like "a*a*a*b") make the zero-or-more choice branch repeatedly over the same (i, j) states — exponential in the worst case. The DP table answers each (i, j) once.',
+    complexity: { time: 'O(2^(m+n)) worst case', space: 'O(m + n) stack' },
+  },
 };
 
 export const dp2 = [longestPalindrome, palindromicSubstrings, partitionSubset, uniquePaths, lcs, targetSum, editDistance, maximalSquare, minPathSum, regexMatch];
