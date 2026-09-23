@@ -105,6 +105,94 @@ const goodNodes: ProblemDef = {
   },
   note: '"Good" depends only on the root-to-node path, and DFS visits nodes exactly along such paths — so one extra argument (the running max) is the entire state needed. No lookups back up the tree, ever.',
   complexity: { time: 'O(n)', space: 'O(h)' },
+  brute: {
+    label: 'Check every ancestor',
+    technique: 'For each node, climb back to the root through a parent map and check that no ancestor is larger.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int goodNodes(TreeNode* root) {'),
+        L('        unordered_map<TreeNode*, TreeNode*> parent{{root, nullptr}};', 'init'),
+        L('        vector<TreeNode*> all = collect(root, parent);  // any traversal', 'init'),
+        L('        int count = 0;', 'init'),
+        L('        for (TreeNode* n : all) {', 'enter'),
+        L('            bool good = true;', 'enter'),
+        L('            for (TreeNode* a = parent[n]; a; a = parent[a])  // O(h) climb', 'enter'),
+        L('                if (a->val > n->val) { good = false; break; }', 'bad'),
+        L('            count += good;', 'good'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int goodNodes(TreeNode root) {'),
+        L('        Map<TreeNode, TreeNode> parent = new HashMap<>(); parent.put(root, null);', 'init'),
+        L('        List<TreeNode> all = collect(root, parent);  // any traversal', 'init'),
+        L('        int count = 0;', 'init'),
+        L('        for (TreeNode n : all) {', 'enter'),
+        L('            boolean good = true;', 'enter'),
+        L('            for (TreeNode a = parent.get(n); a != null; a = parent.get(a))  // O(h) climb', 'enter'),
+        L('                if (a.val > n.val) { good = false; break; }', 'bad'),
+        L('            if (good) count++;', 'good'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const { done, badges, snap } = makeSnap(root);
+      const parent = new Map<TNode, TNode | null>([[root, null]]);
+      const all: TNode[] = [];
+      const q = [root];
+      while (q.length) {
+        const n = q.shift()!;
+        all.push(n);
+        for (const c of [n.left, n.right]) if (c) {
+          parent.set(c, n);
+          q.push(c);
+        }
+      }
+      let count = 0;
+      let climbs = 0;
+      const steps: Step[] = [];
+      const aggs = () => [
+        { label: 'good nodes', value: String(count), c: 'b' as const },
+        { label: 'ancestors checked', value: String(climbs), c: 'a' as const },
+      ];
+      steps.push({ tag: 'init', trace: ['No running max: for each node, look back up at all of its ancestors.'], state: snap({ aggs: aggs() }) });
+      for (const n of all) {
+        let blocker: TNode | null = null;
+        for (let a = parent.get(n) ?? null; a; a = parent.get(a) ?? null) {
+          climbs++;
+          if (a.val > n.val) {
+            blocker = a;
+            break;
+          }
+        }
+        if (blocker) {
+          badges.set(n.id, '✗');
+          steps.push({ tag: 'bad', trace: [F(n.val), ' has a larger ancestor ', A(blocker.val), ' — not good.'], state: snap({ current: n.id, aggs: aggs() }) });
+        } else {
+          count++;
+          badges.set(n.id, '✓');
+          done.push(n.id);
+          steps.push({ tag: 'good', trace: ['No ancestor of ', B(n.val), ' is larger — good. Count ', C(count), '.'], state: snap({ current: n.id, aggs: aggs() }) });
+        }
+      }
+      steps.push({ tag: 'ret', trace: [C(count), ' good node(s) after ', A(climbs), ' ancestor checks.'], state: snap({ aggs: aggs() }) });
+      return { steps, result: String(count) };
+    },
+    note: 'Each node re-reads its whole ancestor chain, so a deep tree costs O(n · h). Carrying the maximum seen so far down the DFS answers each node in O(1).',
+    complexity: { time: 'O(n · h)', space: 'O(n)' },
+  },
 };
 
 /* ================= 69. Validate Binary Search Tree ================= */
@@ -193,6 +281,74 @@ const validateBST: ProblemDef = {
   },
   note: 'The classic trap: comparing only parent and child accepts trees where a grandchild sneaks outside a grandparent\'s range. Passing down an interval encodes *all* ancestor constraints in two numbers — each node checks once, O(n) total.',
   complexity: { time: 'O(n)', space: 'O(h)' },
+  brute: {
+    label: 'In-order must increase',
+    technique: 'An in-order traversal of a valid BST lists values in strictly increasing order; list them and check each step.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void inorder(TreeNode* n, vector<int>& out) {', 'walk'),
+        L('        if (!n) return;', 'walk'),
+        L('        inorder(n->left, out); out.push_back(n->val); inorder(n->right, out);', 'walk'),
+        L('    }'),
+        L('public:'),
+        L('    bool isValidBST(TreeNode* root) {'),
+        L('        vector<int> v; inorder(root, v);', 'init'),
+        L('        for (int i = 1; i < v.size(); i++)', 'cmp'),
+        L('            if (v[i] <= v[i - 1]) return false;', 'cmp', 'bad'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void inorder(TreeNode n, List<Integer> out) {', 'walk'),
+        L('        if (n == null) return;', 'walk'),
+        L('        inorder(n.left, out); out.add(n.val); inorder(n.right, out);', 'walk'),
+        L('    }'),
+        L('    public boolean isValidBST(TreeNode root) {'),
+        L('        List<Integer> v = new ArrayList<>(); inorder(root, v);', 'init'),
+        L('        for (int i = 1; i < v.size(); i++)', 'cmp'),
+        L('            if (v.get(i) <= v.get(i - 1)) return false;', 'cmp', 'bad'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const { done, snap } = makeSnap(root);
+      const order: TNode[] = [];
+      const steps: Step[] = [];
+      const listAgg = () => [{ label: 'in-order', value: order.map((n) => n.val).join(', ') || '—', c: 'b' as const }];
+      steps.push({ tag: 'init', trace: ['No bounds: list the values in-order (left, node, right) and check they strictly increase.'], state: snap({ aggs: listAgg() }) });
+      const walk = (n: TNode | null) => {
+        if (!n) return;
+        walk(n.left);
+        order.push(n);
+        done.push(n.id);
+        steps.push({ tag: 'walk', trace: ['In-order visits ', A(n.val), '.'], state: snap({ current: n.id, aggs: listAgg() }) });
+        walk(n.right);
+      };
+      walk(root);
+      let ok = true;
+      for (let i = 1; i < order.length; i++) {
+        if (order[i].val <= order[i - 1].val) {
+          ok = false;
+          steps.push({ tag: 'bad', trace: [F(order[i].val), ' comes after ', F(order[i - 1].val), ' but is not larger — ', C('not a BST'), '.'], state: snap({ current: order[i].id, aggs: listAgg() }) });
+          break;
+        }
+        steps.push({ tag: 'cmp', trace: [A(order[i - 1].val), ' < ', B(order[i].val), ' ✓'], state: snap({ current: order[i].id, aggs: listAgg() }) });
+      }
+      if (ok) steps.push({ tag: 'ret', trace: ['In-order sequence is strictly increasing — ', C('valid BST'), '.'], state: snap({ aggs: listAgg() }) });
+      return { steps, result: String(ok) };
+    },
+    note: 'Also O(n), and arguably the most memorable characterisation of a BST. It stores the whole list; keeping just the previous in-order value, or passing (low, high) bounds down, needs no array.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 70. Kth Smallest Element in a BST ================= */
@@ -293,6 +449,67 @@ const kthSmallest: ProblemDef = {
   },
   note: 'A BST *is* a sorted list folded into a tree, and in-order traversal unfolds it — so "kth smallest" needs no extra data structure, just a counter and early exit after k visits (O(h + k), not O(n)).',
   complexity: { time: 'O(h + k)', space: 'O(h)' },
+  brute: {
+    label: 'Full in-order list',
+    technique: 'Traverse the whole tree in-order into an array and read position k − 1.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void inorder(TreeNode* n, vector<int>& out) {', 'visit'),
+        L('        if (!n) return;', 'visit'),
+        L('        inorder(n->left, out); out.push_back(n->val); inorder(n->right, out);', 'visit'),
+        L('    }'),
+        L('public:'),
+        L('    int kthSmallest(TreeNode* root, int k) {'),
+        L('        vector<int> v; inorder(root, v);  // visits every node', 'init'),
+        L('        return v[k - 1];', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void inorder(TreeNode n, List<Integer> out) {', 'visit'),
+        L('        if (n == null) return;', 'visit'),
+        L('        inorder(n.left, out); out.add(n.val); inorder(n.right, out);', 'visit'),
+        L('    }'),
+        L('    public int kthSmallest(TreeNode root, int k) {'),
+        L('        List<Integer> v = new ArrayList<>(); inorder(root, v);  // visits every node', 'init'),
+        L('        return v.get(k - 1);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const k = parseInt1(values.k, 'k', { min: 1 });
+      if (typeof k === 'string') return { error: k };
+      const total = levels.filter((v) => v !== null).length;
+      if (k > total) return { error: `k must be ≤ number of nodes (${total}).` };
+      const { done, badges, snap } = makeSnap(root);
+      const v: number[] = [];
+      const steps: Step[] = [];
+      const listAgg = () => [{ label: 'sorted list', value: v.join(', ') || '—', c: 'b' as const }];
+      steps.push({ tag: 'init', trace: ['No early stop: list every value in-order, then index into the list.'], state: snap({ aggs: listAgg() }) });
+      const walk = (n: TNode | null) => {
+        if (!n) return;
+        walk(n.left);
+        v.push(n.val);
+        badges.set(n.id, `#${v.length}`);
+        done.push(n.id);
+        steps.push({ tag: 'visit', trace: ['Append ', A(n.val), ' (rank ', A(v.length), ').'], state: snap({ current: n.id, aggs: listAgg() }) });
+        walk(n.right);
+      };
+      walk(root);
+      const result = v[k - 1];
+      steps.push({ tag: 'ret', trace: ['Position ', A(k), ' of the sorted list is ', C(result), ' — but all ', A(total), ' nodes were visited.'], state: snap({ aggs: listAgg() }) });
+      return { steps, result: String(result), resultDetail: `${k}th smallest value` };
+    },
+    note: 'Always visits all n nodes and stores them. The iterative in-order stops the moment it pops the kth value, costing O(h + k) and O(h) memory.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 71. Construct Binary Tree from Preorder and Inorder ================= */
@@ -432,6 +649,109 @@ const buildFromPreIn: ProblemDef = {
   },
   note: 'Preorder\'s first element is always the current subtree\'s root; finding it in inorder splits the remaining values into exact left and right subtrees. The recursion consumes preorder strictly left to right, so a single shared index replaces slicing.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Linear search for the root',
+    technique: 'Same recursion, but find each root’s position in the inorder list by scanning instead of a hash-map lookup.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    int pre = 0;', 'init'),
+        L('public:'),
+        L('    TreeNode* buildTree(vector<int>& preorder, vector<int>& inorder) {'),
+        L('        return build(preorder, inorder, 0, inorder.size() - 1);', 'init'),
+        L('    }'),
+        L('    TreeNode* build(vector<int>& preorder, vector<int>& inorder, int lo, int hi) {', 'enter'),
+        L('        if (lo > hi) return nullptr;', 'enter'),
+        L('        TreeNode* root = new TreeNode(preorder[pre++]);', 'root'),
+        L('        int mid = lo;', 'split'),
+        L('        while (inorder[mid] != root->val) mid++;  // O(n) scan', 'split'),
+        L('        root->left = build(preorder, inorder, lo, mid - 1);', 'recl'),
+        L('        root->right = build(preorder, inorder, mid + 1, hi);', 'recr'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    int pre = 0;', 'init'),
+        L('    public TreeNode buildTree(int[] preorder, int[] inorder) {'),
+        L('        return build(preorder, inorder, 0, inorder.length - 1);', 'init'),
+        L('    }'),
+        L('    TreeNode build(int[] preorder, int[] inorder, int lo, int hi) {', 'enter'),
+        L('        if (lo > hi) return null;', 'enter'),
+        L('        TreeNode root = new TreeNode(preorder[pre++]);', 'root'),
+        L('        int mid = lo;', 'split'),
+        L('        while (inorder[mid] != root.val) mid++;  // O(n) scan', 'split'),
+        L('        root.left = build(preorder, inorder, lo, mid - 1);', 'recl'),
+        L('        root.right = build(preorder, inorder, mid + 1, hi);', 'recr'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const pre = parseIntArray(values.preorder, { maxLen: 12 });
+      if (typeof pre === 'string') return { error: pre };
+      const ino = parseIntArray(values.inorder, { maxLen: 12 });
+      if (typeof ino === 'string') return { error: ino };
+      if (pre.length !== ino.length) return { error: 'Traversals must have the same length.' };
+      if (new Set(pre).size !== pre.length) return { error: 'Values must be distinct.' };
+      if ([...pre].sort().join() !== [...ino].sort().join()) return { error: 'Traversals must contain the same values.' };
+      let preIdx = 0;
+      let scanned = 0;
+      let nextId = 0;
+      const build = (lo: number, hi: number): TNode | null => {
+        if (lo > hi) return null;
+        const val = pre[preIdx++];
+        let mid = lo;
+        while (ino[mid] !== val) {
+          mid++;
+          scanned++;
+        }
+        scanned++;
+        const node: TNode = { id: nextId++, val, left: null, right: null };
+        node.left = build(lo, mid - 1);
+        node.right = build(mid + 1, hi);
+        return node;
+      };
+      const root = build(0, ino.length - 1);
+      if (!root) return { error: 'Traversals are empty.' };
+      const layout = layoutTree(root);
+      const steps: Step[] = [];
+      const shown: number[] = [];
+      const snap = (current: number | null): TreeState => ({
+        nodes: layout.nodes.filter((n) => shown.includes(n.id)),
+        edges: layout.edges.filter(([a, b]) => shown.includes(a) && shown.includes(b)),
+        current,
+        aggs: [{ label: 'inorder cells scanned', value: String(scanned), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['No value → index map: each root is found by scanning its inorder range.'], state: snap(null) });
+      const replay = (n: TNode | null) => {
+        if (!n) return;
+        shown.push(n.id);
+        steps.push({ tag: 'split', trace: ['Next preorder value ', A(n.val), ' is a root — scan the inorder range to find where it splits left from right.'], state: snap(n.id) });
+        replay(n.left);
+        replay(n.right);
+      };
+      replay(root);
+      const lvl: (number | string)[] = [];
+      const q: (TNode | null)[] = [root];
+      while (q.length) {
+        const n = q.shift()!;
+        if (!n) {
+          lvl.push('null');
+          continue;
+        }
+        lvl.push(n.val);
+        if (n.left || n.right) q.push(n.left, n.right);
+      }
+      while (lvl[lvl.length - 1] === 'null') lvl.pop();
+      steps.push({ tag: 'ret', trace: ['Tree rebuilt after scanning ', A(scanned), ' inorder cells.'], state: snap(null) });
+      return { steps, result: `[${lvl.join(', ')}]`, resultDetail: 'level-order of the rebuilt tree' };
+    },
+    note: 'The recursion is identical, but each root lookup scans its range, so a skewed tree costs O(n²). Precomputing value → inorder index in a hash map makes each split O(1) and the whole build O(n).',
+    complexity: { time: 'O(n²) worst case', space: 'O(h)' },
+  },
 };
 
 /* ================= 72. Binary Tree Maximum Path Sum ================= */
@@ -524,6 +844,77 @@ const maxPathSum: ProblemDef = {
   },
   note: 'The asymmetry is the whole problem: a path through a node may use both children, but the value passed to the parent may use only one (a path cannot fork twice). Clamping negative gains to zero implements "you may simply not extend downward".',
   complexity: { time: 'O(n)', space: 'O(h)' },
+  brute: {
+    label: 'Try every bend point',
+    technique: 'For each node as the top of the path, separately compute the best downward gain on its left and right, and add them.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    int down(TreeNode* n) {  // best single-branch sum starting at n', 'gain'),
+        L('        if (!n) return 0;', 'gain'),
+        L('        return max(0, n->val + max(down(n->left), down(n->right)));', 'gain'),
+        L('    }'),
+        L('public:'),
+        L('    int maxPathSum(TreeNode* root) {', 'init'),
+        L('        if (!root) return INT_MIN;', 'init'),
+        L('        int here = root->val + down(root->left) + down(root->right);  // recomputed', 'bend'),
+        L('        return max({here, maxPathSum(root->left), maxPathSum(root->right)});', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    int down(TreeNode n) {  // best single-branch sum starting at n', 'gain'),
+        L('        if (n == null) return 0;', 'gain'),
+        L('        return Math.max(0, n.val + Math.max(down(n.left), down(n.right)));', 'gain'),
+        L('    }'),
+        L('    public int maxPathSum(TreeNode root) {', 'init'),
+        L('        if (root == null) return Integer.MIN_VALUE;', 'init'),
+        L('        int here = root.val + down(root.left) + down(root.right);  // recomputed', 'bend'),
+        L('        return Math.max(here, Math.max(maxPathSum(root.left), maxPathSum(root.right)));', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const { done, badges, snap } = makeSnap(root);
+      let downCalls = 0;
+      const down = (n: TNode | null): number => {
+        if (!n) return 0;
+        downCalls++;
+        return Math.max(0, n.val + Math.max(down(n.left), down(n.right)));
+      };
+      let best = -Infinity;
+      const steps: Step[] = [];
+      const aggs = () => [
+        { label: 'best path sum', value: best === -Infinity ? '—' : String(best), c: 'b' as const },
+        { label: 'down() calls', value: String(downCalls), c: 'a' as const },
+      ];
+      steps.push({ tag: 'init', trace: ['Treat every node as the bend of the path and measure both arms from scratch.'], state: snap({ aggs: aggs() }) });
+      const walk = (n: TNode | null) => {
+        if (!n || steps.length > MAX_STEPS) return;
+        const l = down(n.left);
+        const r = down(n.right);
+        const here = n.val + l + r;
+        const better = here > best;
+        if (better) best = here;
+        badges.set(n.id, String(here));
+        done.push(n.id);
+        steps.push({ tag: 'bend', trace: ['Bend at ', A(n.val), ': left arm ', A(l), ' + ', A(n.val), ' + right arm ', A(r), ' = ', better ? B(here) : F(here), better ? ' — best so far.' : '.'], state: snap({ current: n.id, aggs: aggs() }) });
+        walk(n.left);
+        walk(n.right);
+      };
+      walk(root);
+      steps.push({ tag: 'ret', trace: ['Maximum path sum: ', C(best), ' — after ', A(downCalls), ' down() calls.'], state: snap({ aggs: aggs() }) });
+      return { steps, result: String(best) };
+    },
+    note: 'Arm gains are recomputed for every ancestor, making a skewed tree O(n²). The single post-order pass returns each node’s best arm once and checks the bend at the same moment, for O(n).',
+    complexity: { time: 'O(n²) worst case', space: 'O(h)' },
+  },
 };
 
 /* ================= 73. Serialize and Deserialize Binary Tree ================= */
@@ -636,6 +1027,81 @@ const serializeTree: ProblemDef = {
   },
   note: 'Preorder alone can\'t reconstruct a tree — but preorder *with explicit nulls* can: every "#" tells the builder exactly where a subtree ends, so deserialization is the same recursion reading tokens instead of nodes.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Level-order (BFS)',
+    technique: 'Serialise breadth-first, writing # for every missing child; deserialise by reading the tokens back two children at a time with a queue.',
+    code: {
+      cpp: [
+        L('class Codec {'),
+        L('public:'),
+        L('    string serialize(TreeNode* root) {', 'ser'),
+        L('        string out; queue<TreeNode*> q; q.push(root);', 'ser'),
+        L('        while (!q.empty()) {', 'ser'),
+        L('            TreeNode* n = q.front(); q.pop();', 'ser'),
+        L('            if (!n) { out += "#,"; continue; }', 'sernull'),
+        L('            out += to_string(n->val) + ","; q.push(n->left); q.push(n->right);', 'ser'),
+        L('        }'),
+        L('        return out;', 'deser'),
+        L('    }'),
+        L('    TreeNode* deserialize(string data) {', 'deser'),
+        L('        // first token is the root; then each dequeued node reads its left and right tokens', 'build', 'buildnull'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('public class Codec {'),
+        L('    public String serialize(TreeNode root) {', 'ser'),
+        L('        StringBuilder out = new StringBuilder(); Deque<TreeNode> q = new LinkedList<>(); q.add(root);', 'ser'),
+        L('        while (!q.isEmpty()) {', 'ser'),
+        L('            TreeNode n = q.poll();', 'ser'),
+        L('            if (n == null) { out.append("#,"); continue; }', 'sernull'),
+        L('            out.append(n.val).append(","); q.add(n.left); q.add(n.right);', 'ser'),
+        L('        }'),
+        L('        return out.toString();', 'deser'),
+        L('    }'),
+        L('    public TreeNode deserialize(String data) {', 'deser'),
+        L('        // first token is the root; then each dequeued node reads its left and right tokens', 'build', 'buildnull'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const layout = layoutTree(root);
+      const tokens: string[] = [];
+      const done: number[] = [];
+      const steps: Step[] = [];
+      const snap = (current: number | null): TreeState => ({
+        nodes: layout.nodes,
+        edges: layout.edges,
+        current,
+        done: [...done],
+        aggs: [{ label: 'string', value: tokens.join(',') || '—', c: 'a' }],
+      });
+      steps.push({ tag: 'ser', trace: ['Serialise level by level with a queue, writing ', A('#'), ' for each missing child.'], state: snap(null) });
+      const q: (TNode | null)[] = [root];
+      while (q.length) {
+        const n = q.shift()!;
+        if (!n) {
+          tokens.push('#');
+          continue;
+        }
+        tokens.push(String(n.val));
+        done.push(n.id);
+        steps.push({ tag: 'ser', trace: ['Dequeue ', A(n.val), ' — write it and enqueue both children (even if null).'], state: snap(n.id) });
+        q.push(n.left, n.right);
+      }
+      const data = tokens.join(',');
+      steps.push({ tag: 'deser', trace: ['Serialised: "', B(data), '". Deserialise by giving each node, in queue order, the next two tokens as children.'], state: snap(null) });
+      steps.push({ tag: 'build', trace: ['Every token consumed — the tree is rebuilt identically. Round trip ', C('✓'), '.'], state: snap(null) });
+      return { steps, result: `"${data}"`, resultDetail: 'serialized form (level order with # nulls)' };
+    },
+    note: 'Also O(n) and matches LeetCode’s own "[1,2,3,null,…]" format. It writes # for the children of every leaf, so it can be up to twice as long; trailing #s can be trimmed. The preorder version rebuilds with simple recursion instead of a queue.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 export const trees3 = [goodNodes, validateBST, kthSmallest, buildFromPreIn, maxPathSum, serializeTree];
