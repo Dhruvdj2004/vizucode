@@ -220,6 +220,85 @@ const implementTrie: ProblemDef = {
   },
   note: 'The trie\'s cost depends only on the word\'s length, never on how many words are stored — and the isEnd flag is what distinguishes "app is a stored word" from "app is merely a prefix of apple".',
   complexity: { time: 'O(L) per op', space: 'O(total characters)' },
+  brute: {
+    label: 'Word set + prefix scan',
+    technique: 'Keep inserted words in a hash set: search is one lookup, but startsWith has to check every stored word.',
+    code: {
+      cpp: [
+        L('class Trie {'),
+        L('    unordered_set<string> words;'),
+        L('public:'),
+        L('    void insert(string w) { words.insert(w); }', 'insert'),
+        L('    bool search(string w) { return words.count(w); }', 'search'),
+        L('    bool startsWith(string p) {', 'prefix'),
+        L('        for (auto& w : words)  // O(#words × |p|)', 'prefix'),
+        L('            if (w.compare(0, p.size(), p) == 0) return true;', 'prefix'),
+        L('        return false;', 'prefix'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Trie {'),
+        L('    Set<String> words = new HashSet<>();'),
+        L('    public void insert(String w) { words.add(w); }', 'insert'),
+        L('    public boolean search(String w) { return words.contains(w); }', 'search'),
+        L('    public boolean startsWith(String p) {', 'prefix'),
+        L('        for (String w : words)  // O(#words × |p|)', 'prefix'),
+        L('            if (w.startsWith(p)) return true;', 'prefix'),
+        L('        return false;', 'prefix'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = (values.ops ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter operations.' };
+      if (raw.length > 10) return { error: 'Keep it to at most 10 operations.' };
+      const ops: { kind: string; arg: string }[] = [];
+      for (const op of raw) {
+        const m = op.match(/^(insert|search|startsWith)\s+([a-z]+)$/i);
+        if (!m) return { error: `Bad op "${op}". Use: insert w, search w, startsWith p (lowercase words).` };
+        if (m[2].length > 8) return { error: 'Keep words to at most 8 characters.' };
+        ops.push({ kind: m[1], arg: m[2].toLowerCase() });
+      }
+      const words: string[] = [];
+      const outputs: string[] = [];
+      let compared = 0;
+      const steps: Step[] = [];
+      const view = (hl: string[] = []): TreeState => ({
+        nodes: [
+          { id: 0, val: 'set', x: 0.5, y: 0 },
+          ...words.map((w, i) => ({ id: i + 1, val: w, x: words.length === 1 ? 0.5 : i / (words.length - 1), y: 1 })),
+        ],
+        edges: words.map((_, i) => [0, i + 1] as [number, number]),
+        done: words.map((w, i) => (hl.includes(w) ? i + 1 : -1)).filter((x) => x >= 0),
+        aggs: [
+          { label: 'words compared by startsWith', value: String(compared), c: 'a' },
+          { label: 'outputs', value: outputs.join('  ') || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'insert', trace: ['No trie: whole words go into a hash set.'], state: view() });
+      for (const op of ops) {
+        if (op.kind.toLowerCase() === 'insert') {
+          if (!words.includes(op.arg)) words.push(op.arg);
+          steps.push({ tag: 'insert', trace: ['insert("', A(op.arg), '") — add the whole word to the set.'], state: view([op.arg]) });
+        } else if (op.kind.toLowerCase() === 'search') {
+          const ok = words.includes(op.arg);
+          outputs.push(`search(${op.arg})→${ok}`);
+          steps.push({ tag: 'search', trace: ['search("', A(op.arg), '") — one hash lookup → ', C(String(ok)), '.'], state: view(ok ? [op.arg] : []) });
+        } else {
+          const hits = words.filter((w) => w.startsWith(op.arg));
+          compared += words.length;
+          const ok = hits.length > 0;
+          outputs.push(`startsWith(${op.arg})→${ok}`);
+          steps.push({ tag: 'prefix', trace: ['startsWith("', A(op.arg), '") — compare against all ', A(words.length), ' stored word(s) → ', C(String(ok)), '.'], state: view(hits) });
+        }
+      }
+      return { steps, result: outputs.join('  ') || 'done', resultDetail: 'set lookups; prefix queries scan every word' };
+    },
+    note: 'Exact search is just as fast, but every prefix query scans all stored words, costing O(#words × |p|). A trie shares prefixes along one path, so startsWith walks at most |p| nodes no matter how many words are stored.',
+    complexity: { time: 'O(L) insert/search, O(W·L) startsWith', space: 'O(total characters)' },
+  },
 };
 
 /* ================= 75. Design Add and Search Words ================= */
@@ -376,6 +455,97 @@ const addSearchWords: ProblemDef = {
   },
   note: 'A literal character follows one edge; a dot follows all of them — so the search degrades gracefully from O(L) to a backtracking walk only where wildcards appear. The trie\'s sharing keeps even the fan-out cheap.',
   complexity: { time: 'O(26^d · L) worst', space: 'O(total characters)' },
+  brute: {
+    label: 'Scan every word',
+    technique: 'Store words in a list; a search compares the pattern against every stored word of the same length, treating "." as a match-anything.',
+    code: {
+      cpp: [
+        L('class WordDictionary {'),
+        L('    vector<string> words;'),
+        L('public:'),
+        L('    void addWord(string w) { words.push_back(w); }', 'add'),
+        L('    bool search(string p) {', 'search'),
+        L('        for (auto& w : words) {', 'search'),
+        L('            if (w.size() != p.size()) continue;', 'search'),
+        L('            int i = 0;', 'search'),
+        L('            while (i < p.size() && (p[i] == \'.\' || p[i] == w[i])) i++;', 'search'),
+        L('            if (i == p.size()) return true;', 'hit'),
+        L('        }'),
+        L('        return false;', 'miss'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class WordDictionary {'),
+        L('    List<String> words = new ArrayList<>();'),
+        L('    public void addWord(String w) { words.add(w); }', 'add'),
+        L('    public boolean search(String p) {', 'search'),
+        L('        for (String w : words) {', 'search'),
+        L('            if (w.length() != p.length()) continue;', 'search'),
+        L('            int i = 0;', 'search'),
+        L('            while (i < p.length() && (p.charAt(i) == \'.\' || p.charAt(i) == w.charAt(i))) i++;', 'search'),
+        L('            if (i == p.length()) return true;', 'hit'),
+        L('        }'),
+        L('        return false;', 'miss'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = (values.ops ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter operations.' };
+      if (raw.length > 10) return { error: 'Keep it to at most 10 operations.' };
+      const ops: { kind: 'add' | 'search'; arg: string }[] = [];
+      for (const op of raw) {
+        const m = op.match(/^(add|search)\s+([a-z.]+)$/i);
+        if (!m) return { error: `Bad op "${op}". Use: add w, search w.` };
+        if (m[1] === 'add' && m[2].includes('.')) return { error: 'Wildcards only allowed in search.' };
+        if (m[2].length > 8) return { error: 'Keep words to at most 8 characters.' };
+        ops.push({ kind: m[1].toLowerCase() as 'add', arg: m[2].toLowerCase() });
+      }
+      const words: string[] = [];
+      const outputs: string[] = [];
+      let compared = 0;
+      const steps: Step[] = [];
+      const matches = (w: string, p: string) => w.length === p.length && [...p].every((c, i) => c === '.' || c === w[i]);
+      const view = (cur: number | null, hit: number[] = []): TreeState => ({
+        nodes: [
+          { id: 0, val: 'list', x: 0.5, y: 0 },
+          ...words.map((w, i) => ({ id: i + 1, val: w, x: words.length === 1 ? 0.5 : i / (words.length - 1), y: 1 })),
+        ],
+        edges: words.map((_, i) => [0, i + 1] as [number, number]),
+        current: cur,
+        done: hit,
+        aggs: [
+          { label: 'words compared', value: String(compared), c: 'a' },
+          { label: 'outputs', value: outputs.join('  ') || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'add', trace: ['No trie: words sit in a plain list; each search tries them one by one.'], state: view(null) });
+      for (const op of ops) {
+        if (op.kind === 'add') {
+          words.push(op.arg);
+          steps.push({ tag: 'add', trace: ['add("', A(op.arg), '").'], state: view(words.length) });
+          continue;
+        }
+        let found = false;
+        for (let i = 0; i < words.length; i++) {
+          compared++;
+          if (matches(words[i], op.arg)) {
+            found = true;
+            steps.push({ tag: 'hit', trace: ['search("', A(op.arg), '"): "', B(words[i]), '" matches — ', C('true'), '.'], state: view(i + 1, [i + 1]) });
+            break;
+          }
+          steps.push({ tag: 'search', trace: ['search("', A(op.arg), '"): "', F(words[i]), '" does not match.'], state: view(i + 1) });
+        }
+        if (!found) steps.push({ tag: 'miss', trace: ['search("', A(op.arg), '") — no word matches → ', C('false'), '.'], state: view(null) });
+        outputs.push(`search(${op.arg})→${found}`);
+      }
+      return { steps, result: outputs.join('  ') || 'done', resultDetail: 'every search scans the whole list' };
+    },
+    note: 'Every search costs O(#words × L), even for a pattern with no wildcards. A trie narrows the candidates character by character and only branches out where a "." appears.',
+    complexity: { time: 'O(W · L) per search', space: 'O(total characters)' },
+  },
 };
 
 /* ================= 76. Word Search II ================= */
@@ -544,6 +714,87 @@ const wordSearchII: ProblemDef = {
   },
   note: 'Searching each word separately re-walks the board per word. The trie merges all words into one automaton: the DFS dies the moment the current path is a prefix of nothing, and every complete word lights up wherever the walk happens to pass a word-mark node.',
   complexity: { time: 'O(R·C·4^L)', space: 'O(total characters)' },
+  brute: {
+    label: 'Search each word separately',
+    technique: 'Run the ordinary Word Search DFS once for every word, restarting from every cell each time.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<string> findWords(vector<vector<char>>& board, vector<string>& words) {'),
+        L('        vector<string> res;', 'init'),
+        L('        for (auto& w : words)', 'word'),
+        L('            if (exist(board, w)) res.push_back(w);  // full board DFS per word', 'word', 'found'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('    // exist(): the Word Search DFS from every starting cell', 'dfs'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<String> findWords(char[][] board, String[] words) {'),
+        L('        List<String> res = new ArrayList<>();', 'init'),
+        L('        for (String w : words)', 'word'),
+        L('            if (exist(board, w)) res.add(w);  // full board DFS per word', 'word', 'found'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('    // exist(): the Word Search DFS from every starting cell', 'dfs'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = parseGrid(values.board, { maxR: 4, maxC: 4 });
+      if (typeof g === 'string') return { error: g };
+      if (!g.every((row) => row.every((c) => /^[a-z]$/.test(c)))) return { error: 'Board must contain lowercase letters only (no commas needed: rows like "oaan").' };
+      const words = (values.words ?? '').split(',').map((w) => w.trim().toLowerCase()).filter(Boolean);
+      if (words.length === 0 || words.length > 6) return { error: 'Enter 1–6 words.' };
+      if (!words.every((w) => /^[a-z]{1,8}$/.test(w))) return { error: 'Words: lowercase, ≤ 8 letters.' };
+      const R = g.length;
+      const Cn = g[0].length;
+      const found: string[] = [];
+      let cellVisits = 0;
+      const steps: Step[] = [];
+      const view = (path: [number, number][] = [], m: 'active' | 'final' = 'active'): MatrixState => ({
+        grid: g,
+        rowLabels: [...Array(R)].map((_, i) => i),
+        colLabels: [...Array(Cn)].map((_, i) => i),
+        mark: Object.fromEntries(path.map(([r, c]) => [`${r},${c}`, m])),
+        aggs: [
+          { label: 'cells visited in total', value: String(cellVisits), c: 'a' },
+          { label: 'found', value: found.join(', ') || '—', c: 'c' },
+        ],
+      });
+      const exist = (w: string): [number, number][] | null => {
+        const path: [number, number][] = [];
+        const dfs = (r: number, c: number, i: number): boolean => {
+          if (r < 0 || c < 0 || r >= R || c >= Cn || g[r][c] !== w[i] || path.some(([pr, pc]) => pr === r && pc === c)) return false;
+          cellVisits++;
+          path.push([r, c]);
+          if (i === w.length - 1) return true;
+          if (dfs(r + 1, c, i + 1) || dfs(r - 1, c, i + 1) || dfs(r, c + 1, i + 1) || dfs(r, c - 1, i + 1)) return true;
+          path.pop();
+          return false;
+        };
+        for (let r = 0; r < R; r++) for (let c = 0; c < Cn; c++) if (dfs(r, c, 0)) return path;
+        return null;
+      };
+      steps.push({ tag: 'init', trace: ['No shared trie: search the board from scratch for each of the ', A(words.length), ' words.'], state: view() });
+      for (const w of words) {
+        const before = cellVisits;
+        const path = exist(w);
+        if (path) {
+          found.push(w);
+          steps.push({ tag: 'found', trace: ['"', B(w), '" found — this search visited ', A(cellVisits - before), ' cells.'], state: view(path, 'final') });
+        } else {
+          steps.push({ tag: 'word', trace: ['"', F(w), '" is not on the board — ', A(cellVisits - before), ' cells visited for nothing.'], state: view() });
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Found ', C(found.length ? found.join(', ') : 'nothing'), ' after ', A(cellVisits), ' cell visits.'], state: view() });
+      return { steps, result: `[${found.join(', ')}]`, resultDetail: `${found.length} of ${words.length} words found` };
+    },
+    note: 'Words that share a prefix redo the same board exploration once each, so the cost multiplies by the number of words. A trie of all words lets one DFS pursue every word at once and prune a path the moment no word continues it.',
+    complexity: { time: 'O(W · R·C · 4^L)', space: 'O(L)' },
+  },
 };
 
 /* ================= 77. Insert Delete GetRandom O(1) ================= */
@@ -675,6 +926,104 @@ const insertDeleteRandom: ProblemDef = {
   },
   note: 'Arrays alone can\'t delete in O(1); maps alone can\'t sample uniformly. The swap-with-last trick removes the array\'s weakness: order was never promised, so overwriting the victim with the tail preserves everything that matters.',
   complexity: { time: 'O(1) per op', space: 'O(n)' },
+  brute: {
+    label: 'Plain list',
+    technique: 'Keep the values in a list: insert and remove search it linearly, and remove shifts everything after the deleted value.',
+    code: {
+      cpp: [
+        L('class RandomizedSet {'),
+        L('    vector<int> vals;'),
+        L('public:'),
+        L('    bool insert(int v) {'),
+        L('        if (find(vals.begin(), vals.end(), v) != vals.end()) return false;  // O(n)', 'dup'),
+        L('        vals.push_back(v); return true;', 'insert'),
+        L('    }'),
+        L('    bool remove(int v) {'),
+        L('        auto it = find(vals.begin(), vals.end(), v);  // O(n)', 'miss', 'swap'),
+        L('        if (it == vals.end()) return false;', 'miss'),
+        L('        vals.erase(it); return true;  // shifts the tail: O(n)', 'swap'),
+        L('    }'),
+        L('    int getRandom() { return vals[rand() % vals.size()]; }', 'rand'),
+        L('};'),
+      ],
+      java: [
+        L('class RandomizedSet {'),
+        L('    List<Integer> vals = new ArrayList<>();'),
+        L('    Random rng = new Random();'),
+        L('    public boolean insert(int v) {'),
+        L('        if (vals.contains(v)) return false;  // O(n)', 'dup'),
+        L('        vals.add(v); return true;', 'insert'),
+        L('    }'),
+        L('    public boolean remove(int v) {'),
+        L('        return vals.remove(Integer.valueOf(v));  // search + shift: O(n)', 'miss', 'swap'),
+        L('    }'),
+        L('    public int getRandom() { return vals.get(rng.nextInt(vals.size())); }', 'rand'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = (values.ops ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter operations.' };
+      if (raw.length > 14) return { error: 'Keep it to at most 14 operations.' };
+      const vals: number[] = [];
+      const outputs: string[] = [];
+      let scanned = 0;
+      let rngState = 42;
+      const nextRng = () => {
+        rngState = (rngState * 1103515245 + 12345) % 2147483648;
+        return rngState;
+      };
+      const steps: Step[] = [];
+      const st = (hl?: number): ArrayState => ({
+        arr: vals.length ? [...vals] : ['∅'],
+        mark: hl !== undefined ? { [hl]: 'active' } : {},
+        aggs: [
+          { label: 'elements scanned or shifted', value: String(scanned), c: 'a' },
+          { label: 'outputs', value: outputs.join(', ') || '—', c: 'c' },
+        ],
+      });
+      steps.push({ tag: 'insert', trace: ['No index map: every membership check is a linear search.'], state: st() });
+      for (const op of raw) {
+        const mIns = op.match(/^insert\s+(-?\d+)$/i);
+        const mRem = op.match(/^remove\s+(-?\d+)$/i);
+        if (mIns) {
+          const v = Number(mIns[1]);
+          scanned += vals.length;
+          if (vals.includes(v)) {
+            outputs.push('false');
+            steps.push({ tag: 'dup', trace: ['insert(', F(v), ') — found by scanning: ', F('false'), '.'], state: st(vals.indexOf(v)) });
+          } else {
+            vals.push(v);
+            outputs.push('true');
+            steps.push({ tag: 'insert', trace: ['insert(', B(v), ') — scanned ', A(vals.length - 1), ' value(s), then appended.'], state: st(vals.length - 1) });
+          }
+        } else if (mRem) {
+          const v = Number(mRem[1]);
+          const i = vals.indexOf(v);
+          scanned += i < 0 ? vals.length : i + 1;
+          if (i < 0) {
+            outputs.push('false');
+            steps.push({ tag: 'miss', trace: ['remove(', F(v), ') — not found after scanning everything: ', F('false'), '.'], state: st() });
+          } else {
+            scanned += vals.length - 1 - i;
+            vals.splice(i, 1);
+            outputs.push('true');
+            steps.push({ tag: 'swap', trace: ['remove(', A(v), ') — found at index ', A(i), '; shift the ', A(vals.length - i), ' later value(s) left.'], state: st(Math.min(i, vals.length - 1)) });
+          }
+        } else if (/^getrandom$/i.test(op)) {
+          if (vals.length === 0) return { error: 'getRandom on an empty set.' };
+          const i = nextRng() % vals.length;
+          outputs.push(String(vals[i]));
+          steps.push({ tag: 'rand', trace: ['getRandom() — index ', A(i), ' → ', C(vals[i]), '.'], state: st(i) });
+        } else {
+          return { error: `Unknown op "${op}". Use: insert n, remove n, getRandom.` };
+        }
+      }
+      return { steps, result: outputs.join(', '), resultDetail: 'insert/remove O(n); random picks may land on different values because removal keeps order' };
+    },
+    note: 'getRandom is O(1), but insert and remove both search the list and remove also shifts the tail — O(n). A value → index map plus swap-with-last deletion makes all three operations O(1).',
+    complexity: { time: 'O(n) insert/remove, O(1) getRandom', space: 'O(n)' },
+  },
 };
 
 /* ================= 78. Design Twitter ================= */
@@ -816,6 +1165,99 @@ const designTwitter: ProblemDef = {
   },
   note: 'The design splits cleanly: writes are trivially cheap (append + set ops), and the only interesting read — the feed — is exactly the "merge k sorted lists" pattern, because each user\'s tweets are already in time order.',
   complexity: { time: 'feed O(T log T), rest O(1)', space: 'O(users + tweets)' },
+  brute: {
+    label: 'Scan the global log',
+    technique: 'Keep one global list of (time, user, tweet); a feed scans the whole list backwards, keeping tweets from the user or their followees.',
+    code: {
+      cpp: [
+        L('class Twitter {'),
+        L('    vector<pair<int, int>> log;  // (user, tweetId), oldest first'),
+        L('    unordered_map<int, unordered_set<int>> follows;'),
+        L('public:'),
+        L('    void postTweet(int u, int id) { log.push_back({u, id}); }', 'post'),
+        L('    vector<int> getNewsFeed(int u) {', 'gather'),
+        L('        vector<int> feed;', 'gather'),
+        L('        for (int i = log.size() - 1; i >= 0 && feed.size() < 10; i--)  // whole log', 'gather'),
+        L('            if (log[i].first == u || follows[u].count(log[i].first)) feed.push_back(log[i].second);', 'gather'),
+        L('        return feed;', 'gather'),
+        L('    }'),
+        L('    void follow(int a, int b) { follows[a].insert(b); }', 'follow'),
+        L('    void unfollow(int a, int b) { follows[a].erase(b); }', 'unfollow'),
+        L('};'),
+      ],
+      java: [
+        L('class Twitter {'),
+        L('    List<int[]> log = new ArrayList<>();  // {user, tweetId}, oldest first'),
+        L('    Map<Integer, Set<Integer>> follows = new HashMap<>();'),
+        L('    public void postTweet(int u, int id) { log.add(new int[]{u, id}); }', 'post'),
+        L('    public List<Integer> getNewsFeed(int u) {', 'gather'),
+        L('        List<Integer> feed = new ArrayList<>();', 'gather'),
+        L('        Set<Integer> f = follows.getOrDefault(u, Set.of());', 'gather'),
+        L('        for (int i = log.size() - 1; i >= 0 && feed.size() < 10; i--)  // whole log', 'gather'),
+        L('            if (log.get(i)[0] == u || f.contains(log.get(i)[0])) feed.add(log.get(i)[1]);', 'gather'),
+        L('        return feed;', 'gather'),
+        L('    }'),
+        L('    public void follow(int a, int b) { follows.computeIfAbsent(a, k -> new HashSet<>()).add(b); }', 'follow'),
+        L('    public void unfollow(int a, int b) { if (follows.containsKey(a)) follows.get(a).remove(b); }', 'unfollow'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const raw = (values.ops ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+      if (raw.length === 0) return { error: 'Enter operations.' };
+      if (raw.length > 14) return { error: 'Keep it to at most 14 operations.' };
+      const log: [number, number][] = [];
+      const follows = new Map<number, Set<number>>();
+      const outputs: string[] = [];
+      let scanned = 0;
+      const steps: Step[] = [];
+      const view = (feedUser?: number, feed?: number[], hl: number[] = []): ListState => ({
+        chains: [
+          { label: 'global log (oldest → newest)', items: log.length ? log.map(([u, id], i) => ({ v: `u${u}:#${id}`, mark: hl.includes(i) ? ('good' as const) : undefined })) : [{ v: '(empty)', mark: 'dim' as const }], broken: true },
+          ...(feed ? [{ label: `feed(${feedUser})`, items: feed.length ? feed.map((id) => ({ v: `#${id}`, mark: 'final' as const })) : [{ v: '(empty)', mark: 'dim' as const }], broken: true }] : []),
+        ],
+        aggs: [{ label: 'log entries scanned', value: String(scanned), c: 'a' }],
+      });
+      steps.push({ tag: 'post', trace: ['One shared log for everyone; feeds filter it on demand.'], state: view() });
+      for (const op of raw) {
+        const mPost = op.match(/^post\s+(\d+)\s+(\d+)$/i);
+        const mFollow = op.match(/^follow\s+(\d+)\s+(\d+)$/i);
+        const mUnfollow = op.match(/^unfollow\s+(\d+)\s+(\d+)$/i);
+        const mFeed = op.match(/^feed\s+(\d+)$/i);
+        if (mPost) {
+          log.push([Number(mPost[1]), Number(mPost[2])]);
+          steps.push({ tag: 'post', trace: ['User ', A(mPost[1]), ' posts ', B(`#${mPost[2]}`), ' — appended to the global log.'], state: view() });
+        } else if (mFollow) {
+          const a = Number(mFollow[1]);
+          if (!follows.has(a)) follows.set(a, new Set());
+          follows.get(a)!.add(Number(mFollow[2]));
+          steps.push({ tag: 'follow', trace: ['User ', A(a), ' follows ', B(mFollow[2]), '.'], state: view() });
+        } else if (mUnfollow) {
+          follows.get(Number(mUnfollow[1]))?.delete(Number(mUnfollow[2]));
+          steps.push({ tag: 'unfollow', trace: ['User ', A(mUnfollow[1]), ' unfollows ', F(mUnfollow[2]), '.'], state: view() });
+        } else if (mFeed) {
+          const u = Number(mFeed[1]);
+          const f = follows.get(u) ?? new Set<number>();
+          const feed: number[] = [];
+          const hl: number[] = [];
+          for (let i = log.length - 1; i >= 0 && feed.length < 10; i--) {
+            scanned++;
+            if (log[i][0] === u || f.has(log[i][0])) {
+              feed.push(log[i][1]);
+              hl.push(i);
+            }
+          }
+          outputs.push(`feed(${u})→[${feed.join(',')}]`);
+          steps.push({ tag: 'gather', trace: ['feed(', A(u), '): walk the whole log from newest, keeping tweets by ', A(u), ' or followees → ', C(`[${feed.join(', ')}]`), '.'], state: view(u, feed, hl) });
+        } else {
+          return { error: `Unknown op "${op}". Use: post u t, follow a b, unfollow a b, feed u.` };
+        }
+      }
+      return { steps, result: outputs.join('  ') || 'done', resultDetail: 'feed = scan of the global log' };
+    },
+    note: 'Simple, but a feed may scan every tweet ever posted by anyone, even users you do not follow. Per-user tweet lists merged with a heap only touch the followees’ newest tweets.',
+    complexity: { time: 'feed O(total tweets), rest O(1)', space: 'O(users + tweets)' },
+  },
 };
 
 export const triesDesign = [implementTrie, addSearchWords, wordSearchII, insertDeleteRandom, designTwitter];
