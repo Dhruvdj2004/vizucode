@@ -10,6 +10,23 @@ const snap = (root: TNode | null, extra?: Partial<TreeState>): TreeState => ({ .
 
 const allIds = (n: TNode | null): number[] => (n ? [n.id, ...allIds(n.left), ...allIds(n.right)] : []);
 
+/** LeetCode-style level order with nulls for gaps, e.g. "[1, null, 2]". */
+const levelStr = (root: TNode | null): string => {
+  if (!root) return '[]';
+  const out: (number | null)[] = [];
+  const q: (TNode | null)[] = [root];
+  while (q.length) {
+    const n = q.shift()!;
+    if (!n) {
+      out.push(null);
+      continue;
+    }
+    out.push(n.val);
+    if (n.left || n.right) q.push(n.left, n.right);
+  }
+  return `[${out.map((v) => (v === null ? 'null' : v)).join(', ')}]`;
+};
+
 /* ================= Construct Binary Tree from Inorder and Postorder ================= */
 const buildFromInPost: ProblemDef = {
   slug: 'construct-binary-tree-from-inorder-and-postorder-traversal',
@@ -160,6 +177,99 @@ const buildFromInPost: ProblemDef = {
   },
   note: 'Consuming postorder from the back means you meet each node before its children, but right-to-left — which is exactly why the right subtree must be built before the left. Swap those two lines and the tree comes out mirrored on every level.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Linear search + array slicing',
+    technique: 'Take the last postorder value as the root, scan inorder for it, and recurse on freshly copied sub-arrays.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    TreeNode* buildTree(vector<int> in, vector<int> post) {', 'start'),
+        L('        if (in.empty()) return nullptr;', 'empty'),
+        L('        int val = post.back();', 'root'),
+        L('        int mid = find(in.begin(), in.end(), val) - in.begin();   // O(n) scan', 'split'),
+        L('        TreeNode* node = new TreeNode(val);'),
+        L('        node->left = buildTree(vector<int>(in.begin(), in.begin() + mid),', 'left'),
+        L('                               vector<int>(post.begin(), post.begin() + mid));', 'left'),
+        L('        node->right = buildTree(vector<int>(in.begin() + mid + 1, in.end()),', 'right'),
+        L('                                vector<int>(post.begin() + mid, post.end() - 1));', 'right'),
+        L('        return node;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public TreeNode buildTree(int[] in, int[] post) {', 'start'),
+        L('        if (in.length == 0) return null;', 'empty'),
+        L('        int val = post[post.length - 1], mid = 0;', 'root'),
+        L('        while (in[mid] != val) mid++;   // O(n) scan', 'split'),
+        L('        TreeNode node = new TreeNode(val);'),
+        L('        node.left = buildTree(Arrays.copyOfRange(in, 0, mid),', 'left'),
+        L('                              Arrays.copyOfRange(post, 0, mid));', 'left'),
+        L('        node.right = buildTree(Arrays.copyOfRange(in, mid + 1, in.length),', 'right'),
+        L('                               Arrays.copyOfRange(post, mid, post.length - 1));', 'right'),
+        L('        return node;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const inorder = parseIntArray(values.inorder, { maxLen: 9 });
+      if (typeof inorder === 'string') return { error: inorder };
+      const postorder = parseIntArray(values.postorder, { maxLen: 9 });
+      if (typeof postorder === 'string') return { error: postorder };
+      if (inorder.length !== postorder.length) return { error: 'Both traversals must have the same length.' };
+      if (new Set(inorder).size !== inorder.length) return { error: 'Values must be distinct.' };
+      if ([...inorder].sort((a, b) => a - b).join() !== [...postorder].sort((a, b) => a - b).join()) {
+        return { error: 'Both traversals must contain the same values.' };
+      }
+      let root: TNode | null = null;
+      let nextId = 0;
+      let scanned = 0;
+      let copied = 0;
+      const placed: number[] = [];
+      const steps: Step[] = [];
+      const view = (cur: number | null, note: string): TreeState =>
+        snap(root, {
+          current: cur,
+          done: [...placed],
+          stack: [{ text: note }],
+          stackTitle: 'current call',
+          aggs: [
+            { label: 'inorder values scanned', value: String(scanned), c: 'a' },
+            { label: 'values copied into sub-arrays', value: String(copied), c: 'b' },
+          ],
+        });
+      steps.push({ tag: 'start', trace: ['Straightforward recursion: no index map, and every call gets its own copies of the two arrays.'], state: view(null, `in [${inorder.join(', ')}], post [${postorder.join(', ')}]`) });
+      const build = (inn: number[], post: number[]): TNode | null => {
+        if (steps.length > MAX_STEPS) return null;
+        if (!inn.length) {
+          steps.push({ tag: 'empty', trace: ['Empty arrays — null child.'], state: view(null, 'in [], post []') });
+          return null;
+        }
+        const val = post[post.length - 1];
+        const node: TNode = { id: nextId++, val, left: null, right: null };
+        if (!root) root = node;
+        placed.push(node.id);
+        steps.push({ tag: 'root', trace: ['Last postorder value ', A(val), ' is this subtree’s root.'], state: view(node.id, `in [${inn.join(', ')}], post [${post.join(', ')}]`) });
+        const mid = inn.indexOf(val);
+        scanned += mid + 1;
+        steps.push({ tag: 'split', trace: ['Scan inorder left to right for ', A(val), ' — found after ', F(mid + 1), ' comparison(s), at index ', B(mid), '.'], state: view(node.id, `split at ${mid}`) });
+        copied += 2 * mid;
+        steps.push({ tag: 'left', trace: ['Copy ', A(mid), ' value(s) from each array and build the left subtree.'], state: view(node.id, `left of ${val}`) });
+        node.left = build(inn.slice(0, mid), post.slice(0, mid));
+        copied += 2 * (inn.length - mid - 1);
+        steps.push({ tag: 'right', trace: ['Copy the rest and build the right subtree of ', A(val), '.'], state: view(node.id, `right of ${val}`) });
+        node.right = build(inn.slice(mid + 1), post.slice(mid, post.length - 1));
+        return node;
+      };
+      build(inorder, postorder);
+      steps.push({ tag: 'ret', trace: ['Tree rebuilt after ', C(scanned), ' scan comparisons and ', C(copied), ' copied values.'], state: snap(root, { done: allIds(root) }) });
+      return { steps, result: levelStr(root), resultDetail: 'level order' };
+    },
+    note: 'Correct but O(n²) on a skewed tree: every level rescans inorder and copies both arrays. A value → index hash map plus index ranges (instead of copies) brings it down to O(n).',
+    complexity: { time: 'O(n²)', space: 'O(n²) copies' },
+  },
 };
 
 /* ================= Flatten Binary Tree to Linked List ================= */
@@ -277,6 +387,81 @@ const flattenTree: ProblemDef = {
   },
   note: 'This is the Morris traversal idea reused for restructuring: the rightmost node of the left subtree is exactly where the old right subtree belongs, so one relink handles a whole subtree. The recursive version is easier to write but costs O(h) stack; this one is genuinely O(1) space.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Collect preorder, then relink',
+    technique: 'Store every node in preorder in a list, then point each node’s right at the next one and clear its left.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void pre(TreeNode* n, vector<TreeNode*>& order) {', 'collect'),
+        L('        if (!n) return;'),
+        L('        order.push_back(n); pre(n->left, order); pre(n->right, order);', 'collect'),
+        L('    }'),
+        L('public:'),
+        L('    void flatten(TreeNode* root) {'),
+        L('        vector<TreeNode*> order; pre(root, order);', 'init', 'collect'),
+        L('        for (int i = 0; i + 1 < order.size(); i++) {', 'link'),
+        L('            order[i]->left = nullptr;', 'link'),
+        L('            order[i]->right = order[i + 1];', 'link'),
+        L('        }'),
+        L('    }', 'ret'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void pre(TreeNode n, List<TreeNode> order) {', 'collect'),
+        L('        if (n == null) return;'),
+        L('        order.add(n); pre(n.left, order); pre(n.right, order);', 'collect'),
+        L('    }'),
+        L('    public void flatten(TreeNode root) {'),
+        L('        List<TreeNode> order = new ArrayList<>(); pre(root, order);', 'init', 'collect'),
+        L('        for (int i = 0; i + 1 < order.size(); i++) {', 'link'),
+        L('            order.get(i).left = null;', 'link'),
+        L('            order.get(i).right = order.get(i + 1);', 'link'),
+        L('        }'),
+        L('    }', 'ret'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree, 10);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const order: TNode[] = [];
+      const linked: number[] = [];
+      const steps: Step[] = [];
+      const view = (cur: TNode | null): TreeState =>
+        snap(root, {
+          current: cur ? cur.id : null,
+          done: [...linked],
+          queued: order.map((n) => n.id),
+          stack: order.map((n) => ({ text: String(n.val) })),
+          stackTitle: 'preorder list',
+        });
+      steps.push({ tag: 'init', trace: ['Easy route: remember the preorder in an extra list, then rewire from that list.'], state: view(null) });
+      const pre = (n: TNode | null) => {
+        if (!n) return;
+        order.push(n);
+        steps.push({ tag: 'collect', trace: ['Preorder visits ', A(n.val), ' — append it to the list.'], state: view(n) });
+        pre(n.left);
+        pre(n.right);
+      };
+      pre(root);
+      for (let i = 0; i + 1 < order.length && steps.length < MAX_STEPS; i++) {
+        order[i].left = null;
+        order[i].right = order[i + 1];
+        linked.push(order[i].id);
+        steps.push({ tag: 'link', trace: ['Clear ', A(order[i].val), '.left and set its right to the next list entry, ', B(order[i + 1].val), '.'], state: view(order[i]) });
+      }
+      const chain: number[] = [];
+      for (let w: TNode | null = root; w; w = w.right) chain.push(w.val);
+      steps.push({ tag: 'ret', trace: ['Flattened: ', C(chain.join(' → ')), '.'], state: snap(root, { done: allIds(root) }) });
+      return { steps, result: chain.join(' → ') };
+    },
+    note: 'Simple and O(n) time, but the list costs O(n) extra memory, which the follow-up forbids. The in-place version reaches O(1) space by splicing each left subtree in front of the right subtree.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Populating Next Right Pointers in Each Node ================= */
@@ -403,6 +588,97 @@ const nextRightPointers: ProblemDef = {
   },
   note: 'The level above is fully linked before the level below is touched, which is what makes the cousin connection possible in constant space — n.next.left is reachable only because n.next was set on the previous pass. In the general (non-perfect) version this same idea still works, but you need a dummy head to skip over missing children.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'BFS with a queue',
+    technique: 'Traverse level by level with a queue and link each dequeued node to the one before it on the same level.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    Node* connect(Node* root) {'),
+        L('        if (!root) return root;'),
+        L('        queue<Node*> q; q.push(root);', 'init'),
+        L('        while (!q.empty()) {', 'level'),
+        L('            Node* prev = nullptr;', 'level'),
+        L('            for (int i = q.size(); i > 0; i--) {', 'link'),
+        L('                Node* n = q.front(); q.pop();', 'link'),
+        L('                if (prev) prev->next = n;', 'link'),
+        L('                prev = n;', 'link'),
+        L('                if (n->left) { q.push(n->left); q.push(n->right); }', 'link'),
+        L('            }'),
+        L('        }'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public Node connect(Node root) {'),
+        L('        if (root == null) return root;'),
+        L('        Queue<Node> q = new LinkedList<>(List.of(root));', 'init'),
+        L('        while (!q.isEmpty()) {', 'level'),
+        L('            Node prev = null;', 'level'),
+        L('            for (int i = q.size(); i > 0; i--) {', 'link'),
+        L('                Node n = q.poll();', 'link'),
+        L('                if (prev != null) prev.next = n;', 'link'),
+        L('                prev = n;', 'link'),
+        L('                if (n.left != null) { q.add(n.left); q.add(n.right); }', 'link'),
+        L('            }'),
+        L('        }'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree, 15);
+      if (typeof levels === 'string') return { error: levels };
+      if (levels.some((v) => v === null)) return { error: 'This version assumes a perfect tree — remove the nulls.' };
+      if (![1, 3, 7, 15].includes(levels.length)) return { error: 'A perfect tree has 1, 3, 7 or 15 nodes.' };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const nextOf = new Map<number, TNode>();
+      const linked: number[] = [];
+      let queue: TNode[] = [root];
+      let peak = 1;
+      const steps: Step[] = [];
+      const view = (cur: TNode | null): TreeState =>
+        snap(root, {
+          nodes: layoutTree(root).nodes.map((nd) => ({ ...nd, badge: nextOf.has(nd.id) ? `→${nextOf.get(nd.id)!.val}` : undefined })),
+          current: cur ? cur.id : null,
+          done: [...linked],
+          queued: queue.map((n) => n.id),
+          aggs: [{ label: 'largest queue size', value: String(peak), c: 'a' }, { label: 'links made', value: String(nextOf.size), c: 'c' }],
+        });
+      steps.push({ tag: 'init', trace: ['Plain level-order BFS: nodes of one level come out of the queue consecutively.'], state: view(null) });
+      while (queue.length && steps.length < MAX_STEPS) {
+        steps.push({ tag: 'level', trace: ['New level of ', A(queue.length), ' node(s): ', A(queue.map((n) => n.val).join(', ')), '.'], state: view(null) });
+        const next: TNode[] = [];
+        let prev: TNode | null = null;
+        for (const n of queue) {
+          if (prev) {
+            nextOf.set(prev.id, n);
+            linked.push(prev.id);
+          }
+          if (n.left && n.right) next.push(n.left, n.right);
+          steps.push({ tag: 'link', trace: prev ? ['Dequeue ', A(n.val), ' and link ', B(prev.val), ' → ', B(n.val), '.'] : ['Dequeue ', A(n.val), ' — first on its level, nothing to link yet.'], state: view(n) });
+          prev = n;
+        }
+        queue = next;
+        peak = Math.max(peak, queue.length);
+      }
+      steps.push({ tag: 'ret', trace: [C(nextOf.size), ' links made, but the queue grew to ', C(peak), ' nodes.'], state: view(null) });
+      const rows: string[] = [];
+      for (let h: TNode | null = root; h; h = h.left) {
+        const row: number[] = [];
+        for (let n: TNode | null = h; n; n = nextOf.get(n.id) ?? null) row.push(n.val);
+        rows.push(row.join(' → ') + ' → #');
+      }
+      return { steps, result: rows.join('  |  ') };
+    },
+    note: 'O(n) time, but the queue holds a whole level, up to n/2 nodes on the bottom row. The optimal version walks each finished level through its own next pointers, so it needs only O(1) extra space.',
+    complexity: { time: 'O(n)', space: 'O(n) queue' },
+  },
 };
 
 /* ================= All Nodes Distance K in Binary Tree ================= */
@@ -552,6 +828,115 @@ const distanceK: ProblemDef = {
   },
   note: 'The seen set is doing double duty: it prevents BFS from bouncing back down the edge it just came up, which without it would revisit the target on step two and loop forever. Once parents exist, this is a completely ordinary graph BFS — the tree structure stops mattering.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Root paths for every node',
+    technique: 'For each node, compare its root path with the target’s root path: distance = |pathA| + |pathB| − 2·(shared prefix).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    bool path(TreeNode* n, TreeNode* t, vector<TreeNode*>& p) {'),
+        L('        if (!n) return false;'),
+        L('        p.push_back(n);'),
+        L('        if (n == t || path(n->left, t, p) || path(n->right, t, p)) return true;'),
+        L('        p.pop_back(); return false;'),
+        L('    }'),
+        L('    void all(TreeNode* n, vector<TreeNode*>& v) { if (n) { v.push_back(n); all(n->left, v); all(n->right, v); } }'),
+        L('public:'),
+        L('    vector<int> distanceK(TreeNode* root, TreeNode* target, int k) {'),
+        L('        vector<TreeNode*> pt, nodes; path(root, target, pt); all(root, nodes);', 'init'),
+        L('        vector<int> res;'),
+        L('        for (TreeNode* n : nodes) {', 'node'),
+        L('            vector<TreeNode*> pn; path(root, n, pn);', 'node'),
+        L('            int c = 0; while (c < pn.size() && c < pt.size() && pn[c] == pt[c]) c++;', 'node'),
+        L('            if (pt.size() + pn.size() - 2 * c == k) res.push_back(n->val);', 'hit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    boolean path(TreeNode n, TreeNode t, List<TreeNode> p) {'),
+        L('        if (n == null) return false;'),
+        L('        p.add(n);'),
+        L('        if (n == t || path(n.left, t, p) || path(n.right, t, p)) return true;'),
+        L('        p.remove(p.size() - 1); return false;'),
+        L('    }'),
+        L('    void all(TreeNode n, List<TreeNode> v) { if (n != null) { v.add(n); all(n.left, v); all(n.right, v); } }'),
+        L('    public List<Integer> distanceK(TreeNode root, TreeNode target, int k) {'),
+        L('        List<TreeNode> pt = new ArrayList<>(), nodes = new ArrayList<>(); path(root, target, pt); all(root, nodes);', 'init'),
+        L('        List<Integer> res = new ArrayList<>();'),
+        L('        for (TreeNode n : nodes) {', 'node'),
+        L('            List<TreeNode> pn = new ArrayList<>(); path(root, n, pn);', 'node'),
+        L('            int c = 0; while (c < pn.size() && c < pt.size() && pn.get(c) == pt.get(c)) c++;', 'node'),
+        L('            if (pt.size() + pn.size() - 2 * c == k) res.add(n.val);', 'hit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree, 14);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const targetVal = parseInt1(values.target, 'Target node value');
+      if (typeof targetVal === 'string') return { error: targetVal };
+      const k = parseInt1(values.k, 'k', { min: 0, max: 6 });
+      if (typeof k === 'string') return { error: k };
+      const nodes: TNode[] = [];
+      const parent = new Map<number, TNode>();
+      const walk = (n: TNode | null, p: TNode | null) => {
+        if (!n) return;
+        nodes.push(n);
+        if (p) parent.set(n.id, p);
+        walk(n.left, n);
+        walk(n.right, n);
+      };
+      walk(root, null);
+      const target = nodes.find((n) => n.val === targetVal);
+      if (!target) return { error: `No node has value ${targetVal}.` };
+      const pathTo = (n: TNode): TNode[] => {
+        const p: TNode[] = [];
+        for (let x: TNode | undefined = n; x; x = parent.get(x.id)) p.unshift(x);
+        return p;
+      };
+      const pt = pathTo(target);
+      const res: number[] = [];
+      const hits: number[] = [];
+      const steps: Step[] = [];
+      const view = (path: TNode[], cur: TNode | null): TreeState =>
+        snap(root, {
+          current: cur ? cur.id : target.id,
+          done: [...hits],
+          queued: path.map((n) => n.id),
+          aggs: [
+            { label: 'target path', value: pt.map((n) => n.val).join('→'), c: 'a' },
+            { label: 'found', value: res.join(', ') || '—', c: 'c' },
+          ],
+        });
+      steps.push({ tag: 'init', trace: ['Root path of the target ', A(targetVal), ': ', A(pt.map((n) => n.val).join(' → ')), '. Now measure every node against it.'], state: view(pt, target) });
+      for (const n of nodes) {
+        const pn = pathTo(n);
+        let c = 0;
+        while (c < pn.length && c < pt.length && pn[c] === pt[c]) c++;
+        const dist = pt.length + pn.length - 2 * c;
+        if (dist === k) {
+          res.push(n.val);
+          hits.push(n.id);
+          steps.push({ tag: 'hit', trace: ['Node ', B(n.val), ': paths share ', A(c), ' node(s), distance ', A(pt.length - c), ' + ', A(pn.length - c), ' = ', C(dist), ' — keep it.'], state: view(pn, n) });
+        } else {
+          steps.push({ tag: 'node', trace: ['Node ', A(n.val), ': paths share ', A(c), ' node(s), distance ', F(dist), '.'], state: view(pn, n) });
+        }
+        if (steps.length > MAX_STEPS) break;
+      }
+      steps.push({ tag: 'ret', trace: res.length ? ['Nodes at distance ', C(k), ': ', C(res.join(', ')), '.'] : ['No node is at distance ', C(k), '.'], state: view([], null) });
+      return { steps, result: res.length ? `[${res.join(', ')}]` : '[]' };
+    },
+    note: 'Each node needs its own O(h) root-path search, so this costs O(n · h), which becomes O(n²) on a skewed tree. Recording parent pointers once turns the tree into a graph where a single BFS from the target finds distance k in O(n).',
+    complexity: { time: 'O(n · h)', space: 'O(h)' },
+  },
 };
 
 /* ================= Vertical Order Traversal ================= */
@@ -695,6 +1080,95 @@ const verticalOrder: ProblemDef = {
   },
   note: 'This is rated hard purely because of the tie-break: nodes at the same (column, row) must be ordered by value, not by traversal order — which is what separates it from the easier "vertical order traversal" variant. Collecting triples and sorting once keeps that rule in a single comparator instead of scattered through the traversal.',
   complexity: { time: 'O(n log n)', space: 'O(n)' },
+  brute: {
+    label: 'BFS into column buckets',
+    technique: 'BFS carrying (column, row), dropping each node into an ordered map of column buckets, then sort each bucket by (row, value).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<vector<int>> verticalTraversal(TreeNode* root) {'),
+        L('        map<int, vector<pair<int,int>>> cols;   // col -> (row, val)', 'init'),
+        L('        queue<tuple<TreeNode*,int,int>> q; q.push({root, 0, 0});', 'init'),
+        L('        while (!q.empty()) {', 'visit'),
+        L('            auto [n, c, r] = q.front(); q.pop();', 'visit'),
+        L('            cols[c].push_back({r, n->val});', 'visit'),
+        L('            if (n->left) q.push({n->left, c - 1, r + 1});', 'visit'),
+        L('            if (n->right) q.push({n->right, c + 1, r + 1});', 'visit'),
+        L('        }'),
+        L('        vector<vector<int>> res;'),
+        L('        for (auto& [c, v] : cols) {', 'col'),
+        L('            sort(v.begin(), v.end());', 'col'),
+        L('            vector<int> vals; for (auto& [r, x] : v) vals.push_back(x);', 'col'),
+        L('            res.push_back(vals);', 'col'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<List<Integer>> verticalTraversal(TreeNode root) {'),
+        L('        TreeMap<Integer, List<int[]>> cols = new TreeMap<>();   // col -> {row, val}', 'init'),
+        L('        Deque<Object[]> q = new ArrayDeque<>(); q.add(new Object[]{root, 0, 0});', 'init'),
+        L('        while (!q.isEmpty()) {', 'visit'),
+        L('            Object[] e = q.poll(); TreeNode n = (TreeNode) e[0]; int c = (int) e[1], r = (int) e[2];', 'visit'),
+        L('            cols.computeIfAbsent(c, x -> new ArrayList<>()).add(new int[]{r, n.val});', 'visit'),
+        L('            if (n.left != null) q.add(new Object[]{n.left, c - 1, r + 1});', 'visit'),
+        L('            if (n.right != null) q.add(new Object[]{n.right, c + 1, r + 1});', 'visit'),
+        L('        }'),
+        L('        List<List<Integer>> res = new ArrayList<>();'),
+        L('        for (List<int[]> v : cols.values()) {', 'col'),
+        L('            v.sort((a, b) -> a[0] != b[0] ? a[0] - b[0] : a[1] - b[1]);', 'col'),
+        L('            List<Integer> vals = new ArrayList<>(); for (int[] p : v) vals.add(p[1]);', 'col'),
+        L('            res.add(vals);', 'col'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree, 13);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const cols = new Map<number, { row: number; val: number; id: number }[]>();
+      const tags = new Map<number, string>();
+      const steps: Step[] = [];
+      const bucketStr = () =>
+        [...cols.keys()].sort((a, b) => a - b).map((c) => `${c}:{${cols.get(c)!.map((e) => e.val).join(',')}}`).join(' ') || '—';
+      const view = (cur: TNode | null): TreeState =>
+        snap(root, {
+          nodes: layoutTree(root).nodes.map((nd) => ({ ...nd, badge: tags.get(nd.id) })),
+          current: cur ? cur.id : null,
+          done: [...tags.keys()],
+          aggs: [{ label: 'column buckets', value: bucketStr(), c: 'b' }],
+        });
+      steps.push({ tag: 'init', trace: ['BFS from the root at column ', A(0), ', row ', A(0), '; each node goes into the bucket for its column.'], state: view(null) });
+      const q: [TNode, number, number][] = [[root, 0, 0]];
+      while (q.length && steps.length < MAX_STEPS) {
+        const [n, c, r] = q.shift()!;
+        if (!cols.has(c)) cols.set(c, []);
+        cols.get(c)!.push({ row: r, val: n.val, id: n.id });
+        tags.set(n.id, `${c},${r}`);
+        steps.push({ tag: 'visit', trace: ['Dequeue ', A(n.val), ' at column ', B(c), ', row ', B(r), ' — into bucket ', B(c), '.'], state: view(n) });
+        if (n.left) q.push([n.left, c - 1, r + 1]);
+        if (n.right) q.push([n.right, c + 1, r + 1]);
+      }
+      const res: number[][] = [];
+      for (const c of [...cols.keys()].sort((a, b) => a - b)) {
+        const v = cols.get(c)!.sort((a, b) => a.row - b.row || a.val - b.val);
+        res.push(v.map((e) => e.val));
+        steps.push({ tag: 'col', trace: ['Column ', A(c), ': sort by (row, value) → [', B(v.map((e) => e.val).join(', ')), '].'], state: snap(root, { done: v.map((e) => e.id), aggs: [{ label: `column ${c}`, value: v.map((e) => e.val).join(', '), c: 'b' }] }) });
+      }
+      const out = res.map((c) => `[${c.join(',')}]`).join(', ');
+      steps.push({ tag: 'ret', trace: ['Vertical order: ', C(out), '.'], state: snap(root, { done: allIds(root) }) });
+      return { steps, result: out };
+    },
+    note: 'Same O(n log n) bound: the ordered map keeps columns sorted and each bucket is sorted separately. BFS already produces rows in order, so only same-cell ties actually need the value tie-break.',
+    complexity: { time: 'O(n log n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Convert Sorted Array to Binary Search Tree ================= */
@@ -813,6 +1287,100 @@ const sortedArrayToBST: ProblemDef = {
   },
   note: 'Inserting the values one by one would build a completely degenerate right-leaning chain — sorted input is the worst case for naive BST insertion. Choosing the midpoint recursively guarantees the two subtrees differ in size by at most one, giving O(log n) height for free.',
   complexity: { time: 'O(n)', space: 'O(log n)' },
+  brute: {
+    label: 'Iterative with a queue of ranges',
+    technique: 'Replace recursion with a queue of (node, lo, hi) jobs; each job creates the children from the middles of the two halves.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    TreeNode* sortedArrayToBST(vector<int>& a) {'),
+        L('        int hi0 = a.size() - 1; TreeNode* root = new TreeNode(a[hi0 / 2]);', 'start'),
+        L('        queue<tuple<TreeNode*,int,int>> q; q.push({root, 0, hi0});', 'start'),
+        L('        while (!q.empty()) {', 'pop'),
+        L('            auto [n, lo, hi] = q.front(); q.pop();', 'pop'),
+        L('            int mid = lo + (hi - lo) / 2;', 'pop'),
+        L('            if (lo <= mid - 1) {', 'left'),
+        L('                n->left = new TreeNode(a[lo + (mid - 1 - lo) / 2]);', 'left'),
+        L('                q.push({n->left, lo, mid - 1});', 'left'),
+        L('            }'),
+        L('            if (mid + 1 <= hi) {', 'right'),
+        L('                n->right = new TreeNode(a[mid + 1 + (hi - mid - 1) / 2]);', 'right'),
+        L('                q.push({n->right, mid + 1, hi});', 'right'),
+        L('            }'),
+        L('        }'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public TreeNode sortedArrayToBST(int[] a) {'),
+        L('        int hi0 = a.length - 1; TreeNode root = new TreeNode(a[hi0 / 2]);', 'start'),
+        L('        Deque<Object[]> q = new ArrayDeque<>(); q.add(new Object[]{root, 0, hi0});', 'start'),
+        L('        while (!q.isEmpty()) {', 'pop'),
+        L('            Object[] e = q.poll(); TreeNode n = (TreeNode) e[0]; int lo = (int) e[1], hi = (int) e[2];', 'pop'),
+        L('            int mid = lo + (hi - lo) / 2;', 'pop'),
+        L('            if (lo <= mid - 1) {', 'left'),
+        L('                n.left = new TreeNode(a[lo + (mid - 1 - lo) / 2]);', 'left'),
+        L('                q.add(new Object[]{n.left, lo, mid - 1});', 'left'),
+        L('            }'),
+        L('            if (mid + 1 <= hi) {', 'right'),
+        L('                n.right = new TreeNode(a[mid + 1 + (hi - mid - 1) / 2]);', 'right'),
+        L('                q.add(new Object[]{n.right, mid + 1, hi});', 'right'),
+        L('            }'),
+        L('        }'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.nums, { maxLen: 9 });
+      if (typeof a === 'string') return { error: a };
+      if (!a.length) return { error: 'The array is empty.' };
+      for (let i = 1; i < a.length; i++) if (a[i] <= a[i - 1]) return { error: 'The array must be sorted and strictly increasing.' };
+      let nextId = 0;
+      const mk = (v: number): TNode => ({ id: nextId++, val: v, left: null, right: null });
+      const midOf = (lo: number, hi: number) => lo + Math.floor((hi - lo) / 2);
+      const root = mk(a[midOf(0, a.length - 1)]);
+      const placed: number[] = [root.id];
+      let q: [TNode, number, number][] = [[root, 0, a.length - 1]];
+      const steps: Step[] = [];
+      const view = (cur: TNode | null): TreeState =>
+        snap(root, {
+          current: cur ? cur.id : null,
+          done: [...placed],
+          stack: q.map(([n, lo, hi]) => ({ text: `${n.val}: [${a.slice(lo, hi + 1).join(', ')}]` })),
+          stackTitle: 'job queue',
+          aggs: [{ label: 'array', value: a.join(', '), c: 'a' }],
+        });
+      steps.push({ tag: 'start', trace: ['Root is the middle value ', B(root.val), '; queue the job “build its children from the whole array”.'], state: view(root) });
+      while (q.length && steps.length < MAX_STEPS) {
+        const [n, lo, hi] = q[0];
+        const mid = midOf(lo, hi);
+        steps.push({ tag: 'pop', trace: ['Job for ', A(n.val), ': its range [', A(a.slice(lo, hi + 1).join(', ')), '] splits around index ', A(mid), '.'], state: view(n) });
+        q = q.slice(1);
+        if (lo <= mid - 1) {
+          n.left = mk(a[midOf(lo, mid - 1)]);
+          placed.push(n.left.id);
+          q.push([n.left, lo, mid - 1]);
+          steps.push({ tag: 'left', trace: ['Left half [', A(a.slice(lo, mid).join(', ')), '] → middle ', B(n.left.val), ' becomes the left child.'], state: view(n.left) });
+        }
+        if (mid + 1 <= hi) {
+          n.right = mk(a[midOf(mid + 1, hi)]);
+          placed.push(n.right.id);
+          q.push([n.right, mid + 1, hi]);
+          steps.push({ tag: 'right', trace: ['Right half [', A(a.slice(mid + 1, hi + 1).join(', ')), '] → middle ', B(n.right.val), ' becomes the right child.'], state: view(n.right) });
+        }
+      }
+      const height = (n: TNode | null): number => (n ? 1 + Math.max(height(n.left), height(n.right)) : 0);
+      steps.push({ tag: 'ret', trace: ['Balanced BST built top-down, one level at a time — height ', C(height(root)), '.'], state: snap(root, { done: allIds(root) }) });
+      return { steps, result: levelStr(root), resultDetail: `height ${height(root)}` };
+    },
+    note: 'Same O(n) tree and the same midpoint rule, built breadth-first instead of by recursion. It avoids the call stack, but the job queue can hold about n/2 entries at the bottom level, versus O(log n) recursion depth.',
+    complexity: { time: 'O(n)', space: 'O(n) queue' },
+  },
 };
 
 /* ================= Insert into a Binary Search Tree ================= */
@@ -938,6 +1506,77 @@ const insertBST: ProblemDef = {
   },
   note: 'A new value can always go in as a leaf, which is why no restructuring is needed — the search path you followed is precisely the set of constraints the new node satisfies. Without rebalancing, though, inserting sorted data degenerates the tree to a list, which is what AVL and red-black trees exist to prevent.',
   complexity: { time: 'O(h)', space: 'O(1)' },
+  brute: {
+    label: 'Recursive insert',
+    technique: 'insert(node) returns the subtree root: recurse into the side val belongs to, and return a new node when you fall off the tree.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    TreeNode* insertIntoBST(TreeNode* root, int val) {', 'init'),
+        L('        if (!root) return new TreeNode(val);', 'attach'),
+        L('        if (val < root->val) root->left = insertIntoBST(root->left, val);', 'left'),
+        L('        else root->right = insertIntoBST(root->right, val);', 'right'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public TreeNode insertIntoBST(TreeNode root, int val) {', 'init'),
+        L('        if (root == null) return new TreeNode(val);', 'attach'),
+        L('        if (val < root.val) root.left = insertIntoBST(root.left, val);', 'left'),
+        L('        else root.right = insertIntoBST(root.right, val);', 'right'),
+        L('        return root;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree, 12);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const val = parseInt1(values.val, 'Value to insert');
+      if (typeof val === 'string') return { error: val };
+      const isBST = (n: TNode | null, lo: number, hi: number): boolean =>
+        !n || (n.val > lo && n.val < hi && isBST(n.left, lo, n.val) && isBST(n.right, n.val, hi));
+      if (!isBST(root, -Infinity, Infinity)) return { error: 'That level-order is not a valid binary search tree.' };
+      let maxId = Math.max(...allIds(root));
+      const path: number[] = [];
+      const calls: string[] = [];
+      const steps: Step[] = [];
+      const view = (cur: TNode | null, fresh?: number): TreeState =>
+        snap(root, { current: cur ? cur.id : null, done: [...path], queued: fresh !== undefined ? [fresh] : [], stack: [...calls].reverse().map((text) => ({ text })), stackTitle: 'Call stack' });
+      steps.push({ tag: 'init', trace: ['Recursive version: each call hands back its (possibly new) subtree root to its parent.'], state: view(root) });
+      const ins = (n: TNode): TNode => {
+        path.push(n.id);
+        calls.push(`insert(${n.val})`);
+        if (val < n.val) {
+          steps.push({ tag: 'left', trace: [A(val), ' < ', A(n.val), ' — recurse left.'], state: view(n) });
+          if (n.left) n.left = ins(n.left);
+          else {
+            n.left = { id: ++maxId, val, left: null, right: null };
+            steps.push({ tag: 'attach', trace: ['Hit null — return a new node ', C(val), ', which becomes the left child of ', A(n.val), '.'], state: view(n, n.left.id) });
+          }
+        } else {
+          steps.push({ tag: 'right', trace: [A(val), ' ≥ ', A(n.val), ' — recurse right.'], state: view(n) });
+          if (n.right) n.right = ins(n.right);
+          else {
+            n.right = { id: ++maxId, val, left: null, right: null };
+            steps.push({ tag: 'attach', trace: ['Hit null — return a new node ', C(val), ', which becomes the right child of ', A(n.val), '.'], state: view(n, n.right.id) });
+          }
+        }
+        calls.pop();
+        return n;
+      };
+      ins(root);
+      steps.push({ tag: 'ret', trace: ['Calls unwind, each returning its unchanged root — ', C(val), ' is in place.'], state: snap(root, { done: allIds(root) }) });
+      return { steps, result: levelStr(root) };
+    },
+    note: 'The same O(h) path as the loop, but every level leaves a frame on the call stack, so it uses O(h) memory instead of O(1). On a degenerate tree that is O(n) frames.',
+    complexity: { time: 'O(h)', space: 'O(h) recursion' },
+  },
 };
 
 /* ================= Delete Node in a BST ================= */
@@ -1088,6 +1727,100 @@ const deleteBST: ProblemDef = {
   },
   note: 'The successor is the only value that can replace a two-child node without moving anything else, because it is the unique value that sits directly between the two subtrees in sorted order. The predecessor (largest on the left) works equally well — pick one and stay consistent.',
   complexity: { time: 'O(h)', space: 'O(h)' },
+  brute: {
+    label: 'Rebuild from sorted values',
+    technique: 'Read out the sorted values with inorder, drop the key, and build a fresh balanced BST from what is left.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void inorder(TreeNode* n, vector<int>& v) {', 'collect'),
+        L('        if (!n) return;'),
+        L('        inorder(n->left, v); v.push_back(n->val); inorder(n->right, v);', 'collect'),
+        L('    }'),
+        L('    TreeNode* build(vector<int>& v, int lo, int hi) {', 'rebuild'),
+        L('        if (lo > hi) return nullptr;'),
+        L('        int mid = (lo + hi) / 2; TreeNode* n = new TreeNode(v[mid]);', 'rebuild'),
+        L('        n->left = build(v, lo, mid - 1); n->right = build(v, mid + 1, hi);', 'rebuild'),
+        L('        return n;'),
+        L('    }'),
+        L('public:'),
+        L('    TreeNode* deleteNode(TreeNode* root, int key) {'),
+        L('        vector<int> v; inorder(root, v);', 'init', 'collect'),
+        L('        v.erase(remove(v.begin(), v.end(), key), v.end());', 'drop'),
+        L('        return build(v, 0, (int) v.size() - 1);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void inorder(TreeNode n, List<Integer> v) {', 'collect'),
+        L('        if (n == null) return;'),
+        L('        inorder(n.left, v); v.add(n.val); inorder(n.right, v);', 'collect'),
+        L('    }'),
+        L('    TreeNode build(List<Integer> v, int lo, int hi) {', 'rebuild'),
+        L('        if (lo > hi) return null;'),
+        L('        int mid = (lo + hi) / 2; TreeNode n = new TreeNode(v.get(mid));', 'rebuild'),
+        L('        n.left = build(v, lo, mid - 1); n.right = build(v, mid + 1, hi);', 'rebuild'),
+        L('        return n;'),
+        L('    }'),
+        L('    public TreeNode deleteNode(TreeNode root, int key) {'),
+        L('        List<Integer> v = new ArrayList<>(); inorder(root, v);', 'init', 'collect'),
+        L('        v.remove(Integer.valueOf(key));', 'drop'),
+        L('        return build(v, 0, v.size() - 1);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree, 12);
+      if (typeof levels === 'string') return { error: levels };
+      const old = buildTree(levels);
+      if (!old) return { error: 'Tree is empty.' };
+      const key = parseInt1(values.key, 'Value to delete');
+      if (typeof key === 'string') return { error: key };
+      const isBST = (n: TNode | null, lo: number, hi: number): boolean =>
+        !n || (n.val > lo && n.val < hi && isBST(n.left, lo, n.val) && isBST(n.right, n.val, hi));
+      if (!isBST(old, -Infinity, Infinity)) return { error: 'That level-order is not a valid binary search tree.' };
+      const vals: number[] = [];
+      const read: number[] = [];
+      const steps: Step[] = [];
+      steps.push({ tag: 'init', trace: ['Heavy-handed but simple: throw the old shape away and rebuild.'], state: snap(old, {}) });
+      const inorder = (n: TNode | null) => {
+        if (!n) return;
+        inorder(n.left);
+        vals.push(n.val);
+        read.push(n.id);
+        steps.push({ tag: 'collect', trace: ['Inorder reads ', A(n.val), ' → [', A(vals.join(', ')), '].'], state: snap(old, { current: n.id, done: [...read] }) });
+        inorder(n.right);
+      };
+      inorder(old);
+      const rest = vals.filter((v) => v !== key);
+      steps.push({
+        tag: 'drop',
+        trace: rest.length < vals.length ? ['Drop ', F(key), ' from the sorted list: [', B(rest.join(', ') || '—'), '].'] : [F(key), ' is not in the tree — the list is unchanged.'],
+        state: snap(old, { done: [...read] }),
+      });
+      let nextId = 0;
+      let root: TNode | null = null;
+      const placed: number[] = [];
+      const build = (lo: number, hi: number): TNode | null => {
+        if (lo > hi || steps.length > MAX_STEPS) return null;
+        const mid = Math.floor((lo + hi) / 2);
+        const n: TNode = { id: nextId++, val: rest[mid], left: null, right: null };
+        if (!root) root = n;
+        placed.push(n.id);
+        steps.push({ tag: 'rebuild', trace: ['Middle of [', A(rest.slice(lo, hi + 1).join(', ')), '] is ', B(rest[mid]), ' — new node.'], state: snap(root, { current: n.id, done: [...placed] }) });
+        n.left = build(lo, mid - 1);
+        n.right = build(mid + 1, hi);
+        return n;
+      };
+      build(0, rest.length - 1);
+      steps.push({ tag: 'ret', trace: root ? ['Fresh BST without ', C(key), ' — valid, but every node was rebuilt.'] : ['The tree is now ', C('empty'), '.'], state: snap(root, { done: allIds(root) }) });
+      return { steps, result: levelStr(root) };
+    },
+    note: 'Always correct, and the result is even balanced, but it touches all n nodes and allocates a whole new tree: O(n) time and memory. The in-place delete follows one root-to-leaf path in O(h) and leaves every other node where it was. Because the shape changes, the level order can differ from the in-place answer; both are valid BSTs.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Binary Search Tree Iterator ================= */
@@ -1205,6 +1938,79 @@ const bstIterator: ProblemDef = {
   },
   note: 'Each node is pushed once and popped once across the entire iteration, so next() is O(1) amortised even though a single call can push a whole spine. The O(h) memory is the point of the exercise — an iterator you can stop early, unlike a precomputed list.',
   complexity: { time: 'O(1) amortised per next()', space: 'O(h)' },
+  brute: {
+    label: 'Flatten to an array up front',
+    technique: 'Do the whole inorder traversal in the constructor, store the sorted values, and walk an index through them.',
+    code: {
+      cpp: [
+        L('class BSTIterator {'),
+        L('    vector<int> a; int i = 0;'),
+        L('    void inorder(TreeNode* n) {', 'flatten'),
+        L('        if (!n) return;'),
+        L('        inorder(n->left); a.push_back(n->val); inorder(n->right);', 'flatten'),
+        L('    }'),
+        L('public:'),
+        L('    BSTIterator(TreeNode* root) { inorder(root); }', 'init'),
+        L('    int next() { return a[i++]; }', 'next'),
+        L('    bool hasNext() { return i < a.size(); }', 'hasNext'),
+        L('};'),
+      ],
+      java: [
+        L('class BSTIterator {'),
+        L('    List<Integer> a = new ArrayList<>(); int i = 0;'),
+        L('    void inorder(TreeNode n) {', 'flatten'),
+        L('        if (n == null) return;'),
+        L('        inorder(n.left); a.add(n.val); inorder(n.right);', 'flatten'),
+        L('    }'),
+        L('    public BSTIterator(TreeNode root) { inorder(root); }', 'init'),
+        L('    public int next() { return a.get(i++); }', 'next'),
+        L('    public boolean hasNext() { return i < a.size(); }', 'hasNext'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree, 12);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const isBST = (n: TNode | null, lo: number, hi: number): boolean =>
+        !n || (n.val > lo && n.val < hi && isBST(n.left, lo, n.val) && isBST(n.right, n.val, hi));
+      if (!isBST(root, -Infinity, Infinity)) return { error: 'That level-order is not a valid binary search tree.' };
+      const a: TNode[] = [];
+      const emitted: number[] = [];
+      let i = 0;
+      const steps: Step[] = [];
+      const view = (cur: TNode | null): TreeState =>
+        snap(root, {
+          current: cur ? cur.id : null,
+          done: a.slice(0, i).map((n) => n.id),
+          queued: a.slice(i).map((n) => n.id),
+          stack: a.map((n, j) => ({ text: `${j === i ? '→ ' : ''}${n.val}` })),
+          stackTitle: 'stored array (→ = index i)',
+          aggs: [{ label: 'emitted', value: emitted.join(', ') || '—', c: 'c' }],
+        });
+      steps.push({ tag: 'init', trace: ['The constructor traverses the entire tree before anyone calls next().'], state: view(null) });
+      const inorder = (n: TNode | null) => {
+        if (!n) return;
+        inorder(n.left);
+        a.push(n);
+        steps.push({ tag: 'flatten', trace: ['Store ', A(n.val), ' — array now holds ', A(a.length), ' value(s).'], state: view(n) });
+        inorder(n.right);
+      };
+      inorder(root);
+      while (steps.length < MAX_STEPS) {
+        const more = i < a.length;
+        steps.push({ tag: 'hasNext', trace: ['hasNext() → ', B(more ? 'true' : 'false'), ' (i = ', A(i), ', size ', A(a.length), ').'], state: view(null) });
+        if (!more) break;
+        const n = a[i++];
+        emitted.push(n.val);
+        steps.push({ tag: 'next', trace: ['next() → ', C(n.val), ' — just read a[', A(i - 1), '].'], state: view(n) });
+      }
+      return { steps, result: `[${emitted.join(', ')}]`, resultDetail: `${emitted.length} calls to next()` };
+    },
+    note: 'next() and hasNext() are true O(1), but the constructor pays O(n) time and the array takes O(n) memory even if the caller only wants the first value. The stack-based iterator keeps only the left spine, O(h), and does its work lazily.',
+    complexity: { time: 'O(n) build, O(1) next()', space: 'O(n)' },
+  },
 };
 
 /* ================= Two Sum IV - Input is a BST ================= */
@@ -1328,6 +2134,75 @@ const twoSumBST: ProblemDef = {
   },
   note: 'A hash set while traversing solves it in one pass with O(n) memory and no sortedness needed; the two-pointer route trades that for reusing what a BST already gives you. Both are O(n) — the interesting follow-up is doing it in O(h) space with two BST iterators walking inward from both ends.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Hash set during DFS',
+    technique: 'Traverse the tree once; at each node check whether k − val was already seen, then remember val.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    unordered_set<int> seen;'),
+        L('public:'),
+        L('    bool findTarget(TreeNode* root, int k) {', 'init'),
+        L('        if (!root) return false;', 'ret'),
+        L('        if (seen.count(k - root->val)) return true;', 'hit'),
+        L('        seen.insert(root->val);', 'visit'),
+        L('        return findTarget(root->left, k) || findTarget(root->right, k);', 'visit'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    Set<Integer> seen = new HashSet<>();'),
+        L('    public boolean findTarget(TreeNode root, int k) {', 'init'),
+        L('        if (root == null) return false;', 'ret'),
+        L('        if (seen.contains(k - root.val)) return true;', 'hit'),
+        L('        seen.add(root.val);', 'visit'),
+        L('        return findTarget(root.left, k) || findTarget(root.right, k);', 'visit'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree, 12);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const k = parseInt1(values.k, 'Target sum');
+      if (typeof k === 'string') return { error: k };
+      const isBST = (n: TNode | null, lo: number, hi: number): boolean =>
+        !n || (n.val > lo && n.val < hi && isBST(n.left, lo, n.val) && isBST(n.right, n.val, hi));
+      if (!isBST(root, -Infinity, Infinity)) return { error: 'That level-order is not a valid binary search tree.' };
+      const seen = new Map<number, number>();
+      const steps: Step[] = [];
+      const view = (cur: TNode | null, mark: number[] = []): TreeState =>
+        snap(root, {
+          current: cur ? cur.id : null,
+          done: [...seen.values()],
+          queued: mark,
+          aggs: [{ label: 'seen', value: `{${[...seen.keys()].join(', ')}}`, c: 'a' }, { label: 'target', value: String(k), c: 'c' }],
+        });
+      steps.push({ tag: 'init', trace: ['Ignore the BST ordering entirely — a hash set of seen values is enough.'], state: view(null) });
+      let found: [number, number] | null = null;
+      const go = (n: TNode | null): boolean => {
+        if (!n || steps.length > MAX_STEPS) return false;
+        const need = k - n.val;
+        if (seen.has(need)) {
+          found = [Math.min(need, n.val), Math.max(need, n.val)];
+          steps.push({ tag: 'hit', trace: ['At ', A(n.val), ': need ', B(need), ' — already seen! ', C(need), ' + ', C(n.val), ' = ', C(k), '.'], state: view(n, [seen.get(need)!, n.id]) });
+          return true;
+        }
+        seen.set(n.val, n.id);
+        steps.push({ tag: 'visit', trace: ['At ', A(n.val), ': need ', F(need), ', not seen yet. Remember ', A(n.val), '.'], state: view(n) });
+        return go(n.left) || go(n.right);
+      };
+      const ok = go(root);
+      if (!ok) steps.push({ tag: 'ret', trace: ['Every node checked — no pair sums to ', C(k), '.'], state: view(null) });
+      const pair = found as [number, number] | null;
+      return { steps, result: ok ? 'true' : 'false', resultDetail: pair ? `${pair[0]} + ${pair[1]}` : undefined };
+    },
+    note: 'One pass, O(n) time and O(n) memory, and it works on any binary tree because it never uses the BST ordering. The inorder + two-pointer version does use it: sorted order lets the pair be found by moving two pointers inward.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= Recover Binary Search Tree ================= */
@@ -1465,6 +2340,79 @@ const recoverBST: ProblemDef = {
   },
   note: 'Two cases hide behind one rule: if the swapped nodes are adjacent in inorder there is a single dip, otherwise there are two. Setting first only on the first dip while always overwriting second handles both without branching. Swapping values rather than nodes keeps every pointer intact.',
   complexity: { time: 'O(n)', space: 'O(h)' },
+  brute: {
+    label: 'Sort the inorder values',
+    technique: 'Read the inorder values into an array, sort it, and write the sorted values back into the nodes in inorder.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    void inorder(TreeNode* n, vector<TreeNode*>& v) {', 'walk'),
+        L('        if (!n) return;'),
+        L('        inorder(n->left, v); v.push_back(n); inorder(n->right, v);', 'walk'),
+        L('    }'),
+        L('public:'),
+        L('    void recoverTree(TreeNode* root) {'),
+        L('        vector<TreeNode*> nodes; inorder(root, nodes);', 'walk'),
+        L('        vector<int> vals; for (auto n : nodes) vals.push_back(n->val);'),
+        L('        sort(vals.begin(), vals.end());', 'sort'),
+        L('        for (int i = 0; i < nodes.size(); i++) nodes[i]->val = vals[i];', 'write'),
+        L('    }', 'ret'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    void inorder(TreeNode n, List<TreeNode> v) {', 'walk'),
+        L('        if (n == null) return;'),
+        L('        inorder(n.left, v); v.add(n); inorder(n.right, v);', 'walk'),
+        L('    }'),
+        L('    public void recoverTree(TreeNode root) {'),
+        L('        List<TreeNode> nodes = new ArrayList<>(); inorder(root, nodes);', 'walk'),
+        L('        int[] vals = new int[nodes.size()];'),
+        L('        for (int i = 0; i < vals.length; i++) vals[i] = nodes.get(i).val;'),
+        L('        Arrays.sort(vals);', 'sort'),
+        L('        for (int i = 0; i < vals.length; i++) nodes.get(i).val = vals[i];', 'write'),
+        L('    }', 'ret'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const levels = parseLevelOrder(values.tree, 12);
+      if (typeof levels === 'string') return { error: levels };
+      const root = buildTree(levels);
+      if (!root) return { error: 'Tree is empty.' };
+      const order: TNode[] = [];
+      const collect = (n: TNode | null) => {
+        if (!n) return;
+        collect(n.left);
+        order.push(n);
+        collect(n.right);
+      };
+      collect(root);
+      const vals = order.map((n) => n.val);
+      const sorted = [...vals].sort((a, b) => a - b);
+      const diff = vals.map((v, i) => (v !== sorted[i] ? i : -1)).filter((i) => i >= 0);
+      if (diff.length !== 2) return { error: 'Exactly two nodes must be swapped — this tree has ' + (diff.length === 0 ? 'none' : `${diff.length}`) + ' out of place.' };
+      const steps: Step[] = [];
+      const read: number[] = [];
+      const fixed: number[] = [];
+      steps.push({ tag: 'walk', trace: ['Collect all nodes in inorder — a correct BST would give sorted values.'], state: snap(root, {}) });
+      for (const n of order) {
+        read.push(n.id);
+        steps.push({ tag: 'walk', trace: ['Inorder reads ', A(n.val), ' → [', A(order.slice(0, read.length).map((x) => x.val).join(', ')), '].'], state: snap(root, { current: n.id, done: [...read] }) });
+      }
+      steps.push({ tag: 'sort', trace: ['Values [', F(vals.join(', ')), '] sorted → [', B(sorted.join(', ')), '].'], state: snap(root, { done: [...read], aggs: [{ label: 'sorted', value: sorted.join(', '), c: 'b' }] }) });
+      order.forEach((n, i) => {
+        const changed = n.val !== sorted[i];
+        n.val = sorted[i];
+        if (changed) fixed.push(n.id);
+        if (changed) steps.push({ tag: 'write', trace: ['Inorder slot ', A(i), ' gets ', C(sorted[i]), ' (was ', F(vals[i]), ').'], state: snap(root, { current: n.id, done: [...read], queued: [...fixed] }) });
+      });
+      steps.push({ tag: 'ret', trace: ['Rewrote all ', C(order.length), ' values; only ', C(fixed.length), ' actually changed.'], state: snap(root, { done: allIds(root), queued: fixed }) });
+      return { steps, result: `swapped ${vals[diff[0]]} ↔ ${vals[diff[1]]}` };
+    },
+    note: 'Easy to trust, but it sorts all n values (O(n log n)) and stores them (O(n)) just to fix two nodes. Since exactly two nodes are swapped, one inorder pass that spots the dips finds them in O(n), and Morris traversal even gets space down to O(1).',
+    complexity: { time: 'O(n log n)', space: 'O(n)' },
+  },
 };
 
 export const trees5: ProblemDef[] = [
