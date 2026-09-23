@@ -9,6 +9,9 @@
 //   node scripts/check-approaches.mjs              # all problems
 //   node scripts/check-approaches.mjs <slug>...    # only these slugs
 //   node scripts/check-approaches.mjs --missing    # list slugs with no brute
+//   node scripts/check-approaches.mjs --cases f.json
+//       f.json = [[slug, {inputKey: value, ...}], ...] — runs both solutions on
+//       each input set (merged over the defaults) and compares their results.
 import { build } from 'esbuild';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -34,6 +37,23 @@ if (args[0] === '--missing') {
   console.log(missing.join('\n'));
   console.log(`\n${missing.length} of ${Object.keys(problemRegistry).length} problems have no second approach.`);
   process.exit(0);
+}
+
+if (args[0] === '--cases') {
+  const { readFileSync } = await import('node:fs');
+  const cases = JSON.parse(readFileSync(args[1], 'utf8'));
+  let bad = 0;
+  for (const [slug, vals] of cases) {
+    const p = problemRegistry[slug];
+    const v = { ...Object.fromEntries(p.inputs.map((f) => [f.key, f.defaultValue])), ...vals };
+    const a = p.run(v);
+    const b = p.brute.run(v);
+    const same = a.result === b.result && !a.error === !b.error;
+    if (!same) bad++;
+    console.log(`${same ? '  ok' : 'DIFF'} ${slug} ${JSON.stringify(vals)} → ${a.result ?? a.error} | ${b.result ?? b.error}`);
+  }
+  console.log(`\n${cases.length - bad}/${cases.length} cases agree.`);
+  process.exit(bad ? 1 : 0);
 }
 
 const slugs = args.length ? args : Object.keys(problemRegistry).filter((s) => problemRegistry[s].brute);

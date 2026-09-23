@@ -139,6 +139,132 @@ const validSudoku: ProblemDef = {
   },
   note: 'Validity is purely local: a board is valid iff no digit repeats within any single unit. Encoding "digit d in row r / col c / box b" as set keys lets one linear scan test all 27 units simultaneously.',
   complexity: { time: 'O(81)', space: 'O(81)' },
+  brute: {
+    label: 'Three passes',
+    technique: 'Check the 9 rows, then the 9 columns, then the 9 boxes — a fresh set per unit.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool isValidSudoku(vector<vector<char>>& board) {'),
+        L('        for (int r = 0; r < 9; r++) {', 'rows'),
+        L('            unordered_set<char> seen;', 'rows'),
+        L('            for (int c = 0; c < 9; c++) {', 'rows'),
+        L('                char d = board[r][c];', 'rows'),
+        L('                if (d != \'.\' && !seen.insert(d).second) return false;', 'duprows'),
+        L('            }'),
+        L('        }'),
+        L('        for (int c = 0; c < 9; c++) {', 'cols'),
+        L('            unordered_set<char> seen;', 'cols'),
+        L('            for (int r = 0; r < 9; r++) {', 'cols'),
+        L('                char d = board[r][c];', 'cols'),
+        L('                if (d != \'.\' && !seen.insert(d).second) return false;', 'dupcols'),
+        L('            }'),
+        L('        }'),
+        L('        for (int b = 0; b < 9; b++) {', 'boxes'),
+        L('            unordered_set<char> seen;', 'boxes'),
+        L('            for (int i = 0; i < 9; i++) {', 'boxes'),
+        L('                char d = board[b / 3 * 3 + i / 3][b % 3 * 3 + i % 3];', 'boxes'),
+        L('                if (d != \'.\' && !seen.insert(d).second) return false;', 'dupboxes'),
+        L('            }'),
+        L('        }'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean isValidSudoku(char[][] board) {'),
+        L('        for (int r = 0; r < 9; r++) {', 'rows'),
+        L('            Set<Character> seen = new HashSet<>();', 'rows'),
+        L('            for (int c = 0; c < 9; c++) {', 'rows'),
+        L('                char d = board[r][c];', 'rows'),
+        L('                if (d != \'.\' && !seen.add(d)) return false;', 'duprows'),
+        L('            }'),
+        L('        }'),
+        L('        for (int c = 0; c < 9; c++) {', 'cols'),
+        L('            Set<Character> seen = new HashSet<>();', 'cols'),
+        L('            for (int r = 0; r < 9; r++) {', 'cols'),
+        L('                char d = board[r][c];', 'cols'),
+        L('                if (d != \'.\' && !seen.add(d)) return false;', 'dupcols'),
+        L('            }'),
+        L('        }'),
+        L('        for (int b = 0; b < 9; b++) {', 'boxes'),
+        L('            Set<Character> seen = new HashSet<>();', 'boxes'),
+        L('            for (int i = 0; i < 9; i++) {', 'boxes'),
+        L('                char d = board[b / 3 * 3 + i / 3][b % 3 * 3 + i % 3];', 'boxes'),
+        L('                if (d != \'.\' && !seen.add(d)) return false;', 'dupboxes'),
+        L('            }'),
+        L('        }'),
+        L('        return true;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = parseGrid(values.board, { maxR: 9, maxC: 9 });
+      if (typeof g === 'string') return { error: g };
+      if (g.length !== 9 || g[0].length !== 9) return { error: 'Board must be exactly 9×9.' };
+
+      const steps: Step[] = [];
+      const st = (mark?: MatrixState['mark']): MatrixState => ({
+        grid: g.map((row) => row.map((c) => (c === '.' ? '' : c))),
+        rowLabels: [...Array(9)].map((_, i) => i),
+        colLabels: [...Array(9)].map((_, i) => i),
+        mark,
+      });
+      const units: { kind: 'rows' | 'cols' | 'boxes'; name: string; cells: [number, number][] }[] = [];
+      for (let r = 0; r < 9; r++) units.push({ kind: 'rows', name: `row ${r}`, cells: [...Array(9)].map((_, c) => [r, c]) });
+      for (let c = 0; c < 9; c++) units.push({ kind: 'cols', name: `column ${c}`, cells: [...Array(9)].map((_, r) => [r, c]) });
+      for (let b = 0; b < 9; b++)
+        units.push({
+          kind: 'boxes',
+          name: `box ${b}`,
+          cells: [...Array(9)].map((_, i) => [Math.floor(b / 3) * 3 + Math.floor(i / 3), (b % 3) * 3 + (i % 3)]),
+        });
+
+      steps.push({
+        tag: 'rows',
+        trace: ['Check each of the ', A('27 units'), ' on its own: 9 rows, then 9 columns, then 9 boxes.'],
+        state: st(),
+      });
+      let conflict = '';
+      for (const u of units) {
+        const seen = new Map<string, [number, number]>();
+        let clash: [number, number, [number, number]] | null = null;
+        for (const [r, c] of u.cells) {
+          const d = g[r][c];
+          if (d === '.') continue;
+          if (seen.has(d)) {
+            clash = [r, c, seen.get(d)!];
+            break;
+          }
+          seen.set(d, [r, c]);
+        }
+        const unitMark = Object.fromEntries(u.cells.map(([r, c]) => [`${r},${c}`, 'good' as const]));
+        if (clash) {
+          const [r, c, [pr, pc]] = clash;
+          conflict = `digit ${g[r][c]} repeats in ${u.name}`;
+          steps.push({
+            tag: `dup${u.kind}`,
+            trace: ['In ', A(u.name), ', ', F(g[r][c]), ' appears twice — invalid. Return ', C('false'), '.'],
+            state: st({ ...unitMark, [`${r},${c}`]: 'dim', [`${pr},${pc}`]: 'dim' }),
+          });
+          break;
+        }
+        steps.push({
+          tag: u.kind,
+          trace: [B(u.name), ' has no repeated digit (', A(seen.size), ' filled cells).'],
+          state: st(unitMark),
+        });
+      }
+      const ok = conflict === '';
+      if (ok) steps.push({ tag: 'ret', trace: ['All 27 units passed — the board is ', C('valid'), '.'], state: st() });
+      return { steps, result: String(ok), resultDetail: ok ? 'no rule violated' : conflict };
+    },
+    note: 'Each filled cell is read three times — once for its row, its column and its box — instead of once. Still constant work on a 9×9 board, but the one-pass version tests all three rules at the same time.',
+    complexity: { time: 'O(3 · 81)', space: 'O(9)' },
+  },
 };
 
 /* ================= 8. Encode and Decode Strings ================= */
@@ -252,6 +378,127 @@ const encodeDecode: ProblemDef = {
   },
   note: 'A delimiter alone can always be spoofed by the data — but a length prefix cannot: the decoder never has to *search* inside a word, it just counts. That is why real protocols (HTTP, protobuf) frame with lengths too.',
   complexity: { time: 'O(total chars)', space: 'O(total chars)' },
+  brute: {
+    label: 'Escaped delimiter',
+    technique: 'End every word with "/:" and double any "/" inside a word, so the separator can never be faked.',
+    code: {
+      cpp: [
+        L('class Codec {'),
+        L('public:'),
+        L('    string encode(vector<string>& strs) {'),
+        L('        string out;', 'einit'),
+        L('        for (string& s : strs) {', 'enc'),
+        L('            for (char ch : s)', 'enc'),
+        L('                out += (ch == \'/\') ? string("//") : string(1, ch);', 'enc'),
+        L('            out += "/:";', 'enc'),
+        L('        }'),
+        L('        return out;', 'eret'),
+        L('    }'),
+        L('    vector<string> decode(string s) {'),
+        L('        vector<string> res;', 'dinit'),
+        L('        string cur;', 'dinit'),
+        L('        for (int i = 0; i < s.size(); i++) {', 'dloop'),
+        L('            if (s[i] == \'/\' && s[i + 1] == \':\') {', 'dend'),
+        L('                res.push_back(cur); cur = ""; i++;', 'dend'),
+        L('            } else if (s[i] == \'/\') {', 'desc'),
+        L('                cur += \'/\'; i++;', 'desc'),
+        L('            } else cur += s[i];', 'dloop'),
+        L('        }'),
+        L('        return res;', 'dret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('public class Codec {'),
+        L('    public String encode(List<String> strs) {'),
+        L('        StringBuilder out = new StringBuilder();', 'einit'),
+        L('        for (String s : strs)', 'enc'),
+        L('            out.append(s.replace("/", "//")).append("/:");', 'enc'),
+        L('        return out.toString();', 'eret'),
+        L('    }'),
+        L('    public List<String> decode(String s) {'),
+        L('        List<String> res = new ArrayList<>();', 'dinit'),
+        L('        StringBuilder cur = new StringBuilder();', 'dinit'),
+        L('        for (int i = 0; i < s.length(); i++) {', 'dloop'),
+        L('            if (s.charAt(i) == \'/\' && s.charAt(i + 1) == \':\') {', 'dend'),
+        L('                res.add(cur.toString()); cur.setLength(0); i++;', 'dend'),
+        L('            } else if (s.charAt(i) == \'/\') {', 'desc'),
+        L('                cur.append(\'/\'); i++;', 'desc'),
+        L('            } else cur.append(s.charAt(i));', 'dloop'),
+        L('        }'),
+        L('        return res;', 'dret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const words = (values.strs ?? '').split(',').map((w) => w.trim());
+      if (words.length === 0 || words.every((w) => !w)) return { error: 'Enter at least one word.' };
+      if (words.length > 8) return { error: 'Keep it to at most 8 words.' };
+
+      const steps: Step[] = [];
+      let encoded = '';
+      const decoded: string[] = [];
+      const view = (opts?: { activeWord?: number; activeDec?: number }) => ({
+        chains: [
+          { label: 'input', items: words.map((w, i) => ({ v: `"${w}"`, mark: opts?.activeWord === i ? ('active' as const) : undefined })), broken: true },
+          { label: 'encoded', items: [{ v: encoded === '' ? '(empty)' : `"${encoded}"`, mark: 'win' as const }], broken: true },
+          ...(decoded.length > 0
+            ? [{ label: 'decoded', items: decoded.map((w, i) => ({ v: `"${w}"`, mark: opts?.activeDec === i ? ('final' as const) : ('good' as const) })), broken: true }]
+            : []),
+        ],
+      });
+
+      steps.push({ tag: 'einit', trace: ['Encode each word with every ', A('/'), ' doubled, then mark its end with ', A('/:'), '.'], state: view() });
+      words.forEach((w, i) => {
+        const piece = w.split('/').join('//') + '/:';
+        encoded += piece;
+        steps.push({
+          tag: 'enc',
+          trace: ['"', A(w), '" becomes "', A(piece), '" — append it to the stream.'],
+          state: view({ activeWord: i }),
+        });
+      });
+      steps.push({ tag: 'eret', trace: ['Encoded stream complete: "', B(encoded), '".'], state: view() });
+      steps.push({
+        tag: 'dinit',
+        trace: ['Decode character by character: ', A('//'), ' is a literal slash, ', A('/:'), ' ends a word, anything else is copied.'],
+        state: view(),
+      });
+      let cur = '';
+      let escapes = 0;
+      for (let i = 0; i < encoded.length; i++) {
+        if (encoded[i] === '/' && encoded[i + 1] === ':') {
+          if (escapes > 0) {
+            steps.push({
+              tag: 'desc',
+              trace: ['Inside this word, ', A(escapes), ' doubled slash(es) were turned back into single ', A('/'), '.'],
+              state: view(),
+            });
+          }
+          decoded.push(cur);
+          steps.push({
+            tag: 'dend',
+            trace: ['Hit ', A('/:'), ' at position ', A(i), ' — the word "', B(cur), '" is complete.'],
+            state: view({ activeDec: decoded.length - 1 }),
+          });
+          cur = '';
+          escapes = 0;
+          i++;
+        } else if (encoded[i] === '/') {
+          cur += '/';
+          escapes++;
+          i++;
+        } else {
+          cur += encoded[i];
+        }
+      }
+      steps.push({ tag: 'dret', trace: ['Round trip complete: ', C(`[${decoded.map((w) => `"${w}"`).join(', ')}]`), ' matches the input.'], state: view() });
+      return { steps, result: `"${encoded}"`, resultDetail: 'decodes back losslessly' };
+    },
+    note: 'Escaping also works for any input, but the encoded size depends on how many slashes the data contains and the decoder must inspect every character. A length prefix lets the decoder jump straight over each word.',
+    complexity: { time: 'O(total chars)', space: 'O(total chars)' },
+  },
 };
 
 /* ================= 9. Longest Consecutive Sequence ================= */
@@ -357,6 +604,117 @@ const longestConsecutive: ProblemDef = {
   },
   note: 'The "only start from run beginnings" guard is what makes this linear: every element is visited at most twice (once by the outer loop, once inside a walk), so the nested-looking while never multiplies the cost.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Sorting',
+    technique: 'Sort the array, then count runs where each value is exactly one more than the previous.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int longestConsecutive(vector<int>& nums) {'),
+        L('        if (nums.empty()) return 0;', 'sort'),
+        L('        sort(nums.begin(), nums.end());', 'sort'),
+        L('        int best = 1, cur = 1;', 'sort'),
+        L('        for (int i = 1; i < nums.size(); i++) {', 'loop'),
+        L('            if (nums[i] == nums[i - 1]) continue;', 'same'),
+        L('            if (nums[i] == nums[i - 1] + 1) cur++;', 'ext'),
+        L('            else cur = 1;', 'reset'),
+        L('            best = max(best, cur);', 'ext', 'reset'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int longestConsecutive(int[] nums) {'),
+        L('        if (nums.length == 0) return 0;', 'sort'),
+        L('        Arrays.sort(nums);', 'sort'),
+        L('        int best = 1, cur = 1;', 'sort'),
+        L('        for (int i = 1; i < nums.length; i++) {', 'loop'),
+        L('            if (nums[i] == nums[i - 1]) continue;', 'same'),
+        L('            if (nums[i] == nums[i - 1] + 1) cur++;', 'ext'),
+        L('            else cur = 1;', 'reset'),
+        L('            best = Math.max(best, cur);', 'ext', 'reset'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const input = parseIntArray(values.nums);
+      if (typeof input === 'string') return { error: input };
+      const arr = [...input].sort((a, b) => a - b);
+      const steps: Step[] = [];
+      if (arr.length === 0) {
+        steps.push({ tag: 'sort', trace: ['Empty array — the answer is ', C(0), '.'], state: { arr } });
+        return { steps, result: '0' };
+      }
+      let best = 1;
+      let cur = 1;
+      let start = 0;
+      let bestWin: [number, number] = [0, 0];
+      const st = (i: number, extra?: Partial<ArrayState>): ArrayState => ({
+        arr,
+        ptrs: i < arr.length ? [{ name: 'i', i, c: 'a' }] : [],
+        window: [start, Math.min(i, arr.length - 1)],
+        aggs: [
+          { label: 'current run', value: String(cur), c: 'a' },
+          { label: 'best', value: String(best), c: 'b' },
+        ],
+        ...extra,
+      });
+
+      steps.push({
+        tag: 'sort',
+        trace: ['Sort: ', A(`[${arr.join(', ')}]`), '. Consecutive numbers are now side by side.'],
+        state: st(0),
+      });
+      for (let i = 1; i < arr.length; i++) {
+        if (arr[i] === arr[i - 1]) {
+          steps.push({
+            tag: 'same',
+            trace: [F(arr[i]), ' repeats the previous value — it neither extends nor breaks the run.'],
+            state: st(i, { mark: { [i]: 'dim' } }),
+          });
+          continue;
+        }
+        if (arr[i] === arr[i - 1] + 1) {
+          cur++;
+          if (cur > best) {
+            best = cur;
+            bestWin = [start, i];
+          }
+          steps.push({
+            tag: 'ext',
+            trace: [A(arr[i]), ' = ', B(arr[i - 1]), ' + 1 — the run grows to ', A(cur), '.'],
+            state: st(i, { mark: { [i]: 'good' } }),
+          });
+        } else {
+          cur = 1;
+          start = i;
+          steps.push({
+            tag: 'reset',
+            trace: ['Gap between ', F(arr[i - 1]), ' and ', F(arr[i]), ' — start a new run at ', A(arr[i]), '.'],
+            state: st(i, { mark: { [i]: 'active' } }),
+          });
+        }
+      }
+      steps.push({
+        tag: 'ret',
+        trace: ['Longest run has length ', C(best), '.'],
+        state: {
+          arr,
+          window: bestWin,
+          mark: Object.fromEntries([...Array(bestWin[1] - bestWin[0] + 1)].map((_, k) => [bestWin[0] + k, 'final'])),
+        },
+      });
+      return { steps, result: String(best), resultDetail: 'via sorting' };
+    },
+    note: 'After sorting, a consecutive sequence is a contiguous stretch, so one scan finds it. The catch is the O(n log n) sort; the hash-set version finds each sequence start directly in O(n).',
+    complexity: { time: 'O(n log n)', space: 'O(1)' },
+  },
 };
 
 /* ================= 10. Subarray Sum Equals K ================= */
@@ -452,6 +810,94 @@ const subarraySumK: ProblemDef = {
   },
   note: 'sum(i..j) = prefix(j) − prefix(i−1), so "some subarray ends here with sum k" is the same question as "did prefix − k ever appear?" — a map of prefix frequencies answers it instantly, and negative numbers (which break sliding windows) are handled for free.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Fix every start index and extend the end one element at a time, keeping a running sum.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int subarraySum(vector<int>& nums, int k) {'),
+        L('        int count = 0;', 'init'),
+        L('        for (int i = 0; i < nums.size(); i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < nums.size(); j++) {', 'add', 'hit'),
+        L('                sum += nums[j];', 'add', 'hit'),
+        L('                if (sum == k) count++;', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int subarraySum(int[] nums, int k) {'),
+        L('        int count = 0;', 'init'),
+        L('        for (int i = 0; i < nums.length; i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < nums.length; j++) {', 'add', 'hit'),
+        L('                sum += nums[j];', 'add', 'hit'),
+        L('                if (sum == k) count++;', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return count;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums);
+      if (typeof arr === 'string') return { error: arr };
+      const k = parseInt1(values.k, 'k');
+      if (typeof k === 'string') return { error: k };
+
+      const steps: Step[] = [];
+      let count = 0;
+      let sum = 0;
+      const st = (i: number, j: number | null, extra?: Partial<ArrayState>): ArrayState => ({
+        arr,
+        ptrs: [
+          ...(i < arr.length ? [{ name: 'i', i, c: 'b' as const }] : []),
+          ...(j !== null ? [{ name: 'j', i: j, c: 'a' as const }] : []),
+        ],
+        window: j !== null ? [i, j] : null,
+        aggs: [
+          { label: 'sum', value: String(sum), c: 'a' },
+          { label: 'k', value: String(k), c: 'c' },
+          { label: 'count', value: String(count), c: 'c' },
+        ],
+        ...extra,
+      });
+
+      steps.push({ tag: 'init', trace: ['Try every subarray nums[i..j] and add up its elements as j moves right.'], state: st(0, null) });
+      for (let i = 0; i < arr.length; i++) {
+        sum = 0;
+        steps.push({ tag: 'outer', trace: ['Start a new subarray at i = ', B(i), ' with sum ', A(0), '.'], state: st(i, null) });
+        for (let j = i; j < arr.length; j++) {
+          sum += arr[j];
+          if (sum === k) {
+            count++;
+            steps.push({
+              tag: 'hit',
+              trace: ['nums[', B(i), '..', A(j), '] sums to ', C(sum), ' = k — count becomes ', C(count), '.'],
+              state: st(i, j, { mark: Object.fromEntries([...Array(j - i + 1)].map((_, t) => [i + t, 'good'])) }),
+            });
+          } else {
+            steps.push({
+              tag: 'add',
+              trace: ['Add ', A(arr[j]), ': nums[', B(i), '..', A(j), '] sums to ', F(sum), ' ≠ ', C(k), '.'],
+              state: st(i, j),
+            });
+          }
+        }
+      }
+      steps.push({ tag: 'ret', trace: ['Checked every subarray — ', C(count), ' of them sum to ', C(k), '.'], state: st(arr.length, null) });
+      return { steps, result: String(count), resultDetail: `subarrays with sum ${k}` };
+    },
+    note: 'A running sum avoids re-adding each subarray from scratch, but there are still n(n+1)/2 subarrays to visit. Prefix sums plus a hash map count all matches ending at j in one lookup.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= 13. Set Matrix Zeroes ================= */
@@ -571,6 +1017,98 @@ const setMatrixZeroes: ProblemDef = {
   },
   note: 'The first row and column are going to be overwritten anyway if they contain zeroes — so they can double as the "which rows/columns die" bitmask. One boolean handles the only cell they share.',
   complexity: { time: 'O(R·C)', space: 'O(1)' },
+  brute: {
+    label: 'Row & column flags',
+    technique: 'Record which rows and columns contain a zero in two separate arrays, then zero them.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    void setZeroes(vector<vector<int>>& m) {'),
+        L('        int R = m.size(), C = m[0].size();', 'init'),
+        L('        vector<bool> zeroRow(R), zeroCol(C);', 'init'),
+        L('        for (int r = 0; r < R; r++)', 'scan'),
+        L('            for (int c = 0; c < C; c++)', 'scan'),
+        L('                if (m[r][c] == 0) zeroRow[r] = zeroCol[c] = true;', 'found'),
+        L('        for (int r = 0; r < R; r++)', 'apply'),
+        L('            for (int c = 0; c < C; c++)', 'apply'),
+        L('                if (zeroRow[r] || zeroCol[c]) m[r][c] = 0;', 'apply'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public void setZeroes(int[][] m) {'),
+        L('        int R = m.length, C = m[0].length;', 'init'),
+        L('        boolean[] zeroRow = new boolean[R], zeroCol = new boolean[C];', 'init'),
+        L('        for (int r = 0; r < R; r++)', 'scan'),
+        L('            for (int c = 0; c < C; c++)', 'scan'),
+        L('                if (m[r][c] == 0) zeroRow[r] = zeroCol[c] = true;', 'found'),
+        L('        for (int r = 0; r < R; r++)', 'apply'),
+        L('            for (int c = 0; c < C; c++)', 'apply'),
+        L('                if (zeroRow[r] || zeroCol[c]) m[r][c] = 0;', 'apply'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = parseNumGrid(values.matrix, 7, 7);
+      if (typeof g === 'string') return { error: g };
+      const R = g.length;
+      const cols = g[0].length;
+      const m = g.map((r) => [...r]);
+      const zeroRow = new Set<number>();
+      const zeroCol = new Set<number>();
+      const steps: Step[] = [];
+      const st = (mark?: MatrixState['mark']): MatrixState => ({
+        grid: m.map((r) => [...r]),
+        rowLabels: [...Array(R)].map((_, i) => i),
+        colLabels: [...Array(cols)].map((_, i) => i),
+        mark,
+        aggs: [
+          { label: 'zero rows', value: `{ ${[...zeroRow].join(', ')} }`, c: 'a' },
+          { label: 'zero cols', value: `{ ${[...zeroCol].join(', ')} }`, c: 'a' },
+        ],
+      });
+
+      steps.push({ tag: 'init', trace: ['Keep two flag arrays: one entry per ', A('row'), ' and one per ', A('column'), '.'], state: st() });
+      for (let r = 0; r < R; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (m[r][c] !== 0) continue;
+          zeroRow.add(r);
+          zeroCol.add(c);
+          steps.push({
+            tag: 'found',
+            trace: ['Zero at (', A(r), ',', A(c), ') — flag row ', A(r), ' and column ', A(c), '.'],
+            state: st({ [`${r},${c}`]: 'active' }),
+          });
+        }
+      }
+      steps.push({ tag: 'scan', trace: ['Scan complete — every flagged row and column will be zeroed.'], state: st() });
+      const zeroed: MatrixState['mark'] = {};
+      for (let r = 0; r < R; r++) {
+        let any = false;
+        for (let c = 0; c < cols; c++) {
+          if (zeroRow.has(r) || zeroCol.has(c)) {
+            m[r][c] = 0;
+            zeroed[`${r},${c}`] = 'dim';
+            any = true;
+          }
+        }
+        if (any)
+          steps.push({
+            tag: 'apply',
+            trace: ['Row ', A(r), ': zero every cell whose row or column is flagged.'],
+            state: st({ ...zeroed }),
+          });
+      }
+      const res = `[${m.map((r) => `[${r.join(',')}]`).join(', ')}]`;
+      steps.push({ tag: 'apply', trace: ['Done — matrix is ', C(res), '.'], state: st(zeroed) });
+      return { steps, result: res, resultDetail: `O(R + C) extra space` };
+    },
+    note: 'Separate flag arrays are the clearest way to avoid zeroing cells too early, but they cost O(R + C) memory. The optimal version stores the same flags inside row 0 and column 0.',
+    complexity: { time: 'O(R·C)', space: 'O(R + C)' },
+  },
 };
 
 /* ================= 14. Spiral Matrix ================= */
@@ -688,6 +1226,113 @@ const spiralMatrix: ProblemDef = {
   },
   note: 'The spiral is just "walk the current rectangle\'s border clockwise" repeated on ever-smaller rectangles. Keeping four explicit boundaries (and checking top ≤ bottom / left ≤ right before the return legs) is what prevents double-visiting single leftover rows or columns.',
   complexity: { time: 'O(R·C)', space: 'O(1) beyond output' },
+  brute: {
+    label: 'Visited grid',
+    technique: 'Walk in the current direction and turn clockwise whenever the next cell is off the grid or already visited.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> spiralOrder(vector<vector<int>>& m) {'),
+        L('        int R = m.size(), C = m[0].size();', 'init'),
+        L('        vector<vector<bool>> seen(R, vector<bool>(C));', 'init'),
+        L('        int dr[] = {0, 1, 0, -1}, dc[] = {1, 0, -1, 0};', 'init'),
+        L('        int r = 0, c = 0, d = 0;', 'init'),
+        L('        vector<int> res;', 'init'),
+        L('        for (int k = 0; k < R * C; k++) {', 'visit'),
+        L('            res.push_back(m[r][c]);', 'visit'),
+        L('            seen[r][c] = true;', 'visit'),
+        L('            int nr = r + dr[d], nc = c + dc[d];', 'visit'),
+        L('            if (nr < 0 || nr >= R || nc < 0 || nc >= C || seen[nr][nc]) {', 'turn'),
+        L('                d = (d + 1) % 4;', 'turn'),
+        L('                nr = r + dr[d]; nc = c + dc[d];', 'turn'),
+        L('            }'),
+        L('            r = nr; c = nc;', 'visit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public List<Integer> spiralOrder(int[][] m) {'),
+        L('        int R = m.length, C = m[0].length;', 'init'),
+        L('        boolean[][] seen = new boolean[R][C];', 'init'),
+        L('        int[] dr = {0, 1, 0, -1}, dc = {1, 0, -1, 0};', 'init'),
+        L('        int r = 0, c = 0, d = 0;', 'init'),
+        L('        List<Integer> res = new ArrayList<>();', 'init'),
+        L('        for (int k = 0; k < R * C; k++) {', 'visit'),
+        L('            res.add(m[r][c]);', 'visit'),
+        L('            seen[r][c] = true;', 'visit'),
+        L('            int nr = r + dr[d], nc = c + dc[d];', 'visit'),
+        L('            if (nr < 0 || nr >= R || nc < 0 || nc >= C || seen[nr][nc]) {', 'turn'),
+        L('                d = (d + 1) % 4;', 'turn'),
+        L('                nr = r + dr[d]; nc = c + dc[d];', 'turn'),
+        L('            }'),
+        L('            r = nr; c = nc;', 'visit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = parseNumGrid(values.matrix, 7, 7);
+      if (typeof g === 'string') return { error: g };
+      const R = g.length;
+      const cols = g[0].length;
+      const steps: Step[] = [];
+      const res: number[] = [];
+      const seen: MatrixState['mark'] = {};
+      const dirs = ['→', '↓', '←', '↑'];
+      const dr = [0, 1, 0, -1];
+      const dc = [1, 0, -1, 0];
+      const st = (active?: [number, number]): MatrixState => ({
+        grid: g,
+        rowLabels: [...Array(R)].map((_, i) => i),
+        colLabels: [...Array(cols)].map((_, i) => i),
+        mark: { ...seen, ...(active ? { [`${active[0]},${active[1]}`]: 'active' as const } : {}) },
+        aggs: [{ label: 'output', value: `[${res.join(', ')}]`, c: 'c' }],
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Start at (0,0) heading ', A('→'), '. A ', B('visited'), ' grid tells us when to turn.'],
+        state: st(),
+      });
+      let r = 0;
+      let c = 0;
+      let d = 0;
+      for (let k = 0; k < R * cols; k++) {
+        res.push(g[r][c]);
+        seen[`${r},${c}`] = 'good';
+        steps.push({
+          tag: 'visit',
+          trace: ['Visit (', A(r), ',', A(c), ') heading ', A(dirs[d]), ' — collect ', B(g[r][c]), '.'],
+          state: st([r, c]),
+        });
+        let nr = r + dr[d];
+        let nc = c + dc[d];
+        const blocked = nr < 0 || nr >= R || nc < 0 || nc >= cols || seen[`${nr},${nc}`];
+        if (blocked && k < R * cols - 1) {
+          d = (d + 1) % 4;
+          nr = r + dr[d];
+          nc = c + dc[d];
+          steps.push({
+            tag: 'turn',
+            trace: ['The next cell is a wall or already visited — turn clockwise to ', A(dirs[d]), '.'],
+            state: st([r, c]),
+          });
+        }
+        r = nr;
+        c = nc;
+      }
+      steps.push({ tag: 'ret', trace: ['All ', C(R * cols), ' cells visited: ', C(`[${res.join(', ')}]`), '.'], state: st() });
+      return { steps, result: `[${res.join(', ')}]`, resultDetail: 'clockwise spiral order' };
+    },
+    note: 'Simulating the walk is hard to get wrong, but the visited grid costs O(R·C) extra memory. Shrinking four boundaries encodes the same information in four integers.',
+    complexity: { time: 'O(R·C)', space: 'O(R·C)' },
+  },
 };
 
 /* ================= 15. Rotate Image ================= */
@@ -773,6 +1418,77 @@ const rotateImage: ProblemDef = {
   },
   note: 'Rotation is a composition of two mirror flips: the transpose reflects across the main diagonal, the row-reverse reflects horizontally. Each flip is a set of independent swaps, which is why no scratch matrix is needed.',
   complexity: { time: 'O(n²)', space: 'O(1)' },
+  brute: {
+    label: 'Extra matrix',
+    technique: 'Write each row r into column n − 1 − r of a new matrix, then copy it back.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    void rotate(vector<vector<int>>& m) {'),
+        L('        int n = m.size();', 'init'),
+        L('        vector<vector<int>> res(n, vector<int>(n));', 'init'),
+        L('        for (int r = 0; r < n; r++)', 'place'),
+        L('            for (int c = 0; c < n; c++)', 'place'),
+        L('                res[c][n - 1 - r] = m[r][c];', 'place'),
+        L('        m = res;', 'copy'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public void rotate(int[][] m) {'),
+        L('        int n = m.length;', 'init'),
+        L('        int[][] res = new int[n][n];', 'init'),
+        L('        for (int r = 0; r < n; r++)', 'place'),
+        L('            for (int c = 0; c < n; c++)', 'place'),
+        L('                res[c][n - 1 - r] = m[r][c];', 'place'),
+        L('        for (int r = 0; r < n; r++) m[r] = res[r].clone();', 'copy'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const g = parseNumGrid(values.matrix, 6, 6);
+      if (typeof g === 'string') return { error: g };
+      if (g.length !== g[0].length) return { error: 'Matrix must be square (n×n).' };
+      const n = g.length;
+      const res: (number | string)[][] = [...Array(n)].map(() => Array(n).fill('·'));
+      const steps: Step[] = [];
+      const st = (mark?: MatrixState['mark'], aggs?: MatrixState['aggs']): MatrixState => ({
+        grid: res.map((r) => [...r]),
+        rowLabels: [...Array(n)].map((_, i) => i),
+        colLabels: [...Array(n)].map((_, i) => i),
+        mark,
+        aggs,
+      });
+
+      steps.push({
+        tag: 'init',
+        trace: ['Start from an empty ', A(`${n}×${n}`), ' result: row r of the input becomes column ', A('n − 1 − r'), '.'],
+        state: st(),
+      });
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) res[c][n - 1 - r] = g[r][c];
+        steps.push({
+          tag: 'place',
+          trace: ['Input row ', A(r), ' ', B(`[${g[r].join(', ')}]`), ' fills result column ', A(n - 1 - r), ' top to bottom.'],
+          state: st(Object.fromEntries([...Array(n)].map((_, c) => [`${c},${n - 1 - r}`, 'active'])), [
+            { label: 'row', value: `[${g[r].join(', ')}]`, c: 'b' },
+          ]),
+        });
+      }
+      const out = `[${res.map((r) => `[${r.join(',')}]`).join(', ')}]`;
+      steps.push({
+        tag: 'copy',
+        trace: ['Copy the result back into the input: ', C(out), '.'],
+        state: st(Object.fromEntries(res.flatMap((row, r) => row.map((_, c) => [`${r},${c}`, 'final'])))),
+      });
+      return { steps, result: out, resultDetail: '90° clockwise, with an extra n×n matrix' };
+    },
+    note: 'The index formula res[c][n − 1 − r] = m[r][c] is the definition of a clockwise turn, which makes this easy to verify, but it needs a second n×n matrix. The problem asks for in-place, which transpose-then-reverse achieves.',
+    complexity: { time: 'O(n²)', space: 'O(n²)' },
+  },
 };
 
 export const arraysHashing2 = [validSudoku, encodeDecode, longestConsecutive, subarraySumK, setMatrixZeroes, spiralMatrix, rotateImage];
