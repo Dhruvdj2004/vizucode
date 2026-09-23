@@ -5,6 +5,75 @@ import { A, B, C, F, L } from '../lib/trace';
 
 const MAX_STEPS = 300;
 
+/** The O(n²) brute force every sliding-window problem shares: fix each start
+ *  i, extend j one element at a time while updating a running state, and
+ *  count / keep the longest / keep the shortest window that qualifies. `dead`
+ *  lets a start stop early once no longer window can ever qualify. */
+export function everyWindow<T>(o: {
+  arr: (number | string)[];
+  fresh: () => T;
+  add: (st: T, x: number | string) => void;
+  qualifies: (st: T, len: number) => boolean;
+  dead?: (st: T) => boolean;
+  goal: 'count' | 'longest' | 'shortest';
+  show: (st: T) => string;
+  intro: Step['trace'];
+}): { steps: Step[]; answer: number; range: [number, number] | null } {
+  const { arr, goal } = o;
+  const steps: Step[] = [];
+  let answer = goal === 'shortest' ? Infinity : 0;
+  let range: [number, number] | null = null;
+  let st = o.fresh();
+  const view = (i: number, j: number | null): ArrayState => ({
+    arr,
+    window: j !== null ? [i, j] : null,
+    ptrs: [
+      ...(i < arr.length ? [{ name: 'i', i, c: 'b' as const }] : []),
+      ...(j !== null ? [{ name: 'j', i: j, c: 'a' as const }] : []),
+    ],
+    aggs: [
+      { label: 'window', value: o.show(st), c: 'a' },
+      { label: goal === 'count' ? 'count' : goal === 'longest' ? 'longest' : 'shortest', value: answer === Infinity ? '—' : String(answer), c: 'c' },
+    ],
+  });
+  steps.push({ tag: 'init', trace: o.intro, state: view(0, null) });
+  for (let i = 0; i < arr.length; i++) {
+    st = o.fresh();
+    if (steps.length < MAX_STEPS) steps.push({ tag: 'outer', trace: ['New start i = ', B(i), ' — reset the window state.'], state: view(i, null) });
+    for (let j = i; j < arr.length; j++) {
+      o.add(st, arr[j]);
+      const len = j - i + 1;
+      if (o.dead?.(st)) {
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'grow', trace: ['[', B(i), '..', A(j), '] broke the rule, and growing it further cannot fix that — next start.'], state: view(i, j) });
+        break;
+      }
+      if (o.qualifies(st, len)) {
+        let note = '';
+        if (goal === 'count') {
+          answer++;
+          note = `count ${answer}`;
+        } else if (goal === 'longest' ? len > answer : len < answer) {
+          answer = len;
+          range = [i, j];
+          note = `new ${goal} (${len})`;
+        } else note = `length ${len}, not better`;
+        if (steps.length < MAX_STEPS) steps.push({ tag: 'hit', trace: ['[', B(i), '..', A(j), '] qualifies — ', C(note), '.'], state: view(i, j) });
+        if (goal === 'shortest') break;
+      } else if (steps.length < MAX_STEPS) {
+        steps.push({ tag: 'grow', trace: ['[', B(i), '..', A(j), '] does not qualify — extend.'], state: view(i, j) });
+      }
+    }
+  }
+  if (answer === Infinity) answer = 0;
+  st = o.fresh();
+  steps.push({
+    tag: 'ret',
+    trace: ['Checked every window — ', goal === 'count' ? 'count ' : goal === 'longest' ? 'longest ' : 'shortest ', C(answer), '.'],
+    state: { arr, window: range, mark: range ? Object.fromEntries([...Array(range[1] - range[0] + 1)].map((_, k) => [range![0] + k, 'final' as const])) : {} },
+  });
+  return { steps, answer, range };
+}
+
 /* ================= Fruit Into Baskets ================= */
 const fruitIntoBaskets: ProblemDef = {
   slug: 'fruit-into-baskets',
@@ -119,6 +188,62 @@ const fruitIntoBaskets: ProblemDef = {
   },
   note: 'The left edge never moves backwards, so although the inner while loop looks nested, each index is added and removed at most once — the whole scan is O(n), not O(n²). Swap the "> 2" for "> k" and this becomes the general longest-substring-with-k-distinct problem.',
   complexity: { time: 'O(n)', space: 'O(1) — at most 3 keys' },
+  brute: {
+    label: 'Brute force',
+    technique: 'From every start tree, walk right until a third fruit type appears; keep the longest walk.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int totalFruit(vector<int>& f) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < f.size(); i++) {', 'outer'),
+        L('            unordered_set<int> types;', 'outer'),
+        L('            for (int j = i; j < f.size(); j++) {', 'grow', 'hit'),
+        L('                types.insert(f[j]);', 'grow', 'hit'),
+        L('                if (types.size() > 2) break;', 'grow'),
+        L('                best = max(best, j - i + 1);', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int totalFruit(int[] f) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < f.length; i++) {', 'outer'),
+        L('            Set<Integer> types = new HashSet<>();', 'outer'),
+        L('            for (int j = i; j < f.length; j++) {', 'grow', 'hit'),
+        L('                types.add(f[j]);', 'grow', 'hit'),
+        L('                if (types.size() > 2) break;', 'grow'),
+        L('                best = Math.max(best, j - i + 1);', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const f = parseIntArray(values.nums, { min: 0, max: 9, maxLen: 16 });
+      if (typeof f === 'string') return { error: f };
+      const { steps, answer, range } = everyWindow<Set<number | string>>({
+        arr: f,
+        fresh: () => new Set(),
+        add: (s, x) => void s.add(x),
+        qualifies: (s) => s.size <= 2,
+        dead: (s) => s.size > 2,
+        goal: 'longest',
+        show: (s) => `types {${[...s].join(', ')}}`,
+        intro: ['From every start, collect fruit until a ', F('third type'), ' shows up.'],
+      });
+      return { steps, result: String(answer), resultDetail: range ? `trees ${range[0]}…${range[1]}` : undefined };
+    },
+    note: 'Each start re-walks trees the previous start already saw, so it is O(n²). The sliding window drops fruit from the left only when a third type forces it, touching every tree at most twice.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Max Consecutive Ones III ================= */
@@ -231,6 +356,64 @@ const maxConsecutiveOnesIII: ProblemDef = {
   },
   note: 'Notice the window never shrinks below its best-ever size — once it is valid we only ever record a longer one. Rephrasing "flip k zeros" as "tolerate k zeros" is the whole trick; the same shape solves longest-repeating-character-replacement.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'From every start, extend right counting zeros; stop once more than k zeros would need flipping.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int longestOnes(vector<int>& a, int k) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < a.size(); i++) {', 'outer'),
+        L('            int zeros = 0;', 'outer'),
+        L('            for (int j = i; j < a.size(); j++) {', 'grow', 'hit'),
+        L('                zeros += a[j] == 0;', 'grow', 'hit'),
+        L('                if (zeros > k) break;', 'grow'),
+        L('                best = max(best, j - i + 1);', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int longestOnes(int[] a, int k) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < a.length; i++) {', 'outer'),
+        L('            int zeros = 0;', 'outer'),
+        L('            for (int j = i; j < a.length; j++) {', 'grow', 'hit'),
+        L('                if (a[j] == 0) zeros++;', 'grow', 'hit'),
+        L('                if (zeros > k) break;', 'grow'),
+        L('                best = Math.max(best, j - i + 1);', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const a = parseIntArray(values.nums, { min: 0, max: 1, maxLen: 18 });
+      if (typeof a === 'string') return { error: a };
+      const k = parseInt1(values.k, 'k', { min: 0, max: 8 });
+      if (typeof k === 'string') return { error: k };
+      const { steps, answer, range } = everyWindow<{ zeros: number }>({
+        arr: a,
+        fresh: () => ({ zeros: 0 }),
+        add: (s, x) => void (x === 0 && s.zeros++),
+        qualifies: (s) => s.zeros <= k,
+        dead: (s) => s.zeros > k,
+        goal: 'longest',
+        show: (s) => `${s.zeros} zero(s) of ${k} allowed`,
+        intro: ['From every start, extend right until the window holds more than ', A(k), ' zeros.'],
+      });
+      return { steps, result: String(answer), resultDetail: answer ? `indices ${range![0]}…${range![1]}` : undefined };
+    },
+    note: 'Quadratic because every start rescans the array. The sliding window keeps a running zero count and only moves the left edge when the count exceeds k, so each element enters and leaves once.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Number of Substrings Containing All Three Characters ================= */
@@ -327,6 +510,59 @@ const substringsAllThree: ProblemDef = {
   },
   note: 'Counting per right end and adding a whole block of starts at once is what avoids enumerating substrings one by one. The bound is exactly the minimum last-seen index, because pushing the start past it would drop that character out of the window.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'Check every substring s[i..j] and count those that contain a, b and c.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int numberOfSubstrings(string s) {'),
+        L('        int ans = 0;', 'init'),
+        L('        for (int i = 0; i < s.size(); i++) {', 'outer'),
+        L('            int seen[3] = {0};', 'outer'),
+        L('            for (int j = i; j < s.size(); j++) {', 'grow', 'hit'),
+        L('                seen[s[j] - \'a\'] = 1;', 'grow', 'hit'),
+        L('                if (seen[0] && seen[1] && seen[2]) ans++;', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int numberOfSubstrings(String s) {'),
+        L('        int ans = 0;', 'init'),
+        L('        for (int i = 0; i < s.length(); i++) {', 'outer'),
+        L('            boolean[] seen = new boolean[3];', 'outer'),
+        L('            for (int j = i; j < s.length(); j++) {', 'grow', 'hit'),
+        L('                seen[s.charAt(j) - \'a\'] = true;', 'grow', 'hit'),
+        L('                if (seen[0] && seen[1] && seen[2]) ans++;', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim().toLowerCase();
+      if (!/^[abc]{1,16}$/.test(s)) return { error: 'Use 1–16 characters, only a, b and c.' };
+      const { steps, answer } = everyWindow<Set<number | string>>({
+        arr: s.split(''),
+        fresh: () => new Set(),
+        add: (st, x) => void st.add(x),
+        qualifies: (st) => st.size === 3,
+        goal: 'count',
+        show: (st) => `seen {${[...st].sort().join(', ')}}`,
+        intro: ['Test every substring for all three letters.'],
+      });
+      return { steps, result: String(answer) };
+    },
+    note: 'There are n(n+1)/2 substrings to test. Tracking the last position of each letter, every right end adds min(last a, last b, last c) + 1 valid starts at once — one pass.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Count Number of Nice Subarrays ================= */
@@ -459,6 +695,64 @@ const niceSubarrays: ProblemDef = {
   },
   note: 'A window condition like "at most k" is monotone — shrinking always helps — which is exactly what a sliding window needs. "Exactly k" is not, so you express it as a difference of two monotone counts. This atMost(k) − atMost(k−1) pattern is worth memorising; it reappears in several hard-rated problems.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'For every subarray, count its odd numbers and add one when there are exactly k.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int numberOfSubarrays(vector<int>& nums, int k) {'),
+        L('        int ans = 0;', 'init'),
+        L('        for (int i = 0; i < nums.size(); i++) {', 'outer'),
+        L('            int odd = 0;', 'outer'),
+        L('            for (int j = i; j < nums.size(); j++) {', 'grow', 'hit'),
+        L('                odd += nums[j] % 2;', 'grow', 'hit'),
+        L('                if (odd == k) ans++;', 'hit'),
+        L('                if (odd > k) break;', 'grow'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int numberOfSubarrays(int[] nums, int k) {'),
+        L('        int ans = 0;', 'init'),
+        L('        for (int i = 0; i < nums.length; i++) {', 'outer'),
+        L('            int odd = 0;', 'outer'),
+        L('            for (int j = i; j < nums.length; j++) {', 'grow', 'hit'),
+        L('                odd += nums[j] % 2;', 'grow', 'hit'),
+        L('                if (odd == k) ans++;', 'hit'),
+        L('                if (odd > k) break;', 'grow'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, maxLen: 12 });
+      if (typeof nums === 'string') return { error: nums };
+      const k = parseInt1(values.k, 'k', { min: 1, max: 8 });
+      if (typeof k === 'string') return { error: k };
+      const { steps, answer } = everyWindow<{ odd: number }>({
+        arr: nums,
+        fresh: () => ({ odd: 0 }),
+        add: (s, x) => void (s.odd += Number(x) % 2),
+        qualifies: (s) => s.odd === k,
+        dead: (s) => s.odd > k,
+        goal: 'count',
+        show: (s) => `${s.odd} odd`,
+        intro: ['Count every subarray that holds exactly ', A(k), ' odd numbers.'],
+      });
+      return { steps, result: String(answer) };
+    },
+    note: 'Every start scans forward until it passes k odds — O(n²) in the worst case. atMost(k) − atMost(k−1) turns the exact count into two linear sliding windows.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Binary Subarrays With Sum ================= */
@@ -580,6 +874,64 @@ const binarySubarraysSum: ProblemDef = {
   },
   note: 'The zeros are what break a direct sliding window: with sum already at the goal, adding a 0 keeps it valid, so there is no single left edge to track. Counting two monotone "at most" totals sidesteps that entirely, and a prefix-sum hash map is the other standard route to the same answer.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'For every subarray, keep a running sum and count those whose sum equals the goal.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int numSubarraysWithSum(vector<int>& nums, int goal) {'),
+        L('        int ans = 0;', 'init'),
+        L('        for (int i = 0; i < nums.size(); i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < nums.size(); j++) {', 'grow', 'hit'),
+        L('                sum += nums[j];', 'grow', 'hit'),
+        L('                if (sum == goal) ans++;', 'hit'),
+        L('                if (sum > goal) break;', 'grow'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int numSubarraysWithSum(int[] nums, int goal) {'),
+        L('        int ans = 0;', 'init'),
+        L('        for (int i = 0; i < nums.length; i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < nums.length; j++) {', 'grow', 'hit'),
+        L('                sum += nums[j];', 'grow', 'hit'),
+        L('                if (sum == goal) ans++;', 'hit'),
+        L('                if (sum > goal) break;', 'grow'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 1, maxLen: 12 });
+      if (typeof nums === 'string') return { error: nums };
+      const goal = parseInt1(values.goal, 'Goal sum', { min: 0, max: 12 });
+      if (typeof goal === 'string') return { error: goal };
+      const { steps, answer } = everyWindow<{ sum: number }>({
+        arr: nums,
+        fresh: () => ({ sum: 0 }),
+        add: (s, x) => void (s.sum += Number(x)),
+        qualifies: (s) => s.sum === goal,
+        dead: (s) => s.sum > goal,
+        goal: 'count',
+        show: (s) => `sum ${s.sum}`,
+        intro: ['Count every subarray whose sum is exactly ', A(goal), '.'],
+      });
+      return { steps, result: String(answer) };
+    },
+    note: 'Quadratic in the worst case (e.g. many zeros). Counting atMost(goal) − atMost(goal − 1) with two sliding windows, or prefix sums with a hash map, does it in O(n).',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Maximum Points You Can Obtain from Cards ================= */
@@ -710,6 +1062,78 @@ const maxPointsCards: ProblemDef = {
   },
   note: 'The reframing is the entire problem: "pick from either end" sounds like a search over 2^k choices, but the cards you leave behind are always one contiguous run, so a single fixed-size sliding window settles it. Fixed-size windows need no inner shrink loop — one add and one subtract per step.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'For each split — take i cards from the left and k − i from the right — add the cards up from scratch.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int maxScore(vector<int>& c, int k) {'),
+        L('        int n = c.size(), best = 0;', 'init'),
+        L('        for (int left = 0; left <= k; left++) {', 'split'),
+        L('            int sum = 0;', 'split'),
+        L('            for (int i = 0; i < left; i++) sum += c[i];', 'split'),
+        L('            for (int i = 0; i < k - left; i++) sum += c[n - 1 - i];', 'split'),
+        L('            best = max(best, sum);', 'split'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int maxScore(int[] c, int k) {'),
+        L('        int n = c.length, best = 0;', 'init'),
+        L('        for (int left = 0; left <= k; left++) {', 'split'),
+        L('            int sum = 0;', 'split'),
+        L('            for (int i = 0; i < left; i++) sum += c[i];', 'split'),
+        L('            for (int i = 0; i < k - left; i++) sum += c[n - 1 - i];', 'split'),
+        L('            best = Math.max(best, sum);', 'split'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const c = parseIntArray(values.nums, { min: 0, maxLen: 14 });
+      if (typeof c === 'string') return { error: c };
+      const k = parseInt1(values.k, 'k', { min: 1 });
+      if (typeof k === 'string') return { error: k };
+      if (k > c.length) return { error: `k cannot exceed the number of cards (${c.length}).` };
+      const n = c.length;
+      const steps: Step[] = [];
+      let best = 0;
+      let adds = 0;
+      const st = (left: number, mark: ArrayState['mark']): ArrayState => ({
+        arr: c,
+        mark,
+        aggs: [
+          { label: 'split', value: `${left} left + ${k - left} right`, c: 'a' },
+          { label: 'best', value: String(best), c: 'c' },
+          { label: 'additions', value: String(adds), c: 'b' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Any hand is some cards from the left end plus the rest from the right end — try all ', A(k + 1), ' splits.'], state: st(0, {}) });
+      for (let left = 0; left <= k; left++) {
+        const idx = [...[...Array(left)].map((_, i) => i), ...[...Array(k - left)].map((_, i) => n - 1 - i)];
+        const sum = idx.reduce((acc, i) => acc + c[i], 0);
+        adds += idx.length;
+        const better = sum > best;
+        if (better) best = sum;
+        steps.push({
+          tag: 'split',
+          trace: ['Take ', A(left), ' from the left and ', A(k - left), ' from the right: ', better ? B(sum) : F(sum), better ? ' — best so far.' : '.'],
+          state: st(left, Object.fromEntries(idx.map((i) => [i, better ? 'good' : 'active']))),
+        });
+      }
+      steps.push({ tag: 'ret', trace: ['Maximum score: ', C(best), ' (', A(adds), ' additions).'], state: st(k, {}) });
+      return { steps, result: String(best) };
+    },
+    note: 'Re-adding each hand from scratch costs O(k²). The sliding version moves one card from the left end to the right end per step, updating the sum in O(1) for O(k) total.',
+    complexity: { time: 'O(k²)', space: 'O(1)' },
+  },
 };
 
 /* ================= Subarrays with K Different Integers ================= */
@@ -830,6 +1254,64 @@ const subarraysKDistinct: ProblemDef = {
   },
   note: 'Subtracting the two bounds works because every subarray with at most k distinct values either has exactly k or at most k−1 — the two sets partition cleanly. The alternative is tracking two left pointers at once, which is faster by a constant but far easier to get wrong under interview pressure.',
   complexity: { time: 'O(n)', space: 'O(k)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'For every subarray, track its distinct values and count those with exactly k.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int subarraysWithKDistinct(vector<int>& nums, int k) {'),
+        L('        int ans = 0;', 'init'),
+        L('        for (int i = 0; i < nums.size(); i++) {', 'outer'),
+        L('            unordered_set<int> seen;', 'outer'),
+        L('            for (int j = i; j < nums.size(); j++) {', 'grow', 'hit'),
+        L('                seen.insert(nums[j]);', 'grow', 'hit'),
+        L('                if (seen.size() == k) ans++;', 'hit'),
+        L('                if (seen.size() > k) break;', 'grow'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int subarraysWithKDistinct(int[] nums, int k) {'),
+        L('        int ans = 0;', 'init'),
+        L('        for (int i = 0; i < nums.length; i++) {', 'outer'),
+        L('            Set<Integer> seen = new HashSet<>();', 'outer'),
+        L('            for (int j = i; j < nums.length; j++) {', 'grow', 'hit'),
+        L('                seen.add(nums[j]);', 'grow', 'hit'),
+        L('                if (seen.size() == k) ans++;', 'hit'),
+        L('                if (seen.size() > k) break;', 'grow'),
+        L('            }'),
+        L('        }'),
+        L('        return ans;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const nums = parseIntArray(values.nums, { min: 0, max: 20, maxLen: 12 });
+      if (typeof nums === 'string') return { error: nums };
+      const k = parseInt1(values.k, 'k', { min: 1, max: 8 });
+      if (typeof k === 'string') return { error: k };
+      const { steps, answer } = everyWindow<Set<number | string>>({
+        arr: nums,
+        fresh: () => new Set(),
+        add: (s, x) => void s.add(x),
+        qualifies: (s) => s.size === k,
+        dead: (s) => s.size > k,
+        goal: 'count',
+        show: (s) => `distinct {${[...s].join(', ')}}`,
+        intro: ['Count every subarray with exactly ', A(k), ' distinct values.'],
+      });
+      return { steps, result: String(answer) };
+    },
+    note: 'O(n²) because each start rebuilds its set of values. Two "at most" sliding windows subtract to the exact count in O(n).',
+    complexity: { time: 'O(n²)', space: 'O(k)' },
+  },
 };
 
 export const slidingWindow2: ProblemDef[] = [

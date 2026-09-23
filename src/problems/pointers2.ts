@@ -2,6 +2,7 @@
 import type { ArrayState, ProblemDef, StackState, Step } from '../lib/types';
 import { parseInt1, parseIntArray } from '../lib/parse';
 import { A, B, C, F, L } from '../lib/trace';
+import { everyWindow } from './slidingWindow2';
 
 /* ================= 16. Valid Palindrome ================= */
 const validPalindrome: ProblemDef = {
@@ -902,6 +903,70 @@ const charReplacement: ProblemDef = {
   },
   note: 'maxFreq is never decremented when the window slides — a deliberate "flaw" that works: best only needs to grow, and it can only grow when maxFreq itself grows, so a stale maxFreq merely keeps the window from shrinking below the best already found.',
   complexity: { time: 'O(n)', space: 'O(26)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'For every substring, check whether (length − count of its most common letter) ≤ k.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int characterReplacement(string s, int k) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < s.size(); i++) {', 'outer'),
+        L('            int cnt[26] = {0}, top = 0;', 'outer'),
+        L('            for (int j = i; j < s.size(); j++) {', 'grow', 'hit'),
+        L('                top = max(top, ++cnt[s[j] - \'A\']);', 'grow', 'hit'),
+        L('                if (j - i + 1 - top > k) break;', 'grow'),
+        L('                best = max(best, j - i + 1);', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int characterReplacement(String s, int k) {'),
+        L('        int best = 0;', 'init'),
+        L('        for (int i = 0; i < s.length(); i++) {', 'outer'),
+        L('            int[] cnt = new int[26]; int top = 0;', 'outer'),
+        L('            for (int j = i; j < s.length(); j++) {', 'grow', 'hit'),
+        L('                top = Math.max(top, ++cnt[s.charAt(j) - \'A\']);', 'grow', 'hit'),
+        L('                if (j - i + 1 - top > k) break;', 'grow'),
+        L('                best = Math.max(best, j - i + 1);', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').toUpperCase().trim();
+      if (!/^[A-Z]+$/.test(s)) return { error: 'Uppercase letters A–Z only.' };
+      if (s.length > 16) return { error: 'Keep it to at most 16 characters.' };
+      const k = parseInt1(values.k, 'k', { min: 0 });
+      if (typeof k === 'string') return { error: k };
+      const { steps, answer } = everyWindow<{ cnt: Map<string, number>; top: number; len: number }>({
+        arr: s.split(''),
+        fresh: () => ({ cnt: new Map(), top: 0, len: 0 }),
+        add: (st, x) => {
+          const c = (st.cnt.get(String(x)) ?? 0) + 1;
+          st.cnt.set(String(x), c);
+          st.top = Math.max(st.top, c);
+          st.len++;
+        },
+        qualifies: (st) => st.len - st.top <= k,
+        dead: (st) => st.len - st.top > k,
+        goal: 'longest',
+        show: (st) => `len ${st.len}, most common ×${st.top}, replace ${st.len - st.top}`,
+        intro: ['A substring works if the letters that are not its most common letter number at most ', A(k), '. Test every substring.'],
+      });
+      return { steps, result: String(answer) };
+    },
+    note: 'Quadratic: every start re-counts letters from scratch. The sliding window keeps the counts as it moves and never shrinks the answer, so each pointer only moves forward.',
+    complexity: { time: 'O(n²)', space: 'O(26)' },
+  },
 };
 
 /* ================= 26. Permutation in String ================= */
@@ -1012,6 +1077,71 @@ const permutationInString: ProblemDef = {
   },
   note: 'A permutation is fully described by its letter counts, and a fixed-size window\'s counts change by exactly one entering and one leaving character per slide — so each position is checked in O(26) instead of re-counting.',
   complexity: { time: 'O(n · 26)', space: 'O(26)' },
+  brute: {
+    label: 'Sort every window',
+    technique: 'Sort s1 once; for every window of s2 with the same length, sort it and compare.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    bool checkInclusion(string s1, string s2) {'),
+        L('        sort(s1.begin(), s1.end());', 'init'),
+        L('        for (int i = 0; i + s1.size() <= s2.size(); i++) {', 'window'),
+        L('            string w = s2.substr(i, s1.size());', 'window'),
+        L('            sort(w.begin(), w.end());', 'window'),
+        L('            if (w == s1) return true;', 'window', 'found'),
+        L('        }'),
+        L('        return false;', 'none'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public boolean checkInclusion(String s1, String s2) {'),
+        L('        char[] a = s1.toCharArray(); Arrays.sort(a);', 'init'),
+        L('        String key = new String(a);', 'init'),
+        L('        for (int i = 0; i + s1.length() <= s2.length(); i++) {', 'window'),
+        L('            char[] w = s2.substring(i, i + s1.length()).toCharArray();', 'window'),
+        L('            Arrays.sort(w);', 'window'),
+        L('            if (new String(w).equals(key)) return true;', 'window', 'found'),
+        L('        }'),
+        L('        return false;', 'none'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s1 = (values.s1 ?? '').toLowerCase().trim();
+      const s2 = (values.s2 ?? '').toLowerCase().trim();
+      if (!/^[a-z]+$/.test(s1) || !/^[a-z]+$/.test(s2)) return { error: 'Lowercase letters only, both strings.' };
+      if (s2.length > 18) return { error: 'Keep s2 to at most 18 characters.' };
+      const m = s1.length;
+      const key = s1.split('').sort().join('');
+      const chars = s2.split('');
+      const steps: Step[] = [];
+      const st = (i: number | null, mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: chars,
+        window: i !== null ? [i, i + m - 1] : null,
+        mark,
+        aggs: [{ label: 'sorted s1', value: key, c: 'b' }],
+      });
+      steps.push({ tag: 'init', trace: ['Sort s1: "', B(key), '". Any permutation of s1 sorts to the same string.'], state: st(null) });
+      let found = -1;
+      for (let i = 0; i + m <= chars.length; i++) {
+        const w = s2.slice(i, i + m).split('').sort().join('');
+        if (w === key) {
+          found = i;
+          steps.push({ tag: 'found', trace: ['Window "', A(s2.slice(i, i + m)), '" sorts to "', B(w), '" — a match.'], state: st(i, Object.fromEntries([...Array(m)].map((_, k) => [i + k, 'final' as const]))) });
+          break;
+        }
+        steps.push({ tag: 'window', trace: ['Window "', A(s2.slice(i, i + m)), '" sorts to "', F(w), '" — no.'], state: st(i) });
+      }
+      if (found === -1) steps.push({ tag: 'none', trace: ['No window matches — return ', C('false'), '.'], state: st(null) });
+      return { steps, result: String(found !== -1), resultDetail: found !== -1 ? `match starts at index ${found}` : undefined };
+    },
+    note: 'Every window is re-sorted from scratch, costing O(m log m) each. Sliding a letter-count array updates only two counts per step, so each window costs O(26) instead.',
+    complexity: { time: 'O(n · m log m)', space: 'O(m)' },
+  },
 };
 
 /* ================= 27. Minimum Window Substring ================= */
@@ -1159,6 +1289,81 @@ const minWindow: ProblemDef = {
   },
   note: 'The window is elastic but never retreats: r only grows, and l only grows. The "formed" counter (how many distinct characters have met their quota) turns "is the window valid?" into an O(1) check instead of a map comparison.',
   complexity: { time: 'O(|s| + |t|)', space: 'O(alphabet)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'From every start, extend right until the window covers t; keep the shortest such window.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string minWindow(string s, string t) {'),
+        L('        int bestL = 0, bestLen = INT_MAX;', 'init'),
+        L('        for (int i = 0; i < s.size(); i++) {', 'outer'),
+        L('            unordered_map<char, int> need;', 'outer'),
+        L('            for (char c : t) need[c]++;', 'outer'),
+        L('            int missing = t.size();', 'outer'),
+        L('            for (int j = i; j < s.size(); j++) {', 'grow', 'hit'),
+        L('                if (need[s[j]]-- > 0) missing--;', 'grow', 'hit'),
+        L('                if (missing == 0) {', 'hit'),
+        L('                    if (j - i + 1 < bestLen) { bestL = i; bestLen = j - i + 1; }', 'hit'),
+        L('                    break;', 'hit'),
+        L('                }'),
+        L('            }'),
+        L('        }'),
+        L('        return bestLen == INT_MAX ? "" : s.substr(bestL, bestLen);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String minWindow(String s, String t) {'),
+        L('        int bestL = 0, bestLen = Integer.MAX_VALUE;', 'init'),
+        L('        for (int i = 0; i < s.length(); i++) {', 'outer'),
+        L('            int[] need = new int[128];', 'outer'),
+        L('            for (char c : t.toCharArray()) need[c]++;', 'outer'),
+        L('            int missing = t.length();', 'outer'),
+        L('            for (int j = i; j < s.length(); j++) {', 'grow', 'hit'),
+        L('                if (need[s.charAt(j)]-- > 0) missing--;', 'grow', 'hit'),
+        L('                if (missing == 0) {', 'hit'),
+        L('                    if (j - i + 1 < bestLen) { bestL = i; bestLen = j - i + 1; }', 'hit'),
+        L('                    break;', 'hit'),
+        L('                }'),
+        L('            }'),
+        L('        }'),
+        L('        return bestLen == Integer.MAX_VALUE ? "" : s.substring(bestL, bestL + bestLen);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim();
+      const t = (values.t ?? '').trim();
+      if (!s || !t) return { error: 'Enter both strings.' };
+      if (s.length > 20) return { error: 'Keep s to at most 20 characters.' };
+      const { steps, answer, range } = everyWindow<{ need: Map<string, number>; missing: number }>({
+        arr: s.split(''),
+        fresh: () => {
+          const need = new Map<string, number>();
+          for (const c of t) need.set(c, (need.get(c) ?? 0) + 1);
+          return { need, missing: t.length };
+        },
+        add: (st, x) => {
+          const c = String(x);
+          const left = st.need.get(c) ?? 0;
+          if (left > 0) st.missing--;
+          st.need.set(c, left - 1);
+        },
+        qualifies: (st) => st.missing === 0,
+        goal: 'shortest',
+        show: (st) => `still missing ${st.missing} of ${t.length}`,
+        intro: ['From every start, extend right until the window contains all of "', A(t), '" (with multiplicity).'],
+      });
+      const result = range ? s.slice(range[0], range[1] + 1) : '';
+      return { steps, result: result === '' ? '""' : `"${result}"`, resultDetail: range ? `length ${answer}` : 'no valid window' };
+    },
+    note: 'Each start rebuilds the need-counts and rescans to the right: O(|s|²). The two-pointer window never moves backwards, so every character is added and removed at most once.',
+    complexity: { time: 'O(|s|² + |s|·|t|)', space: 'O(alphabet)' },
+  },
 };
 
 /* ================= 28. Sliding Window Maximum ================= */
@@ -1265,6 +1470,71 @@ const slidingWindowMax: ProblemDef = {
   },
   note: 'Every index is pushed once and popped at most once, so the whole run is O(n) despite the nested-looking while. The deque discards exactly the elements that are provably useless: anything smaller than a newer arrival can never be a future maximum.',
   complexity: { time: 'O(n)', space: 'O(k)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'For every window of size k, scan all k values to find its maximum.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    vector<int> maxSlidingWindow(vector<int>& nums, int k) {'),
+        L('        vector<int> res;', 'init'),
+        L('        for (int i = 0; i + k <= nums.size(); i++) {', 'emit'),
+        L('            int mx = nums[i];', 'emit'),
+        L('            for (int j = i + 1; j < i + k; j++) mx = max(mx, nums[j]);', 'emit'),
+        L('            res.push_back(mx);', 'emit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int[] maxSlidingWindow(int[] nums, int k) {'),
+        L('        int[] res = new int[nums.length - k + 1];', 'init'),
+        L('        for (int i = 0; i + k <= nums.length; i++) {', 'emit'),
+        L('            int mx = nums[i];', 'emit'),
+        L('            for (int j = i + 1; j < i + k; j++) mx = Math.max(mx, nums[j]);', 'emit'),
+        L('            res[i] = mx;', 'emit'),
+        L('        }'),
+        L('        return res;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums, { maxLen: 14 });
+      if (typeof arr === 'string') return { error: arr };
+      const k = parseInt1(values.k, 'k', { min: 1 });
+      if (typeof k === 'string') return { error: k };
+      if (k > arr.length) return { error: 'k must be ≤ array length.' };
+      const steps: Step[] = [];
+      const res: number[] = [];
+      let scans = 0;
+      const st = (i: number | null, maxAt?: number): StackState => ({
+        array: {
+          arr,
+          window: i !== null ? [i, i + k - 1] : null,
+          mark: maxAt !== undefined ? { [maxAt]: 'good' } : {},
+        },
+        stack: res.map((v) => ({ v })),
+        stackLabel: 'Output',
+        aggs: [{ label: 'values scanned', value: String(scans), c: 'a' }],
+      });
+      steps.push({ tag: 'init', trace: ['No deque: rescan all ', A(k), ' values of every window.'], state: st(null) });
+      for (let i = 0; i + k <= arr.length; i++) {
+        let at = i;
+        for (let j = i + 1; j < i + k; j++) if (arr[j] > arr[at]) at = j;
+        scans += k;
+        res.push(arr[at]);
+        steps.push({ tag: 'emit', trace: ['Window [', A(i), '..', A(i + k - 1), ']: scanning all ', A(k), ' values finds max ', B(arr[at]), '.'], state: st(i, at) });
+      }
+      steps.push({ tag: 'ret', trace: ['Output ', C(`[${res.join(', ')}]`), ' after scanning ', A(scans), ' values.'], state: st(null) });
+      return { steps, result: `[${res.join(', ')}]` };
+    },
+    note: 'Neighbouring windows share k − 1 values, yet each is rescanned in full: O(n·k). The monotonic deque keeps only candidates that could still become a maximum, so every index is pushed and popped once.',
+    complexity: { time: 'O(n · k)', space: 'O(1) beyond output' },
+  },
 };
 
 /* ================= 29. Minimum Size Subarray Sum ================= */
@@ -1368,6 +1638,61 @@ const minSizeSubarray: ProblemDef = {
   },
   note: 'Positivity is the license for the shrink loop: once a window qualifies, no longer window starting at the same l can be better, so l can advance permanently. Each pointer moves at most n times — O(n) total.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Brute force',
+    technique: 'From every start, add elements until the sum reaches the target; keep the shortest such subarray.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int minSubArrayLen(int target, vector<int>& nums) {'),
+        L('        int best = INT_MAX;', 'init'),
+        L('        for (int i = 0; i < nums.size(); i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < nums.size(); j++) {', 'grow', 'hit'),
+        L('                sum += nums[j];', 'grow', 'hit'),
+        L('                if (sum >= target) { best = min(best, j - i + 1); break; }', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return best == INT_MAX ? 0 : best;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int minSubArrayLen(int target, int[] nums) {'),
+        L('        int best = Integer.MAX_VALUE;', 'init'),
+        L('        for (int i = 0; i < nums.length; i++) {', 'outer'),
+        L('            int sum = 0;', 'outer'),
+        L('            for (int j = i; j < nums.length; j++) {', 'grow', 'hit'),
+        L('                sum += nums[j];', 'grow', 'hit'),
+        L('                if (sum >= target) { best = Math.min(best, j - i + 1); break; }', 'hit'),
+        L('            }'),
+        L('        }'),
+        L('        return best == Integer.MAX_VALUE ? 0 : best;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const arr = parseIntArray(values.nums, { min: 1 });
+      if (typeof arr === 'string') return { error: arr };
+      const target = parseInt1(values.target, 'Target', { min: 1 });
+      if (typeof target === 'string') return { error: target };
+      const { steps, answer, range } = everyWindow<{ sum: number }>({
+        arr,
+        fresh: () => ({ sum: 0 }),
+        add: (s, x) => void (s.sum += Number(x)),
+        qualifies: (s) => s.sum >= target,
+        goal: 'shortest',
+        show: (s) => `sum ${s.sum}`,
+        intro: ['From every start, add elements until the sum reaches ', C(target), '.'],
+      });
+      return { steps, result: String(answer), resultDetail: range ? `[${arr.slice(range[0], range[1] + 1).join(', ')}]` : 'no valid subarray' };
+    },
+    note: 'Every start re-adds its elements: O(n²). Since all values are positive, the two-pointer window can shrink from the left the moment the sum reaches the target and never needs to go back.',
+    complexity: { time: 'O(n²)', space: 'O(1)' },
+  },
 };
 
 export const pointers2 = [validPalindrome, threeSum, trappingRain, sortColors, charReplacement, permutationInString, minWindow, slidingWindowMax, minSizeSubarray];
