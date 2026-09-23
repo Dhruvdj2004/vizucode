@@ -85,6 +85,66 @@ const longestCommonPrefix: ProblemDef = {
   },
   note: 'The prefix property is columnar: column k belongs to the answer iff all words agree on every column ≤ k. Scanning columns until the first disagreement examines no character more than once.',
   complexity: { time: 'O(total chars)', space: 'O(1)' },
+  brute: {
+    label: 'Sort, compare ends',
+    technique: 'Sort the words; the common prefix of the whole list is the common prefix of just the first and last word.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string longestCommonPrefix(vector<string>& strs) {'),
+        L('        sort(strs.begin(), strs.end());', 'sort'),
+        L('        string& a = strs.front(); string& b = strs.back();', 'sort'),
+        L('        int i = 0;', 'cmp'),
+        L('        while (i < a.size() && i < b.size() && a[i] == b[i]) i++;', 'cmp'),
+        L('        return a.substr(0, i);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String longestCommonPrefix(String[] strs) {'),
+        L('        Arrays.sort(strs);', 'sort'),
+        L('        String a = strs[0], b = strs[strs.length - 1];', 'sort'),
+        L('        int i = 0;', 'cmp'),
+        L('        while (i < a.length() && i < b.length() && a.charAt(i) == b.charAt(i)) i++;', 'cmp'),
+        L('        return a.substring(0, i);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const words = (values.strs ?? '').split(',').map((w) => w.trim().toLowerCase()).filter(Boolean);
+      if (words.length === 0 || words.length > 6) return { error: 'Enter 1–6 words.' };
+      if (!words.every((w) => /^[a-z]{1,12}$/.test(w))) return { error: 'Lowercase words, ≤ 12 chars each.' };
+      const sorted = [...words].sort();
+      const a = sorted[0];
+      const b = sorted[sorted.length - 1];
+      const steps: Step[] = [];
+      const view = (k: number, bad?: boolean): ListState => ({
+        chains: sorted.map((w, wi) => ({
+          label: wi === 0 ? 'first' : wi === sorted.length - 1 ? 'last' : `w${wi + 1}`,
+          items: w.split('').map((ch, i) => ({
+            v: ch,
+            mark: wi !== 0 && wi !== sorted.length - 1 ? ('dim' as const) : i < k ? ('good' as const) : i === k ? (bad ? ('dim' as const) : ('active' as const)) : undefined,
+          })),
+          broken: true,
+        })),
+      });
+      steps.push({ tag: 'sort', trace: ['Sort alphabetically. The first and last words differ the most, so their shared prefix is shared by everything in between.'], state: view(-1) });
+      let i = 0;
+      while (i < a.length && i < b.length && a[i] === b[i]) {
+        steps.push({ tag: 'cmp', trace: ["Column ", A(i), ": '", B(a[i]), "' in both first and last."], state: view(i) });
+        i++;
+      }
+      steps.push({ tag: 'cmp', trace: [i < a.length && i < b.length ? ["Column ", i, ": '", a[i], "' vs '", b[i], "' — they differ."].join('') : 'One of the two words ends here.'], state: view(i, true) });
+      const result = a.slice(0, i);
+      steps.push({ tag: 'ret', trace: ['Common prefix: "', C(result), '".'], state: view(i) });
+      return { steps, result: `"${result}"`, resultDetail: `length ${i}` };
+    },
+    note: 'Sorting costs O(S log n) for total characters S, more than the O(S) column scan, but afterwards only two words are compared. It is a neat trick when the list is already sorted or will be reused.',
+    complexity: { time: 'O(S log n)', space: 'O(1)' },
+  },
 };
 
 /* ================= 152. String to Integer (atoi) ================= */
@@ -194,6 +254,65 @@ const atoi: ProblemDef = {
   },
   note: 'atoi is less an algorithm than a specification-compliance test: the order of phases, single-sign rule, and 32-bit clamping are all edge-case landmines. Accumulating in a wider type (long) is the standard way to detect overflow before it corrupts.',
   complexity: { time: 'O(n)', space: 'O(1)' },
+  brute: {
+    label: 'Regular expression',
+    technique: 'Match leading spaces, an optional sign and a run of digits with one regex, then clamp to the 32-bit range.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int myAtoi(string s) {'),
+        L('        smatch m;', 'init'),
+        L('        if (!regex_search(s, m, regex("^ *([+-]?\\\\d+)"))) return 0;', 'match'),
+        L('        string digits = m[1];', 'match'),
+        L('        long long v = 0; int sign = digits[0] == \'-\' ? -1 : 1;', 'digit'),
+        L('        for (char c : digits) if (isdigit(c)) {', 'digit'),
+        L('            v = v * 10 + (c - \'0\');', 'digit'),
+        L('            if (v > INT_MAX) return sign == 1 ? INT_MAX : INT_MIN;', 'clamp'),
+        L('        }'),
+        L('        return sign * v;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int myAtoi(String s) {'),
+        L('        Matcher m = Pattern.compile("^ *([+-]?\\\\d+)").matcher(s);', 'init'),
+        L('        if (!m.find()) return 0;', 'match'),
+        L('        BigInteger v = new BigInteger(m.group(1));', 'match', 'digit'),
+        L('        if (v.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) > 0) return Integer.MAX_VALUE;', 'clamp'),
+        L('        if (v.compareTo(BigInteger.valueOf(Integer.MIN_VALUE)) < 0) return Integer.MIN_VALUE;', 'clamp'),
+        L('        return v.intValue();', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = values.s ?? '';
+      if (s.length === 0 || s.length > 20) return { error: 'Enter 1–20 characters.' };
+      const chars = s.split('');
+      const INT_MAX = 2147483647;
+      const INT_MIN = -2147483648;
+      const steps: Step[] = [];
+      const st = (mark: ArrayState['mark'] = {}): ArrayState => ({ arr: chars.map((c) => (c === ' ' ? '␣' : c)), mark });
+      steps.push({ tag: 'init', trace: ['One pattern captures all the rules: ', A('^ *([+-]?\\d+)'), ' — spaces, at most one sign, then digits.'], state: st() });
+      const m = s.match(/^ *([+-]?\d+)/);
+      if (!m) {
+        steps.push({ tag: 'match', trace: ['The pattern does not match at the start — return ', C(0), '.'], state: st() });
+        return { steps, result: '0' };
+      }
+      const start = m[0].length - m[1].length;
+      steps.push({ tag: 'match', trace: ['Matched "', B(m[1]), '"; everything after it is ignored.'], state: st(Object.fromEntries([...Array(m[1].length)].map((_, k) => [start + k, 'good' as const]))) });
+      const raw = Number(m[1]);
+      const final = Math.max(INT_MIN, Math.min(INT_MAX, raw));
+      const clamped = final !== raw;
+      if (clamped) steps.push({ tag: 'clamp', trace: [F(m[1]), ' is outside the 32-bit range — clamp to ', C(final), '.'], state: st() });
+      steps.push({ tag: 'ret', trace: ['Parsed value: ', C(final), '.'], state: st() });
+      return { steps, result: String(final), resultDetail: clamped ? 'clamped to 32-bit range' : undefined };
+    },
+    note: 'Compact and easy to audit against the spec, but it relies on a regex engine and, in C++, is noticeably slower than a hand-written scan. The state-machine version makes each rule explicit and runs in O(n) with O(1) memory.',
+    complexity: { time: 'O(n)', space: 'O(n)' },
+  },
 };
 
 /* ================= 153. Find the Index of the First Occurrence ================= */
@@ -280,6 +399,99 @@ const strStr: ProblemDef = {
   },
   note: 'The naive slide is O(n·m) worst case but perfectly fine at interview scale — and it is the baseline that KMP improves by never re-examining matched characters (reusing the needle\'s self-similarity structure).',
   complexity: { time: 'O(n·m)', space: 'O(1)' },
+  brute: {
+    label: 'KMP',
+    technique: 'Precompute the needle’s failure table so a mismatch never moves the haystack pointer backwards: O(n + m).',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int strStr(string hay, string needle) {'),
+        L('        int m = needle.size();', 'lps'),
+        L('        vector<int> lps(m, 0);', 'lps'),
+        L('        for (int i = 1, len = 0; i < m; ) {', 'lps'),
+        L('            if (needle[i] == needle[len]) lps[i++] = ++len;', 'lps'),
+        L('            else if (len) len = lps[len - 1];', 'lps'),
+        L('            else lps[i++] = 0;', 'lps'),
+        L('        }'),
+        L('        for (int i = 0, j = 0; i < hay.size(); ) {', 'scan'),
+        L('            if (hay[i] == needle[j]) { i++; j++; if (j == m) return i - m; }', 'scan', 'found'),
+        L('            else if (j) j = lps[j - 1];', 'fallback'),
+        L('            else i++;', 'scan'),
+        L('        }'),
+        L('        return -1;', 'none'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int strStr(String hay, String needle) {'),
+        L('        int m = needle.length();', 'lps'),
+        L('        int[] lps = new int[m];', 'lps'),
+        L('        for (int i = 1, len = 0; i < m; ) {', 'lps'),
+        L('            if (needle.charAt(i) == needle.charAt(len)) lps[i++] = ++len;', 'lps'),
+        L('            else if (len > 0) len = lps[len - 1];', 'lps'),
+        L('            else lps[i++] = 0;', 'lps'),
+        L('        }'),
+        L('        for (int i = 0, j = 0; i < hay.length(); ) {', 'scan'),
+        L('            if (hay.charAt(i) == needle.charAt(j)) { i++; j++; if (j == m) return i - m; }', 'scan', 'found'),
+        L('            else if (j > 0) j = lps[j - 1];', 'fallback'),
+        L('            else i++;', 'scan'),
+        L('        }'),
+        L('        return -1;', 'none'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const hay = (values.haystack ?? '').trim().toLowerCase();
+      const needle = (values.needle ?? '').trim().toLowerCase();
+      if (!/^[a-z]{1,16}$/.test(hay) || !/^[a-z]{1,8}$/.test(needle)) return { error: 'Lowercase; haystack ≤ 16, needle ≤ 8.' };
+      const m = needle.length;
+      const lps = Array(m).fill(0);
+      for (let i = 1, len = 0; i < m; ) {
+        if (needle[i] === needle[len]) lps[i++] = ++len;
+        else if (len) len = lps[len - 1];
+        else lps[i++] = 0;
+      }
+      const steps: Step[] = [];
+      const st = (i: number, j: number, mark: ArrayState['mark'] = {}): ArrayState => ({
+        arr: hay.split(''),
+        window: j > 0 ? [i - j, i - 1] : null,
+        ptrs: i < hay.length ? [{ name: 'i', i, c: 'a' }] : [],
+        mark,
+        aggs: [
+          { label: 'matched so far', value: `"${needle.slice(0, j)}"`, c: 'b' },
+          { label: 'failure table', value: needle.split('').map((c, k) => `${c}:${lps[k]}`).join(' '), c: 'a' },
+        ],
+      });
+      steps.push({ tag: 'lps', trace: ['Failure table for "', A(needle), '": after a mismatch with j characters matched, resume at lps[j − 1] instead of 0.'], state: st(0, 0) });
+      let found = -1;
+      for (let i = 0, j = 0; i < hay.length; ) {
+        if (hay[i] === needle[j]) {
+          i++;
+          j++;
+          if (j === m) {
+            found = i - m;
+            steps.push({ tag: 'found', trace: ['All ', A(m), ' characters matched — needle starts at ', C(found), '.'], state: st(i, j, Object.fromEntries([...Array(m)].map((_, k) => [found + k, 'final' as const]))) });
+            break;
+          }
+          steps.push({ tag: 'scan', trace: ["'", B(hay[i - 1]), "' matches — ", A(j), ' character(s) matched.'], state: st(i, j) });
+        } else if (j) {
+          const nj = lps[j - 1];
+          steps.push({ tag: 'fallback', trace: ["'", F(hay[i]), "' breaks the match. Keep i where it is and fall back to ", A(nj), ' matched character(s).'], state: st(i, j, { [i]: 'dim' }) });
+          j = nj;
+        } else {
+          steps.push({ tag: 'scan', trace: ["'", F(hay[i]), "' cannot start a match — move on."], state: st(i, j, { [i]: 'dim' }) });
+          i++;
+        }
+      }
+      if (found < 0) steps.push({ tag: 'none', trace: ['Needle not found — ', C(-1), '.'], state: st(hay.length, 0) });
+      return { steps, result: String(found), resultDetail: found >= 0 ? `"${needle}" found at ${found}` : 'not found' };
+    },
+    note: 'Better than the sliding comparison: the haystack pointer never moves backwards, so the scan is O(n) after an O(m) table build — O(n + m) total instead of O(n·m) on inputs like "aaaa…ab".',
+    complexity: { time: 'O(n + m)', space: 'O(m)' },
+  },
 };
 
 /* ================= 154. Zigzag Conversion ================= */
@@ -376,6 +588,84 @@ const zigzag: ProblemDef = {
   },
   note: 'No geometry needed — the zigzag is fully captured by which row each character lands in, and that row follows a simple bounce pattern. The columns exist only in the picture; the algorithm never stores them.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Index formula',
+    technique: 'The pattern repeats every 2·(rows − 1) characters, so each row’s characters can be read straight from the string by index.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string convert(string s, int rows) {'),
+        L('        if (rows == 1) return s;', 'base'),
+        L('        int cycle = 2 * (rows - 1); string out;', 'init'),
+        L('        for (int r = 0; r < rows; r++)', 'row'),
+        L('            for (int j = r; j < s.size(); j += cycle) {', 'row'),
+        L('                out += s[j];', 'row'),
+        L('                int k = j + cycle - 2 * r;', 'row'),
+        L('                if (r != 0 && r != rows - 1 && k < s.size()) out += s[k];', 'row'),
+        L('            }'),
+        L('        return out;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String convert(String s, int rows) {'),
+        L('        if (rows == 1) return s;', 'base'),
+        L('        int cycle = 2 * (rows - 1); StringBuilder out = new StringBuilder();', 'init'),
+        L('        for (int r = 0; r < rows; r++)', 'row'),
+        L('            for (int j = r; j < s.length(); j += cycle) {', 'row'),
+        L('                out.append(s.charAt(j));', 'row'),
+        L('                int k = j + cycle - 2 * r;', 'row'),
+        L('                if (r != 0 && r != rows - 1 && k < s.length()) out.append(s.charAt(k));', 'row'),
+        L('            }'),
+        L('        return out.toString();', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').trim();
+      if (!/^[A-Za-z]{1,20}$/.test(s)) return { error: 'Letters only, ≤ 20.' };
+      const numRows = Number(values.rows);
+      if (!Number.isInteger(numRows) || numRows < 1 || numRows > 5) return { error: 'Rows must be 1–5.' };
+      const steps: Step[] = [];
+      if (numRows === 1) {
+        steps.push({ tag: 'base', trace: ['One row — the string is unchanged: ', C(s), '.'], state: { grid: [s.split('')], mark: {} } });
+        return { steps, result: `"${s}"` };
+      }
+      const cycle = 2 * (numRows - 1);
+      const rows: string[][] = [...Array(numRows)].map(() => []);
+      const view = (active?: number): MatrixState => {
+        const w = Math.max(1, ...rows.map((r) => r.length));
+        return {
+          grid: rows.map((r) => [...r, ...Array(w - r.length).fill('')]),
+          rowLabels: rows.map((_, i) => `row ${i}`),
+          mark: active !== undefined ? Object.fromEntries(rows[active].map((_, c) => [`${active},${c}`, 'active' as const])) : {},
+          aggs: [{ label: 'cycle length', value: String(cycle), c: 'a' }],
+        };
+      };
+      steps.push({ tag: 'init', trace: ['The zigzag repeats every ', A(cycle), ' characters. Row r takes index r of each cycle, and middle rows also take index cycle − r.'], state: view() });
+      for (let r = 0; r < numRows; r++) {
+        const idx: number[] = [];
+        for (let j = r; j < s.length; j += cycle) {
+          rows[r].push(s[j]);
+          idx.push(j);
+          const k = j + cycle - 2 * r;
+          if (r !== 0 && r !== numRows - 1 && k < s.length) {
+            rows[r].push(s[k]);
+            idx.push(k);
+          }
+        }
+        steps.push({ tag: 'row', trace: ['Row ', A(r), ' reads indices ', B(idx.join(', ')), ' → "', B(rows[r].join('')), '".'], state: view(r) });
+      }
+      const result = rows.map((r) => r.join('')).join('');
+      steps.push({ tag: 'ret', trace: ['Concatenate the rows: ', C(result), '.'], state: view() });
+      return { steps, result: `"${result}"` };
+    },
+    note: 'Same O(n) as simulating the bouncing row pointer, but it computes each character’s position directly and needs no per-row buffers — every character is appended exactly once, straight into the output.',
+    complexity: { time: 'O(n)', space: 'O(1) beyond output' },
+  },
 };
 
 /* ================= 155. Compare Version Numbers ================= */
@@ -466,6 +756,81 @@ const compareVersions: ProblemDef = {
   },
   note: 'Version strings are not decimal numbers — "1.01" equals "1.1" but "1.10" beats "1.9". Parsing each chunk as an integer erases the leading-zero trap, and padding with zeros makes "1.0" equal "1".',
   complexity: { time: 'O(n + m)', space: 'O(n + m)' },
+  brute: {
+    label: 'Two pointers, no split',
+    technique: 'Walk both strings with two pointers, parsing one revision number at a time instead of splitting into arrays.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    int compareVersion(string v1, string v2) {'),
+        L('        int i = 0, j = 0;', 'init'),
+        L('        while (i < v1.size() || j < v2.size()) {', 'chunk'),
+        L('            long a = 0, b = 0;', 'chunk'),
+        L('            while (i < v1.size() && v1[i] != \'.\') a = a * 10 + (v1[i++] - \'0\');', 'chunk'),
+        L('            while (j < v2.size() && v2[j] != \'.\') b = b * 10 + (v2[j++] - \'0\');', 'chunk'),
+        L('            if (a != b) return a < b ? -1 : 1;', 'differ'),
+        L('            i++; j++;', 'chunk'),
+        L('        }'),
+        L('        return 0;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public int compareVersion(String v1, String v2) {'),
+        L('        int i = 0, j = 0;', 'init'),
+        L('        while (i < v1.length() || j < v2.length()) {', 'chunk'),
+        L('            long a = 0, b = 0;', 'chunk'),
+        L('            while (i < v1.length() && v1.charAt(i) != \'.\') a = a * 10 + (v1.charAt(i++) - \'0\');', 'chunk'),
+        L('            while (j < v2.length() && v2.charAt(j) != \'.\') b = b * 10 + (v2.charAt(j++) - \'0\');', 'chunk'),
+        L('            if (a != b) return a < b ? -1 : 1;', 'differ'),
+        L('            i++; j++;', 'chunk'),
+        L('        }'),
+        L('        return 0;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const v1 = (values.v1 ?? '').trim();
+      const v2 = (values.v2 ?? '').trim();
+      if (!/^\d+(\.\d+){0,4}$/.test(v1) || !/^\d+(\.\d+){0,4}$/.test(v2)) return { error: 'Versions like "1.2.3" (digits and dots).' };
+      const steps: Step[] = [];
+      const view = (i: number, j: number): ListState => ({
+        chains: [
+          { label: 'v1', items: v1.split('').map((c, k) => ({ v: c, mark: k < i ? ('good' as const) : undefined })), broken: true },
+          { label: 'v2', items: v2.split('').map((c, k) => ({ v: c, mark: k < j ? ('good' as const) : undefined })), broken: true },
+        ],
+        ptrs: [
+          ...(i < v1.length ? [{ name: 'i', chain: 0, i, c: 'a' as const }] : []),
+          ...(j < v2.length ? [{ name: 'j', chain: 1, i: j, c: 'a' as const }] : []),
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['No split and no arrays: parse one revision at a time from each string. A missing revision counts as 0.'], state: view(0, 0) });
+      let i = 0;
+      let j = 0;
+      let result = 0;
+      while (i < v1.length || j < v2.length) {
+        let a = 0;
+        let b = 0;
+        while (i < v1.length && v1[i] !== '.') a = a * 10 + Number(v1[i++]);
+        while (j < v2.length && v2[j] !== '.') b = b * 10 + Number(v2[j++]);
+        if (a !== b) {
+          result = a < b ? -1 : 1;
+          steps.push({ tag: 'differ', trace: ['Revision ', A(a), ' vs ', A(b), ' — they differ, so return ', C(result), '.'], state: view(i, j) });
+          break;
+        }
+        steps.push({ tag: 'chunk', trace: ['Revision ', B(a), ' = ', B(b), ' — equal, move past the dots.'], state: view(i, j) });
+        i++;
+        j++;
+      }
+      if (result === 0) steps.push({ tag: 'ret', trace: ['Every revision matched — ', C(0), '.'], state: view(v1.length, v2.length) });
+      return { steps, result: String(result), resultDetail: result === 0 ? `${v1} == ${v2}` : result < 0 ? `${v1} < ${v2}` : `${v1} > ${v2}` };
+    },
+    note: 'Same O(n + m) time as splitting, but with O(1) extra space and an early exit that never parses the rest of the strings once a difference is found.',
+    complexity: { time: 'O(n + m)', space: 'O(1)' },
+  },
 };
 
 /* ================= 156. Multiply Strings ================= */
@@ -566,6 +931,98 @@ const multiplyStrings: ProblemDef = {
   },
   note: 'The whole trick is the addressing formula: digits at positions i and j (from the left) multiply into positions i+j+1 (units) and i+j (carry) — schoolbook multiplication becomes pure index arithmetic, no BigInteger needed.',
   complexity: { time: 'O(m·n)', space: 'O(m+n)' },
+  brute: {
+    label: 'Partial products',
+    technique: 'Multiply num1 by one digit of num2 at a time, shift it, and add it to a running total with string addition.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    string add(string a, string b) { /* schoolbook addition of two digit strings */ }'),
+        L('public:'),
+        L('    string multiply(string num1, string num2) {'),
+        L('        string total = "0";', 'init'),
+        L('        for (int j = num2.size() - 1, shift = 0; j >= 0; j--, shift++) {', 'row'),
+        L('            string row; int carry = 0, d = num2[j] - \'0\';', 'row'),
+        L('            for (int i = num1.size() - 1; i >= 0; i--) {', 'row'),
+        L('                int p = (num1[i] - \'0\') * d + carry;', 'row'),
+        L('                row += char(\'0\' + p % 10); carry = p / 10;', 'row'),
+        L('            }'),
+        L('            if (carry) row += char(\'0\' + carry);', 'row'),
+        L('            reverse(row.begin(), row.end());', 'row'),
+        L('            total = add(total, row + string(shift, \'0\'));', 'addrow'),
+        L('        }'),
+        L('        return strip(total);', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    String add(String a, String b) { /* schoolbook addition of two digit strings */ }'),
+        L('    public String multiply(String num1, String num2) {'),
+        L('        String total = "0";', 'init'),
+        L('        for (int j = num2.length() - 1, shift = 0; j >= 0; j--, shift++) {', 'row'),
+        L('            StringBuilder row = new StringBuilder(); int carry = 0, d = num2.charAt(j) - \'0\';', 'row'),
+        L('            for (int i = num1.length() - 1; i >= 0; i--) {', 'row'),
+        L('                int p = (num1.charAt(i) - \'0\') * d + carry;', 'row'),
+        L('                row.append(p % 10); carry = p / 10;', 'row'),
+        L('            }'),
+        L('            if (carry > 0) row.append(carry);', 'row'),
+        L('            total = add(total, row.reverse() + "0".repeat(shift));', 'addrow'),
+        L('        }'),
+        L('        return strip(total);', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const num1 = (values.num1 ?? '').trim();
+      const num2 = (values.num2 ?? '').trim();
+      if (!/^\d{1,5}$/.test(num1) || !/^\d{1,5}$/.test(num2)) return { error: 'Digits only, ≤ 5 each.' };
+      const add = (a: string, b: string) => {
+        let i = a.length - 1;
+        let j = b.length - 1;
+        let carry = 0;
+        let out = '';
+        while (i >= 0 || j >= 0 || carry) {
+          const s = (i >= 0 ? Number(a[i--]) : 0) + (j >= 0 ? Number(b[j--]) : 0) + carry;
+          out = String(s % 10) + out;
+          carry = Math.floor(s / 10);
+        }
+        return out;
+      };
+      const steps: Step[] = [];
+      let total = '0';
+      const st = (row?: string): ArrayState => ({
+        arr: total.split(''),
+        aggs: [
+          { label: 'this partial product', value: row ?? '—', c: 'a' },
+          { label: 'num1 × num2', value: `${num1} × ${num2}`, c: 'b' },
+        ],
+      });
+      steps.push({ tag: 'init', trace: ['Grade-school long multiplication: one partial product per digit of num2, each shifted one place further left.'], state: st() });
+      for (let j = num2.length - 1, shift = 0; j >= 0; j--, shift++) {
+        const d = Number(num2[j]);
+        let row = '';
+        let carry = 0;
+        for (let i = num1.length - 1; i >= 0; i--) {
+          const p = Number(num1[i]) * d + carry;
+          row = String(p % 10) + row;
+          carry = Math.floor(p / 10);
+        }
+        if (carry) row = String(carry) + row;
+        const shifted = row + '0'.repeat(shift);
+        steps.push({ tag: 'row', trace: [A(num1), ' × ', A(d), ' = ', B(row), ', shifted ', A(shift), ' place(s) → ', B(shifted), '.'], state: st(shifted) });
+        total = add(total, shifted);
+        steps.push({ tag: 'addrow', trace: ['Add it to the running total: ', B(total), '.'], state: st(shifted) });
+      }
+      let out = total.replace(/^0+/, '');
+      if (out === '') out = '0';
+      steps.push({ tag: 'ret', trace: ['Product: ', C(out), '.'], state: { arr: out.split(''), mark: Object.fromEntries(out.split('').map((_, i) => [i, 'final' as const])) } });
+      return { steps, result: out, resultDetail: `${num1} × ${num2}` };
+    },
+    note: 'The same O(m·n) digit work, plus n string additions and a new string per row. Accumulating every digit product straight into slot i + j + 1 of one array avoids the intermediate strings entirely.',
+    complexity: { time: 'O(m·n)', space: 'O(m + n) per row' },
+  },
 };
 
 /* ================= 157. Basic Calculator ================= */
@@ -685,6 +1142,104 @@ const basicCalculator: ProblemDef = {
   },
   note: 'Without × and ÷ there is no precedence to resolve — the only nonlocal structure is parentheses, and a stack of (result, sign) pairs handles them exactly like function calls: "(" saves the frame, ")" returns into it.',
   complexity: { time: 'O(n)', space: 'O(nesting depth)' },
+  brute: {
+    label: 'Recursive descent',
+    technique: 'Evaluate left to right; on "(" call the evaluator recursively and use its result as a single number.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('    int i = 0;'),
+        L('    int eval(string& s) {', 'enter'),
+        L('        int result = 0, sign = 1;', 'enter'),
+        L('        while (i < s.size() && s[i] != \')\') {'),
+        L('            char c = s[i];'),
+        L('            if (c == \'+\' || c == \'-\') { sign = c == \'+\' ? 1 : -1; i++; }', 'sign'),
+        L('            else if (c == \'(\') { i++; result += sign * eval(s); i++; }', 'open'),
+        L('            else {', 'num'),
+        L('                long num = 0;', 'num'),
+        L('                while (i < s.size() && isdigit(s[i])) num = num * 10 + (s[i++] - \'0\');', 'num'),
+        L('                result += sign * num;', 'num'),
+        L('            }'),
+        L('        }'),
+        L('        return result;', 'close'),
+        L('    }'),
+        L('public:'),
+        L('    int calculate(string s) { i = 0; return eval(s); }', 'ret'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    int i = 0;'),
+        L('    int eval(String s) {', 'enter'),
+        L('        int result = 0, sign = 1;', 'enter'),
+        L('        while (i < s.length() && s.charAt(i) != \')\') {'),
+        L('            char c = s.charAt(i);'),
+        L('            if (c == \'+\' || c == \'-\') { sign = c == \'+\' ? 1 : -1; i++; }', 'sign'),
+        L('            else if (c == \'(\') { i++; result += sign * eval(s); i++; }', 'open'),
+        L('            else {', 'num'),
+        L('                long num = 0;', 'num'),
+        L('                while (i < s.length() && Character.isDigit(s.charAt(i))) num = num * 10 + (s.charAt(i++) - \'0\');', 'num'),
+        L('                result += sign * num;', 'num'),
+        L('            }'),
+        L('        }'),
+        L('        return result;', 'close'),
+        L('    }'),
+        L('    public int calculate(String s) { i = 0; return eval(s.replace(" ", "")); }', 'ret'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const s = (values.s ?? '').replace(/\s/g, '');
+      if (!/^[\d+\-()]{1,24}$/.test(s)) return { error: 'Digits, + − and parentheses only, ≤ 24 chars.' };
+      let depth = 0;
+      for (const c of s) {
+        if (c === '(') depth++;
+        if (c === ')') depth--;
+        if (depth < 0) return { error: 'Unbalanced parentheses.' };
+      }
+      if (depth !== 0) return { error: 'Unbalanced parentheses.' };
+      const chars = s.split('');
+      const steps: Step[] = [];
+      const frames: { result: number; sign: number }[] = [];
+      let i = 0;
+      const view = (): StackState => ({
+        array: { arr: chars, ptrs: i < chars.length ? [{ name: 'c', i, c: 'a' }] : [] },
+        stack: frames.map((f, k) => ({ v: `level ${k}: result ${f.result}, sign ${f.sign > 0 ? '+' : '−'}`, c: k === frames.length - 1 ? ('a' as const) : undefined })),
+        stackLabel: 'Call stack (one frame per open parenthesis)',
+      });
+      const evalExpr = (): number => {
+        const f = { result: 0, sign: 1 };
+        frames.push(f);
+        steps.push({ tag: 'enter', trace: ['Start evaluating a new level at depth ', A(frames.length - 1), '.'], state: view() });
+        while (i < chars.length && chars[i] !== ')') {
+          const c = chars[i];
+          if (c === '+' || c === '-') {
+            f.sign = c === '+' ? 1 : -1;
+            i++;
+            steps.push({ tag: 'sign', trace: ["Sign '", A(c), "' for the next term."], state: view() });
+          } else if (c === '(') {
+            i++;
+            const inner = evalExpr();
+            f.result += f.sign * inner;
+            i++;
+            steps.push({ tag: 'close', trace: ['The parenthesised group is worth ', B(inner), ' — add it with sign ', A(f.sign > 0 ? '+' : '−'), ': level result ', B(f.result), '.'], state: view() });
+          } else {
+            let num = 0;
+            while (i < chars.length && /\d/.test(chars[i])) num = num * 10 + Number(chars[i++]);
+            f.result += f.sign * num;
+            steps.push({ tag: 'num', trace: ['Number ', A(num), ' → level result ', B(f.result), '.'], state: view() });
+          }
+        }
+        frames.pop();
+        return f.result;
+      };
+      const result = evalExpr();
+      steps.push({ tag: 'ret', trace: ['Value: ', C(result), '.'], state: view() });
+      return { steps, result: String(result) };
+    },
+    note: 'Same O(n) work: each call handles one parenthesised group and returns its value. The recursion uses the language call stack instead of an explicit stack, which reads naturally but can overflow on deeply nested input.',
+    complexity: { time: 'O(n)', space: 'O(nesting depth)' },
+  },
 };
 
 /* ================= 158. Simplify Path ================= */
@@ -770,6 +1325,81 @@ const simplifyPath: ProblemDef = {
   },
   note: '".." undoes the most recent directory entered — LIFO by definition, which is why a stack models paths perfectly. The edge cases (".." at root, trailing slash, "//") all collapse into "empty component" or "pop on empty" rules.',
   complexity: { time: 'O(n)', space: 'O(n)' },
+  brute: {
+    label: 'Rewrite until stable',
+    technique: 'Repeatedly apply text rules — collapse "//", drop "/./", cancel "/name/../" — until the path stops changing.',
+    code: {
+      cpp: [
+        L('class Solution {'),
+        L('public:'),
+        L('    string simplifyPath(string p) {'),
+        L('        p += "/";', 'init'),
+        L('        string prev;', 'init'),
+        L('        while (prev != p) {', 'rule'),
+        L('            prev = p;', 'rule'),
+        L('            p = regex_replace(p, regex("/+"), "/");', 'rule'),
+        L('            p = regex_replace(p, regex("/\\\\./"), "/");', 'rule'),
+        L('            p = regex_replace(p, regex("^/\\\\.\\\\./"), "/");', 'rule'),
+        L('            p = regex_replace(p, regex("/(?!\\\\.\\\\.?/)[^/]+/\\\\.\\\\./"), "/");', 'rule'),
+        L('        }'),
+        L('        return p.size() > 1 ? p.substr(0, p.size() - 1) : p;', 'ret'),
+        L('    }'),
+        L('};'),
+      ],
+      java: [
+        L('class Solution {'),
+        L('    public String simplifyPath(String p) {'),
+        L('        p += "/";', 'init'),
+        L('        String prev = "";', 'init'),
+        L('        while (!prev.equals(p)) {', 'rule'),
+        L('            prev = p;', 'rule'),
+        L('            p = p.replaceAll("/+", "/")', 'rule'),
+        L('                 .replaceAll("/\\\\./", "/")', 'rule'),
+        L('                 .replaceAll("^/\\\\.\\\\./", "/")', 'rule'),
+        L('                 .replaceFirst("/(?!\\\\.\\\\.?/)[^/]+/\\\\.\\\\./", "/");', 'rule'),
+        L('        }'),
+        L('        return p.length() > 1 ? p.substring(0, p.length() - 1) : p;', 'ret'),
+        L('    }'),
+        L('}'),
+      ],
+    },
+    run(values) {
+      const path = (values.path ?? '').trim();
+      if (!/^\/[\w./-]{0,30}$/.test(path)) return { error: 'Path must start with "/" (letters, dots, dashes; ≤ 31 chars).' };
+      const steps: Step[] = [];
+      let p = path + '/';
+      const view = (): StackState => ({
+        array: { arr: p.split('') },
+        stack: [],
+        stackLabel: 'no stack — the string itself is rewritten',
+      });
+      steps.push({ tag: 'init', trace: ['Add a trailing "/" so every component is surrounded by slashes, then rewrite until nothing changes.'], state: view() });
+      const rules: [RegExp, string][] = [
+        [/\/+/g, 'collapse repeated "/"'],
+        [/\/\.\//g, 'drop "/./"'],
+        [/^\/\.\.\//, 'a leading "/../" stays at the root'],
+        [/\/(?!\.\.?\/)[^/]+\/\.\.\//, 'cancel "/name/../"'],
+      ];
+      let changed = true;
+      let guard = 0;
+      while (changed && guard++ < 60) {
+        changed = false;
+        for (const [re, what] of rules) {
+          const next = p.replace(re, '/');
+          if (next !== p) {
+            p = next;
+            changed = true;
+            steps.push({ tag: 'rule', trace: ['Rule: ', A(what), ' → "', B(p), '".'], state: view() });
+          }
+        }
+      }
+      const result = p.length > 1 ? p.slice(0, -1) : p;
+      steps.push({ tag: 'ret', trace: ['No rule applies any more — canonical path ', C(result), '.'], state: view() });
+      return { steps, result, resultDetail: 'canonical path' };
+    },
+    note: 'Each pass rescans and rebuilds the string, and one pass can cancel only one ".." level, so deep paths take O(n²). Splitting once and using a stack handles every component in a single O(n) pass.',
+    complexity: { time: 'O(n²)', space: 'O(n)' },
+  },
 };
 
 export const strings = [longestCommonPrefix, atoi, strStr, zigzag, compareVersions, multiplyStrings, basicCalculator, simplifyPath];
