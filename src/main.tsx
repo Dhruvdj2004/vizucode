@@ -26,6 +26,11 @@ const SqlPage = lazy(() => import('./pages/SqlPage'));
 const SqlTopicPage = lazy(() => import('./pages/SqlTopicPage'));
 const SdPage = lazy(() => import('./pages/SdPage'));
 const SdTopicPage = lazy(() => import('./pages/SdTopicPage'));
+const AptitudeHome = lazy(() => import('./pages/aptitude/AptitudeHome'));
+const AptitudeSetup = lazy(() => import('./pages/aptitude/AptitudeSetup'));
+const AptitudeTest = lazy(() => import('./pages/aptitude/AptitudeTest'));
+const AptitudeResult = lazy(() => import('./pages/aptitude/AptitudeResult'));
+const AptitudeCoverage = lazy(() => import('./pages/aptitude/AptitudeCoverage'));
 
 function PageFallback() {
   return <div className="page-loading">Loading…</div>;
@@ -170,6 +175,46 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               element={
                 <RequireAuth>
                   <SdTopicPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="aptitude"
+              element={
+                <RequireAuth>
+                  <AptitudeHome />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="aptitude/start/:mode"
+              element={
+                <RequireAuth>
+                  <AptitudeSetup />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="aptitude/test"
+              element={
+                <RequireAuth>
+                  <AptitudeTest />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="aptitude/result/:id"
+              element={
+                <RequireAuth>
+                  <AptitudeResult />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="aptitude/coverage"
+              element={
+                <RequireAuth>
+                  <AptitudeCoverage />
                 </RequireAuth>
               }
             />

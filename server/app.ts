@@ -17,6 +17,7 @@ import { authRouter } from './auth';
 import { progressRouter } from './progress';
 import { paymentRouter } from './payment';
 import { feedbackRouter } from './feedback';
+import { aptitudeRouter } from './aptitude';
 import { pool } from './db';
 
 // In production set ALLOWED_ORIGIN to the deployed frontend URL
@@ -76,6 +77,9 @@ app.use('/api/progress', rateLimit('read'), progressRouter);
 
 // Razorpay order create/verify (JWT required) — see server/payment.ts.
 app.use('/api/payment', rateLimit('payment'), paymentRouter);
+
+// Aptitude & OA practice attempts (JWT required) — see server/aptitude.ts.
+app.use('/api/aptitude', rateLimit('read'), aptitudeRouter);
 
 // Public feedback/suggestions (open to everyone) — see server/feedback.ts.
 // Its own POST-specific rate limit lives inside the router.

@@ -49,6 +49,15 @@ The server (`server/index.ts`) imports the same data modules as the frontend, so
 
 Create a `ProblemDef` (see `src/lib/types.ts`) in `src/problems/…` and register it in `src/problems/index.ts`. The def bundles: metadata, tagged C++/Java code lines (`L(text, ...tags)`), a `run(inputs)` step-trace generator, the closing insight note, and complexity. Steps reference code lines by tag, so the code panel stays in sync automatically. The home page enables the Visualize button for any catalog slug present in the registry.
 
+## Aptitude & OA practice (`#/aptitude`)
+
+Timed placement-style tests: 20 questions in 20 minutes, 8 easy / 6 medium / 6 hard, drawn at random from a curated bank in `src/aptitude/bank/` (quant, logical, analytical, verbal, core CS). Modes: full test with a topic picker, topic practice, mixed, Core CS OA and company-style OA; random or smart selection (smart favors unseen questions, past mistakes and weak topics). Results include difficulty, section and topic breakdowns, a full review with explanations, recommendations, and per-topic coverage.
+
+- `src/aptitude/engine.ts` generates tests, scores them and computes the dashboard and coverage stats. It is pure, and the server reuses it to re-score attempts.
+- `src/aptitude/store.ts` keeps the in-progress test in localStorage, so a refresh never resets the timer, and syncs finished attempts to `/api/aptitude/attempts` (`server/aptitude.ts`, table `aptitude_attempts`).
+- **Adding questions:** append to a file in `src/aptitude/bank/` with a new, never-reused id, then run `node scripts/validate-aptitude.mjs`. It checks structure, duplicates, whether the explanation agrees with the answer key, and each `calc`/`check` recomputation, and it exercises the generator.
+- `node scripts/verify-aptitude.mjs --screenshot` runs the whole flow in headless Chrome against a database-free API on :4100.
+
 ## Remaining phases
 
 2. Backend API (serve catalog/problems) · 3. Database (persist traces) · 4. Scale content to all 158 · 5. Deploy.

@@ -89,6 +89,23 @@ create table if not exists feedback (
 
 create index if not exists idx_feedback_created on feedback (created_at desc);
 
+-- Aptitude & OA practice: one row per finished test attempt. `data` is the
+-- full attempt (question ids, option order, answers) as the client sent it;
+-- score/total are recomputed server-side from the question bank.
+create table if not exists aptitude_attempts (
+  id           text primary key,
+  user_id      integer not null references users(id) on delete cascade,
+  mode         text not null,
+  status       text not null check (status in ('submitted', 'timeout', 'abandoned')),
+  score        integer not null,
+  total        integer not null,
+  started_at   timestamptz not null,
+  submitted_at timestamptz not null,
+  data         jsonb not null
+);
+
+create index if not exists idx_aptitude_user on aptitude_attempts (user_id, started_at desc);
+
 -- The backend connects as the table owner and is unaffected; this keeps
 -- Supabase's auto-generated public REST API from exposing the tables.
 alter table questions enable row level security;
@@ -97,3 +114,4 @@ alter table users enable row level security;
 alter table user_progress enable row level security;
 alter table user_sessions enable row level security;
 alter table feedback enable row level security;
+alter table aptitude_attempts enable row level security;

@@ -46,6 +46,9 @@ export default function App() {
           <Link to="/core" className={section === 'core' ? 'on' : ''}>
             Core Subjects
           </Link>
+          <Link to="/aptitude" className={section === 'aptitude' ? 'on' : ''}>
+            Aptitude
+          </Link>
           <Link to="/feedback" className={pathname === '/feedback' ? 'on' : ''}>
             Feedback
           </Link>
