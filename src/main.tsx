@@ -11,6 +11,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
+const NewsPage = lazy(() => import('./pages/NewsPage'));
 const DbmsPage = lazy(() => import('./pages/DbmsPage'));
 const DbmsTopicPage = lazy(() => import('./pages/DbmsTopicPage'));
 const RevisionPage = lazy(() => import('./pages/RevisionPage'));
@@ -222,6 +223,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="register" element={<RegisterPage />} />
             <Route path="upgrade" element={<UpgradePage />} />
             <Route path="feedback" element={<FeedbackPage />} />
+            <Route path="news" element={<NewsPage />} />
           </Route>
         </Routes>
       </Suspense>

@@ -106,6 +106,21 @@ create table if not exists aptitude_attempts (
 
 create index if not exists idx_aptitude_user on aptitude_attempts (user_id, started_at desc);
 
+-- Daily "Top 5 in AI" digest (server/news.ts). One row per story; the cron
+-- job replaces a whole day at once. Only our own summary + a link out are kept.
+create table if not exists ai_news (
+  day          date not null,
+  rank         smallint not null check (rank between 1 and 5),
+  headline     text not null,
+  summary      text not null,
+  why          text not null default '',
+  url          text not null,
+  source       text not null,
+  published_at timestamptz not null,
+  created_at   timestamptz not null default now(),
+  primary key (day, rank)
+);
+
 -- The backend connects as the table owner and is unaffected; this keeps
 -- Supabase's auto-generated public REST API from exposing the tables.
 alter table questions enable row level security;
@@ -115,3 +130,4 @@ alter table user_progress enable row level security;
 alter table user_sessions enable row level security;
 alter table feedback enable row level security;
 alter table aptitude_attempts enable row level security;
+alter table ai_news enable row level security;

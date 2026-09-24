@@ -49,6 +49,9 @@ export default function App() {
           <Link to="/aptitude" className={section === 'aptitude' ? 'on' : ''}>
             Aptitude
           </Link>
+          <Link to="/news" className={section === 'news' ? 'on' : ''}>
+            AI News
+          </Link>
           <Link to="/feedback" className={pathname === '/feedback' ? 'on' : ''}>
             Feedback
           </Link>

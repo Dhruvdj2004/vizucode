@@ -18,6 +18,7 @@ import { progressRouter } from './progress';
 import { paymentRouter } from './payment';
 import { feedbackRouter } from './feedback';
 import { aptitudeRouter } from './aptitude';
+import { newsRouter } from './news';
 import { pool } from './db';
 
 // In production set ALLOWED_ORIGIN to the deployed frontend URL
@@ -84,6 +85,10 @@ app.use('/api/aptitude', rateLimit('read'), aptitudeRouter);
 // Public feedback/suggestions (open to everyone) — see server/feedback.ts.
 // Its own POST-specific rate limit lives inside the router.
 app.use('/api/feedback', rateLimit('read'), feedbackRouter);
+
+// Daily "Top 5 in AI" digest: public reads + the Vercel Cron job that fills
+// it — see server/news.ts.
+app.use('/api/news', rateLimit('read'), newsRouter);
 
 app.get('/api/health', rateLimit('read'), wrap(async (_req, res) => {
   if (!pool) {

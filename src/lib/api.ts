@@ -138,3 +138,27 @@ export async function fetchProblem(slug: string): Promise<{ def: StaticProblem |
     return { def: local ? toStatic(local) : null, source: 'local' };
   }
 }
+
+export interface NewsItem {
+  rank: number;
+  headline: string;
+  summary: string;
+  /** Empty when the day was posted without AI summaries (fallback). */
+  why: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+}
+
+export interface NewsDay {
+  /** YYYY-MM-DD (IST), or null when nothing has been posted yet. */
+  day: string | null;
+  items: NewsItem[];
+  /** Recent days that have news, newest first. */
+  days: string[];
+}
+
+/** The daily "Top 5 in AI" digest — one day's stories (default: latest). Public — no auth. */
+export async function fetchNews(day?: string): Promise<NewsDay> {
+  return getJson<NewsDay>(day ? `/api/news?day=${encodeURIComponent(day)}` : '/api/news');
+}
