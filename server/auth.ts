@@ -17,6 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET ?? 'vizucode-dev-secret-change-me';
 if (!process.env.JWT_SECRET) {
   console.warn('[auth] JWT_SECRET not set — using the dev fallback. Set it in production.');
 }
+const FREE_PRO_EMAIL_SUFFIX = '@ietdavv.edu.in';
 const TOKEN_TTL = '7d';
 const BCRYPT_ROUNDS = 10;
 
@@ -333,7 +334,13 @@ authRouter.post('/google', wrap(async (req, res) => {
   }
   const email = payload.email.toLowerCase();
   const firstName = payload.given_name || payload.name || 'there';
-  const user = await store.findOrCreateGoogle(email, firstName, payload.sub);
+  let user = await store.findOrCreateGoogle(email, firstName, payload.sub);
+  // College accounts get Pro for free. Granted only here, never on password
+  // register/login: Google has verified the address, whereas anyone can type
+  // a college email into the sign-up form.
+  if (!user.isPro && email.endsWith(FREE_PRO_EMAIL_SUFFIX)) {
+    user = (await store.markPro(user.id)) ?? user;
+  }
   const sessions = await sessionStore.list(user.id);
   if (sessions.length >= MAX_DEVICES) {
     res.status(409).json({

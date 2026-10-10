@@ -27,6 +27,7 @@ export default function UpgradePage() {
   const [status, setStatus] = useState<'idle' | 'starting'>('idle');
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const isStudent = !!session?.user.email.toLowerCase().endsWith(STUDENT_EMAIL_SUFFIX);
   useEffect(() => onAuthChange(() => setSession(getSession())), []);
 
   async function startCheckout() {
@@ -105,6 +106,12 @@ export default function UpgradePage() {
           <p className="auth-hint upgrade-note">You're already Pro — everything is unlocked. 🎉</p>
         ) : session ? (
           <>
+            {isStudent && (
+              <p className="auth-hint upgrade-note">
+                IET DAVV student? Sign out and use "Sign in with Google" with your college account — Pro
+                is free.
+              </p>
+            )}
             <button className="btn primary auth-submit" onClick={startCheckout} disabled={status === 'starting'}>
               {status === 'starting' ? 'Opening Razorpay…' : 'Pay with Razorpay'}
             </button>
