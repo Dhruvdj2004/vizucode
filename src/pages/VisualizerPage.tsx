@@ -18,6 +18,7 @@ import ListWidget from '../components/widgets/ListWidget';
 import HeapWidget from '../components/widgets/HeapWidget';
 import BitsWidget from '../components/widgets/BitsWidget';
 import IntervalsWidget from '../components/widgets/IntervalsWidget';
+import { Icon } from '../components/Icon';
 
 const SPEEDS = [
   { label: '0.5×', ms: 950 },
@@ -132,7 +133,7 @@ export default function VisualizerPage() {
       <div className="panel">
         <h2>Visualizer not built yet</h2>
         <p className="serif">This question doesn't have a step-trace yet. It's on the roadmap.</p>
-        <Link to="/">
+        <Link to="/dsa">
           <button className="btn primary">← Back to questions</button>
         </Link>
       </div>
@@ -142,7 +143,7 @@ export default function VisualizerPage() {
   if (isCategoryLocked(problem.category, session?.user)) {
     return (
       <div className="panel">
-        <h2>🔒 This one's locked</h2>
+        <h2><Icon name="lock" /> This one's locked</h2>
         <p className="serif">Upgrade to unlock every pattern, including {problem.category}.</p>
         <Link to="/upgrade">
           <button className="btn primary">Upgrade</button>
@@ -234,10 +235,10 @@ export default function VisualizerPage() {
 
         <div className="transport">
           <button className="btn icon" onClick={() => { setIdx(0); setPlaying(false); }} aria-label="Reset" title="Reset">
-            ⏮
+            <Icon name="skip-back" />
           </button>
           <button className="btn icon" onClick={() => { setIdx((i) => Math.max(0, i - 1)); setPlaying(false); }} aria-label="Step back" title="Step back">
-            ←
+            <Icon name="arrow-left" />
           </button>
           <button
             className="btn icon primary"
@@ -248,10 +249,10 @@ export default function VisualizerPage() {
             aria-label={playing ? 'Pause' : 'Play'}
             title={playing ? 'Pause' : 'Play'}
           >
-            {playing ? '⏸' : '▶'}
+            <Icon name={playing ? 'pause' : 'play'} />
           </button>
           <button className="btn icon" onClick={() => { setIdx((i) => Math.min(last, i + 1)); setPlaying(false); }} aria-label="Step forward" title="Step forward">
-            →
+            <Icon name="arrow-right" />
           </button>
           <input
             className="scrub"
@@ -318,7 +319,7 @@ export default function VisualizerPage() {
           </span>
         )}
         <span style={{ marginLeft: 'auto' }}>
-          <Link to="/">← All questions</Link>
+          <Link to="/dsa">← All questions</Link>
         </span>
       </div>
     </>

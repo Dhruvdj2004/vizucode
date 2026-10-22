@@ -4,6 +4,7 @@ import { availableFor, difficultyTargets, fullConfig, topicConfig } from '../../
 import { ALL_TOPICS, CATEGORIES, COMPANY_STYLES, TEST_COUNT, presetConfig } from '../../aptitude/taxonomy';
 import type { Difficulty, TestConfig } from '../../aptitude/types';
 import { launchTest, useAptHistory, useAptUser } from '../../aptitude/ui';
+import { EmojiIcon } from '../../components/Icon';
 
 const TITLES: Record<string, string> = {
   full: 'Full Test',
@@ -105,7 +106,7 @@ export default function AptitudeSetup() {
                         onChange={() => setMany(c.topics, !all)}
                       />
                       <span className="apt-cat-icon" aria-hidden>
-                        {c.icon}
+                        <EmojiIcon emoji={c.icon} />
                       </span>
                       <span className="apt-cat-name">{c.name}</span>
                       <span className="apt-cat-count mono">
@@ -133,7 +134,7 @@ export default function AptitudeSetup() {
                 <section key={c.key} className="panel apt-cat">
                   <div className="apt-cat-head static">
                     <span className="apt-cat-icon" aria-hidden>
-                      {c.icon}
+                      <EmojiIcon emoji={c.icon} />
                     </span>
                     <span className="apt-cat-name">{c.name}</span>
                   </div>

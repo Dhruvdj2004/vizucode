@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { coverage, missedQuestions, topicConfig, type CoverageRow } from '../../aptitude/engine';
 import { QUESTION_BANK } from '../../aptitude/bank';
 import { Bar, DIFF_LABEL, launchTest, pct, useAptHistory, useAptUser } from '../../aptitude/ui';
+import { EmojiIcon } from '../../components/Icon';
 
 export default function AptitudeCoverage() {
   const { history } = useAptHistory();
@@ -47,7 +48,7 @@ export default function AptitudeCoverage() {
         <section key={c.key} className="panel apt-cov-cat">
           <div className="apt-cov-cat-head">
             <span className="apt-cat-icon" aria-hidden>
-              {c.icon}
+              <EmojiIcon emoji={c.icon} />
             </span>
             <h2>{c.name}</h2>
             <span className="apt-spacer" />

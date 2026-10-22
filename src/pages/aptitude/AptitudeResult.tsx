@@ -4,6 +4,7 @@ import { recommendations, scoreAttempt, type Breakdown, type ItemResult } from '
 import { CATEGORY_BY_KEY } from '../../aptitude/taxonomy';
 import type { Attempt, CategoryKey } from '../../aptitude/types';
 import { Bar, DIFF_LABEL, QuestionBody, STATUS_LABEL, fmtDate, fmtDuration, launchTest, pct, useAptHistory, useAptUser } from '../../aptitude/ui';
+import { Icon } from '../../components/Icon';
 
 const LETTERS = ['A', 'B', 'C', 'D'];
 type Filter = 'all' | 'incorrect' | 'unattempted' | 'marked' | 'correct';
@@ -79,10 +80,10 @@ function ResultView({ attempt, history }: { attempt: Attempt; history: Attempt[]
 
       <div className="apt-actions-row">
         <button className="btn primary" onClick={() => launchTest(navigate, uid, attempt.config)}>
-          ↻ Practice again (new set)
+          <Icon name="refresh" /> Practice again (new set)
         </button>
         <button className="btn" onClick={() => document.getElementById('review')?.scrollIntoView({ behavior: 'smooth' })}>
-          Review answers ↓
+          Review answers <Icon name="arrow-down" />
         </button>
         <Link to="/aptitude/coverage" className="btn">
           Coverage

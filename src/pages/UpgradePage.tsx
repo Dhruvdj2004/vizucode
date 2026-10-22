@@ -103,7 +103,7 @@ export default function UpgradePage() {
         </ul>
 
         {session?.user.isPro ? (
-          <p className="auth-hint upgrade-note">You're already Pro — everything is unlocked. 🎉</p>
+          <p className="auth-hint upgrade-note">You're already Pro — everything is unlocked.</p>
         ) : session ? (
           <>
             {isStudent && (
@@ -131,7 +131,7 @@ export default function UpgradePage() {
         )}
 
         <p className="auth-alt">
-          <Link to="/">← Back to questions</Link>
+          <Link to="/dsa">← Back to questions</Link>
         </p>
       </div>
     </main>

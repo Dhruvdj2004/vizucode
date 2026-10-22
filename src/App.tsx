@@ -3,6 +3,8 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getSession, logout, onAuthChange } from './lib/auth';
 import { navSection } from './content/navKeys';
 import { Logo } from './components/Logo';
+import InterviewerBot from './pages/interview/InterviewerBot';
+import { Icon } from './components/Icon';
 
 function getInitialTheme(): 'light' | 'dark' {
   const saved = localStorage.getItem('vizucode-theme');
@@ -37,7 +39,10 @@ export default function App() {
           <span className="eyebrow faint">Lets code</span>
         </Link>
         <nav className="site-nav" aria-label="Sections">
-          <Link to="/" className={section === 'dsa' ? 'on' : ''}>
+          <Link to="/" className={section === 'home' ? 'on' : ''}>
+            Home
+          </Link>
+          <Link to="/dsa" className={section === 'dsa' ? 'on' : ''}>
             DSA
           </Link>
           <Link to="/revision" className={section === 'revision' ? 'on' : ''}>
@@ -49,6 +54,9 @@ export default function App() {
           <Link to="/aptitude" className={section === 'aptitude' ? 'on' : ''}>
             Aptitude
           </Link>
+          <Link to="/resume" className={section === 'resume' ? 'on' : ''}>
+            Resume
+          </Link>
           <Link to="/news" className={section === 'news' ? 'on' : ''}>
             AI News
           </Link>
@@ -57,12 +65,22 @@ export default function App() {
           </Link>
         </nav>
         <div className="header-actions">
+          <Link
+            to="/interview"
+            className={`iv-launch ${section === 'interview' ? 'on' : ''}`}
+            aria-current={section === 'interview' ? 'page' : undefined}
+          >
+            <span className="iv-launch-bot" aria-hidden>
+              <InterviewerBot mood="idle" size={30} showStatus={false} />
+            </span>
+            AI Interview
+          </Link>
           {session ? (
             <>
               <span className="auth-greeting">Hi, {session.user.firstName}</span>
               {!session.user.isPro && (
                 <Link to="/upgrade" className="btn primary">
-                  🔓 Upgrade
+                  <Icon name="unlock" /> Upgrade
                 </Link>
               )}
               <button
@@ -84,7 +102,7 @@ export default function App() {
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
           >
-            {theme === 'dark' ? '☀️' : '🌙'}
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
           </button>
         </div>
       </header>

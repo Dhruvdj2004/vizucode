@@ -6,12 +6,14 @@ import RequireAuth from './lib/RequireAuth';
 import './styles.css';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const VisualizerPage = lazy(() => import('./pages/VisualizerPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const NewsPage = lazy(() => import('./pages/NewsPage'));
+const ResumePage = lazy(() => import('./pages/ResumePage'));
 const DbmsPage = lazy(() => import('./pages/DbmsPage'));
 const DbmsTopicPage = lazy(() => import('./pages/DbmsTopicPage'));
 const RevisionPage = lazy(() => import('./pages/RevisionPage'));
@@ -32,6 +34,8 @@ const AptitudeSetup = lazy(() => import('./pages/aptitude/AptitudeSetup'));
 const AptitudeTest = lazy(() => import('./pages/aptitude/AptitudeTest'));
 const AptitudeResult = lazy(() => import('./pages/aptitude/AptitudeResult'));
 const AptitudeCoverage = lazy(() => import('./pages/aptitude/AptitudeCoverage'));
+const InterviewHome = lazy(() => import('./pages/interview/InterviewHome'));
+const InterviewSession = lazy(() => import('./pages/interview/InterviewSession'));
 
 function PageFallback() {
   return <div className="page-loading">Loading…</div>;
@@ -45,6 +49,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route element={<App />}>
             <Route
               index
+              element={
+                <RequireAuth>
+                  <DashboardPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="dsa"
               element={
                 <RequireAuth>
                   <HomePage />
@@ -216,6 +228,30 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               element={
                 <RequireAuth>
                   <AptitudeCoverage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="resume"
+              element={
+                <RequireAuth>
+                  <ResumePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="interview"
+              element={
+                <RequireAuth>
+                  <InterviewHome />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="interview/:id"
+              element={
+                <RequireAuth>
+                  <InterviewSession />
                 </RequireAuth>
               }
             />

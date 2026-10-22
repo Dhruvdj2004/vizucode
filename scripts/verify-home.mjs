@@ -112,10 +112,10 @@ async function main() {
     expression: `localStorage.setItem('vizucode-session', JSON.stringify({
       token: 'verify', user: { id: 0, email: 'v@local', firstName: 'Verify', isPro: true } }))`,
   });
-  await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/#/` });
+  await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/#/dsa` });
 
   // One card per registered module: the revision notes plus each core subject.
-  const EXPECTED_CARDS = 6;
+  const EXPECTED_CARDS = 7;
   if (!(await waitFor(call, `document.querySelectorAll('.mod-cta').length === ${EXPECTED_CARDS}`, 30000))) {
     const n = await val(call, `document.querySelectorAll('.mod-cta').length`);
     fail(`expected ${EXPECTED_CARDS} module cards on the home page, found ${n}`);
@@ -152,7 +152,7 @@ async function main() {
 
   // Click each card and confirm it lands on that module's index.
   for (const c of cards) {
-    await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/#/` });
+    await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/#/dsa` });
     await waitFor(call, `!!document.querySelector('.mod-cta')`, 15000);
     await call('Runtime.evaluate', {
       expression: `[...document.querySelectorAll('.mod-cta')].find(a => a.getAttribute('href') === '${c.href}')?.click()`,
@@ -165,9 +165,9 @@ async function main() {
 
   // The /core hub should list exactly the core-subject modules.
   await call('Page.navigate', { url: `http://localhost:${VITE_PORT}/#/core` });
-  const coreOk = await waitFor(call, `document.querySelectorAll('.mod-cta').length === 5`, 15000);
+  const coreOk = await waitFor(call, `document.querySelectorAll('.mod-cta').length === 6`, 15000);
   const coreN = await val(call, `document.querySelectorAll('.mod-cta').length`);
-  if (!coreOk) fail(`/#/core showed ${coreN} cards, expected 5`);
+  if (!coreOk) fail(`/#/core showed ${coreN} cards, expected 6`);
   else console.log(`core hub: ${coreN} core-subject cards ✓`);
 
   if (wantScreenshots) {

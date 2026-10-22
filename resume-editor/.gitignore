@@ -1,0 +1,9 @@
+.venv/
+.env
+data/
+__pycache__/
+.DS_Store
+*.pyc
+
+# the root .gitignore hides .env*; the example has no secrets
+!.env.example
