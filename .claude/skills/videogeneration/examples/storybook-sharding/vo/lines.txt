@@ -1,0 +1,56 @@
+chintu_h1|Meera! Meera! My food app went viral! Ten lakh people signed up in one week!
+meera_h2|Wow, congrats Chintu! So why do you look so sad?
+chintu_h3|Because my app is now slower than me on a Monday morning. Every page takes ten seconds to load!
+meera_h4|Let me guess. All your users, orders and photos live in one single database?
+chintu_h5|Yes! One poor database. It's sweating, it's crying, and I think it just asked for a holiday.
+meera_h6|Then today we learn database sharding. It's how big apps stay fast.
+chintu_s1|Easy! I'll just buy a bigger computer. More RAM, more CPU, bigger everything!
+meera_s2|That's called vertical scaling. Making one machine bigger. It works, for a while.
+meera_s3|But there's a ceiling. The biggest machine money can buy is still just one machine, and it gets super expensive.
+chintu_s4|So what's the other option?
+meera_s5|Horizontal scaling. Instead of one giant machine, use many normal machines, and split the work between them.
+chintu_s6|Like ordering four small pizzas instead of one pizza the size of a car!
+meera_l1|Exactly. Think of a huge library with just one room. A million books, all in one giant pile.
+chintu_l2|Finding one book there would take forever. I would just take a nap.
+meera_l3|So the librarian splits the books into four rooms, by the first letter of the title. A to F, G to M, N to S, and T to Z.
+chintu_l4|Ooh! So Harry Potter goes to room G to M!
+meera_l5|Right. Now when someone asks for a book, she doesn't search everywhere. She walks straight to the right room.
+chintu_l6|Each room is small, so searching is fast. And four helpers can work at the same time!
+meera_r1|That's database sharding. Each room is a shard: a smaller database that holds only part of the data.
+meera_r4|The thing we use to pick the room is called the shard key. Like the user's name, or their user ID.
+chintu_r5|And who plays the librarian?
+meera_r6|A router. It looks at the shard key, and sends each query to the right shard.
+meera_r7|Say we want the profile of Rahul. R falls between N and S, so the router asks only shard two.
+chintu_r8|And the other three shards don't even wake up. They keep snoring. I love them already.
+chintu_w1|But is splitting by letter the only way?
+meera_w2|No. That's range based sharding. Each shard holds a range, like A to F. Simple, and easy to understand.
+meera_w3|The other way is hash based sharding. We put the user ID through a hash function, and take the remainder after dividing by four.
+meera_w4|For example, user one zero four seven goes through the hash, mod four gives three. So that user lives on shard three.
+chintu_w5|Why do all that maths? Letters were so easy!
+meera_w6|Because of hot spots. What if half your users have names starting with A? Aarav, Aditi, Ananya, Arjun.
+chintu_w7|Then room A to F is overflowing, and the other rooms are bored!
+meera_w8|Exactly. One shard gets all the load. That's a hot spot. One celebrity with millions of fans can cause it too.
+meera_w9|A hash scrambles the keys, so users spread evenly across all the shards. No single room gets crushed.
+chintu_c1|Sharding sounds perfect. Let's shard everything!
+meera_c2|Careful! Sharding has costs. First, queries across shards are harder. To count all users, you must ask every shard.
+meera_c3|Second, joins get tricky. If a user is on shard one and their orders are on shard three, combining them is slow.
+meera_c4|Third, re-sharding. Add a fifth shard, and mod four becomes mod five. Almost every user has to move!
+chintu_c5|Moving day for a million users? My back hurts already.
+meera_c6|That's why big systems use consistent hashing. Adding a shard then moves only a small slice of the data.
+chintu_c7|Do real apps actually do this?
+meera_c8|Yes! Instagram splits user data by user ID across thousands of shards. And WhatsApp style chat apps split chats by user.
+meera_c9|So, shard only when one database truly can't keep up.
+meera_x2|Shard: one piece of a split database.
+chintu_x3|Shard key: the thing that decides where the data goes. Like name or user ID.
+meera_x4|Range versus hash: split by ranges, or scramble with a hash to spread evenly.
+chintu_x5|Hot spot: one shard getting way too much load. Like me at a buffet.
+meera_q0|Quiz time! Three questions. Beat the timer!
+meera_q1|Question one. A book called Mango. Which room does it go to?
+meera_a1|G to M! Because M falls in that range.
+meera_q2|Question two. We shard by user ID mod four. Which shard gets user ID ten?
+meera_a2|Shard two! Ten divided by four leaves a remainder of two.
+chintu_q3|Question three. One shard is on fire, while the others are chilling. What is that called?
+meera_a3|A hot spot! Fix it with a better shard key, like a hash.
+chintu_o1|That was fun! Next episode, message queues. Where apps learn to wait in line. Unlike me at the snack counter.
+meera_o2|Practise system design visually on vizu code dot site, and follow at vizu code 26 for more!
+chintu_o3|Bye bye! Now, where is my pizza?
