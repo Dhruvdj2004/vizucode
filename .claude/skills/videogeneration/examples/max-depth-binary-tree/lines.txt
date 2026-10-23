@@ -1,0 +1,11 @@
+hook|How deep is this tree? LeetCode 104, Maximum Depth of Binary Tree.
+problem|Max depth is the number of nodes on the longest path, from the root down to a leaf.
+brute|You could list every root to leaf path and measure each one. But recursion makes it much simpler.
+idea|Each node asks its children, how deep are you? Then it answers: one plus the bigger one. An empty child returns zero.
+w0|Nine is a leaf. Both children are empty, so nine returns one.
+w1|Fifteen is a leaf. It returns one.
+w2|Seven also returns one.
+w3|Twenty gets one and one. One plus one, two.
+w4|Root three gets one from the left, two from the right. One plus two. Depth is three!
+code|If the node is null, return zero. Get the left depth, get the right depth, and return one plus the max.
+outro|Time: O of n, every node once. Space: O of h, the recursion stack. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

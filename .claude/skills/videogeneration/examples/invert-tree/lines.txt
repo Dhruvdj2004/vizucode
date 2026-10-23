@@ -1,0 +1,11 @@
+hook|Can you flip this tree like a mirror? LeetCode 226, Invert Binary Tree.
+problem|Inverting a tree means every left child becomes the right child, and every right child becomes the left child, at every level.
+brute|You might try collecting each level and reversing it. That works, but it needs extra lists and more code than you need.
+idea|The trick is recursion. At each node, swap its two children, then invert the left subtree and the right subtree. An empty node simply returns.
+w0|Start at the root, four. Swap its children, two and seven.
+w1|Now go into seven. Swap its children, nine and six.
+w2|Nine and six are leaves. Their children are empty, so nothing to do.
+w3|Now go into two. Swap its children, three and one.
+w4|Every node is swapped. The tree is now a perfect mirror!
+code|If the root is null, return. Swap the left and right child. Then invert the left, and invert the right. Return the root.
+outro|Time: O of n, every node is visited once. Space: O of h, the height of the tree. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

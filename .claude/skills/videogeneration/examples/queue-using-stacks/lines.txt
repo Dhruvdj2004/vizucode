@@ -1,0 +1,12 @@
+hook|Can you build a queue using only two stacks? LeetCode 232, Implement Queue using Stacks.
+problem|A queue is first in, first out, like a line at a ticket counter. A stack is last in, first out. We need push, pop, and peek, but we may only use stacks.
+brute|Simple idea: on every pop, pour the whole stack into another one and back again. That works, but each pop costs O of n.
+idea|The trick: use two stacks, in and out. Push always goes into in. To pop, take from out. Only when out is empty, pour everything from in to out. Pouring reverses the order!
+w0|Push one, push two, push three. They all go into the in stack.
+w1|Pop. Out is empty, so pour everything from in to out. Now one is on top.
+w2|Pop returns one. First in, first out!
+w3|Push four. It goes into in, out is untouched.
+w4|Pop again. Out is not empty, so just pop. It returns two.
+w5|Each element moves at most once. Every operation is O of one on average!
+code|Push goes into the in stack. For pop and peek, if out is empty, move everything from in to out. Then use the top of out.
+outro|Time: amortized O of one per operation. Space: O of n. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

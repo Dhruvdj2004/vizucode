@@ -1,0 +1,11 @@
+hook|Find a number among a million in just twenty steps? LeetCode 704, Binary Search.
+problem|You get a sorted array and a target. Return the index of the target, or minus one if it is not there. Here, find twenty three.
+brute|Linear search checks one element at a time, from left to right. That's O of n. Fine for small arrays, slow for huge ones.
+idea|The trick: look at the middle. If it's too small, throw away the left half. If it's too big, throw away the right half. Every step cuts the search in half.
+w0|Low is zero, high is eight. The middle is index four, value sixteen.
+w1|Sixteen is smaller than twenty three. Throw away the left half. Low becomes five.
+w2|New middle is index six, value thirty eight. Too big! High becomes five.
+w3|Low and high are both five. Middle is twenty three. Found it!
+w4|Only three steps, instead of six. Return index five!
+code|While low is less than or equal to high, compute mid. If it equals the target, return mid. If it's smaller, move low up. Otherwise move high down.
+outro|Time: O of log n. Space: O of one. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

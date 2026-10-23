@@ -1,0 +1,12 @@
+hook|What is the longest substring with no repeating characters? LeetCode 3.
+problem|A substring is a continuous part of the string. Here, in a b c a b b, the longest one with all different characters is a b c, length three.
+brute|Brute force checks every substring and tests if its characters are unique. That's O of n cubed. Way too slow.
+idea|The trick is a sliding window. Grow the window on the right. When a character repeats, shrink it from the left until the window is unique again.
+w0|Add a. Window is a. Length one.
+w1|Add b, then c. Window a b c. Length three, our best!
+w2|Next is a. It's already in the window! Shrink from the left. Remove a.
+w3|Add b. Repeat again! Shrink. Window is now c a b.
+w4|Add b. Another repeat! Shrink until it's just b.
+w5|The window never beat three. The answer is three!
+code|Move right through the string. While the character is already in the set, remove from the left. Then add it, and update the best length.
+outro|Time: O of n, each character enters and leaves the window once. Space: O of the alphabet. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

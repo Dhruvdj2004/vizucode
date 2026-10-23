@@ -1,0 +1,11 @@
+hook|Can you spot the duplicate in this array? Let's crack LeetCode 217, Contains Duplicate.
+problem|Given an array of numbers, return true if any value appears at least twice. Otherwise, return false.
+brute|The brute force way? Compare every pair. That's n squared checks. Way too slow.
+idea|Smarter idea: keep a hash set of every number you've already seen.
+w0|Three. Not in the set. Add it.
+w1|Seven. New. Add it.
+w2|One. Add it.
+w3|Nine. Add it.
+w4|Seven again! It's already in the set. Return true!
+code|In code, it's one loop. If the set already has x, return true. Otherwise, insert x. Loop ends? Return false.
+outro|Time: O of n. Space: O of n. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

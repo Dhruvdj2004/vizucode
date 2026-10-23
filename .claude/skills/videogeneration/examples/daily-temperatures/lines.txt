@@ -1,0 +1,13 @@
+hook|How many days until it gets warmer? LeetCode 739, Daily Temperatures.
+problem|For each day, find how many days you must wait for a warmer temperature. If it never gets warmer, the answer is zero.
+brute|Brute force: from every day, scan forward until you find a warmer one. In the worst case, that's O of n squared.
+idea|The trick is a monotonic stack. It holds the days still waiting for a warmer day. When a hotter day arrives, it answers every colder day on the stack.
+w0|Thirty. Nothing is waiting. Push it.
+w1|Thirty eight is warmer than thirty. Pop! Thirty waited one day. Push thirty eight.
+w2|Thirty four is colder. Push it, it waits.
+w3|Thirty two is even colder. Push it.
+w4|Thirty six! Pop thirty two, one day. Pop thirty four, two days. Thirty eight is warmer, so stop. Push thirty six.
+w5|Forty! Pop thirty six, one day. Pop thirty eight, four days. Push forty.
+w6|Forty never sees a warmer day, so it stays zero. Done in one pass!
+code|Loop over the days. While today is warmer than the day on top of the stack, pop it, and record the gap. Then push today's index.
+outro|Time: O of n, because each day is pushed and popped at most once. Space: O of n. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

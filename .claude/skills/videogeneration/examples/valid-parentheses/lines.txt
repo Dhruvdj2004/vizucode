@@ -1,0 +1,13 @@
+hook|Are these brackets balanced? LeetCode 20, Valid Parentheses.
+problem|Every opening bracket must be closed by the same type, in the right order. This one is valid. This one is not.
+brute|Brute force keeps deleting matching pairs, again and again, until nothing is left. That's O of n squared.
+idea|Better: use a stack! Push every opener. When a closer comes, it must match the top of the stack.
+w0|Round opener. Push.
+w1|Curly opener. Push.
+w2|Square opener. Push.
+w3|Square closer. Top is square. Match! Pop.
+w4|Curly closer matches curly. Pop.
+w5|Round closer matches round. Pop.
+w6|String finished, and the stack is empty. Return true!
+code|Push every opener. For a closer, if the stack is empty or the top doesn't match, return false. At the end, the stack must be empty.
+outro|Time: O of n. Space: O of n. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

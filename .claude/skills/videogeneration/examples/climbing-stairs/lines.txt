@@ -1,0 +1,10 @@
+hook|One step or two steps at a time. How many ways to reach the top? LeetCode 70, Climbing Stairs.
+problem|Given n stairs, count every distinct way to reach the top, taking one or two steps per move.
+brute|Brute force recursion tries every path. But the same subproblems repeat again and again. That's two to the power n. Super slow!
+idea|Key insight: to reach step i, your last move came from step i minus one, or step i minus two. So ways of i is the sum of those two.
+w0|Step one has one way. Step two has two ways.
+w1|Step three: two plus one. Three ways.
+w2|Step four: three plus two. Five.
+w3|Step five: five plus three. Eight ways!
+code|Keep only the last two answers. Each loop, current equals prev one plus prev two, then shift both forward.
+outro|Time: O of n. Space: O of one. It's Fibonacci in disguise! Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

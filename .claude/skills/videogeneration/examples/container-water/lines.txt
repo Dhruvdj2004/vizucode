@@ -1,0 +1,11 @@
+hook|Which two walls hold the most water? LeetCode 11, Container With Most Water.
+problem|Each number is the height of a wall. Pick two walls. The water they hold is the shorter height, times the distance between them. Find the maximum.
+brute|Brute force tries every pair of walls. That's O of n squared. Too slow for big inputs.
+idea|The trick is two pointers. Start at both ends, the widest container. Then always move the shorter wall inward, because the short wall limits the water.
+w0|Left is one, right is seven. Width six, height one. Area six. Move the shorter left wall.
+w1|Left is eight, right is seven. Width five, height seven. Area thirty five! New best. Move right.
+w2|Eight and three. Width four. Area twelve. Move right.
+w3|Eight and eight. Width three. Area twenty four. Move either one.
+w4|The pointers meet. The answer is thirty five!
+code|Start with left at zero and right at the end. Compute the area, and keep the best. Then move the pointer with the shorter wall.
+outro|Time: O of n, just one pass. Space: O of one. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

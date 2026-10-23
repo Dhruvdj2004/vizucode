@@ -1,0 +1,11 @@
+hook|Can you reverse a linked list without any extra space? LeetCode 206, Reverse Linked List.
+problem|Each node points to the next one. Reverse the list, so the last node becomes the head, and every arrow points the other way.
+brute|One way: copy the values into an array, then write them back in reverse. That works, but it uses O of n extra space.
+idea|The trick is three pointers: previous, current, and next. Save next, flip the current arrow back to previous, then move everything one step forward.
+w0|Previous is null. Current is one. Save next, which is two.
+w1|Flip one's arrow to point at null. Move previous to one, current to two.
+w2|Flip two's arrow back to one. Move forward.
+w3|Flip three back to two. Then flip four back to three.
+w4|Current is null. Previous is four, the new head. Done!
+code|While current is not null: save next, point current back to previous, move previous to current, and current to next. Return previous.
+outro|Time: O of n. Space: O of one. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

@@ -1,0 +1,9 @@
+hook|Are these two words made of the exact same letters? LeetCode 242, Valid Anagram.
+problem|Two strings are anagrams if they use the same letters, the same number of times. Anagram and nagaram: true. Rat and car: false.
+brute|One way: sort both strings and compare them. That works, but sorting costs O of n log n.
+idea|Faster: just count! Add one for every letter in the first word. Subtract one for every letter in the second. If every count ends at zero, it's an anagram.
+w0|First, scan anagram. Every letter adds one to its count. Notice, a climbs all the way to three.
+w1|Now scan nagaram. Every letter subtracts one from its count.
+w2|Every count is back to zero. So it's an anagram. Return true!
+code|If the lengths differ, return false. Make twenty six counters. Add one for each letter of s. Subtract one for each letter of t. If any count is not zero, return false. Otherwise, true.
+outro|Time: O of n. Space: O of one, just twenty six counters. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

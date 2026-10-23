@@ -1,0 +1,11 @@
+hook|How many islands are hiding in this grid? LeetCode 200, Number of Islands.
+problem|Ones are land, zeros are water. Land cells touching up, down, left or right form one island. No diagonals.
+brute|Why not just count the ones? That gives seven. Wrong! Connected land is one island, so each group must be counted only once.
+idea|The trick is flood fill. When you find land, count it, then sink the whole island using D F S.
+w0|Scan the grid. Land at the top left! Islands: one.
+w1|D F S sinks every connected cell, so we never count it again.
+w2|Keep scanning. Water, water, new land! Islands: two.
+w3|More land. Islands: three. Sink it and its neighbour.
+w4|Scan complete. The answer is three islands!
+code|Two loops scan every cell. When we hit a one, count plus plus, and sink it. Sink turns land into water, then spreads in four directions.
+outro|Time: O of rows times columns. Every cell is visited once. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.

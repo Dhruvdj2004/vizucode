@@ -1,0 +1,12 @@
+hook|Which two numbers add up to twelve? Can you find them in one pass? LeetCode 1, Two Sum.
+problem|You get an array and a target. Return the indices of the two numbers that add up to the target. Here, five plus seven is twelve, so the answer is two and four.
+brute|Brute force tries every pair with two loops. Three and eight, three and five, and so on. That's O of n squared. Too slow!
+idea|The trick is the complement. For each number, need equals target minus the number. Then ask a hash map: have I seen it before?
+w0|Three. We need nine. Not in the map. Store three, at index zero.
+w1|Eight. We need four. Not seen. Store eight.
+w2|Five. We need seven. Not seen yet. Store five.
+w3|One. We need eleven. Not there. Store one.
+w4|Seven. We need five. Five is in the map, at index two!
+w5|Return two and four. Found in a single pass!
+code|Loop once through the array. Compute the complement. If the map has it, return both indices. Otherwise, store the number with its index.
+outro|Time: O of n. Space: O of n. Watch every step live on vizu code dot site, and follow at vizu code 26 for more.
