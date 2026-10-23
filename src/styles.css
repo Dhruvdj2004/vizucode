@@ -460,8 +460,7 @@ section.panel.cat:only-of-type { border-radius: var(--r-lg); }
 .tag-chip.c { background: var(--accent-3-soft); color: var(--accent-3); }
 .tag-chip.f { background: var(--surface-2); color: var(--ink-faint); text-decoration: line-through; }
 
-.viz-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 1.25rem; margin-bottom: 1.25rem; }
-@media (max-width: 900px) { .viz-grid { grid-template-columns: 1fr; } }
+.viz-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; margin-bottom: 1.25rem; }
 .viz-left { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
 
 .widget-title { margin-bottom: 0.85rem; }
