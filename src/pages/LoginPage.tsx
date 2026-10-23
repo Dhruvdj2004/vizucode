@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { login, forceLogin, DeviceLimitError, type DeviceSession } from '../lib/auth';
 import GoogleSignInButton from '../lib/GoogleSignInButton';
 import { PasswordField } from '../components/PasswordField';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  // Coming back from a password reset: say so and prefill the email.
+  const resetState = useLocation().state as { reset?: boolean; email?: string } | null;
+  const [email, setEmail] = useState(resetState?.email ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,6 +86,7 @@ export default function LoginPage() {
         <div className="eyebrow">Welcome back</div>
         <h1 className="auth-title">Sign in</h1>
         <p className="auth-sub">Pick up where you left off.</p>
+        {resetState?.reset && <p className="auth-success">Password updated — sign in with your new password.</p>}
         <form onSubmit={onSubmit} noValidate>
           <div className="field auth-field">
             <label htmlFor="login-email">Email</label>
@@ -103,6 +106,9 @@ export default function LoginPage() {
             onChange={setPassword}
             autoComplete="current-password"
           />
+          <p className="auth-hint" style={{ textAlign: 'right', marginTop: '-0.35rem' }}>
+            <Link to="/forgot-password">Forgot password?</Link>
+          </p>
           {error && (
             <p className="input-error" role="alert">
               {error}

@@ -4,21 +4,15 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
 import Razorpay from 'razorpay';
-import { requireAuth, markUserPro, type AuthedRequest } from './auth';
+import { requireAuth, markUserPro, isCollegeEmail, type AuthedRequest } from './auth';
 
 const KEY_ID = process.env.RAZORPAY_KEY_ID;
 const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
 
-// Price is derived server-side from the signed-in user's email, never taken
-// from the client, so a request can't be tampered with to buy the upgrade
-// for less. Students on the college domain get the discounted price.
-const STUDENT_EMAIL_SUFFIX = '@ietdavv.edu.in';
-const STUDENT_PRICE_PAISE = 100; // ₹1
-const STANDARD_PRICE_PAISE = 4900; // ₹49
-
-function priceForEmail(email: string): number {
-  return email.toLowerCase().endsWith(STUDENT_EMAIL_SUFFIX) ? STUDENT_PRICE_PAISE : STANDARD_PRICE_PAISE;
-}
+// Price is fixed server-side, never taken from the client, so a request
+// can't be tampered with to buy the upgrade for less. College accounts
+// (@ietdavv.edu.in) never pay: they get Pro free by verifying their email.
+const PRO_PRICE_PAISE = 4900; // ₹49
 
 const razorpay = KEY_ID && KEY_SECRET ? new Razorpay({ key_id: KEY_ID, key_secret: KEY_SECRET }) : null;
 
@@ -40,11 +34,15 @@ paymentRouter.use(requireAuth);
 
 /** POST /api/payment/create-order — no body needed, price is fixed server-side. */
 paymentRouter.post('/create-order', wrap(async (req, res) => {
+  if (isCollegeEmail(req.user!.email)) {
+    res.status(403).json({ error: 'IET DAVV accounts get Pro free — verify your college email on the Upgrade page.' });
+    return;
+  }
   if (!razorpay) {
     res.status(500).json({ error: 'Payments are not configured on this server.' });
     return;
   }
-  const amount = priceForEmail(req.user!.email);
+  const amount = PRO_PRICE_PAISE;
   try {
     const order = await razorpay.orders.create({
       amount,

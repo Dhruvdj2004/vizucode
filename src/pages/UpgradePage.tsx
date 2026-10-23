@@ -1,23 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { applySession, getSession, onAuthChange } from '../lib/auth';
+import { applySession, getSession, onAuthChange, isCollegeEmail, sendCollegeCode, verifyCollegeCode } from '../lib/auth';
+import { CodeField } from '../components/CodeField';
 import { FREE_CATEGORY } from '../lib/plan';
 import { createOrder, verifyPayment } from '../lib/api';
 import { loadRazorpayScript } from '../lib/razorpay';
 
 const RAZORPAY_KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID as string | undefined;
 
-// Mirrors the server-side price rule in server/payment.ts — display only,
-// the actual charge is always computed server-side from the JWT email.
-const STUDENT_EMAIL_SUFFIX = '@ietdavv.edu.in';
-
+// Display only — the server charges ₹49 and refuses college accounts, which
+// get Pro free by verifying their @ietdavv.edu.in email instead.
 function displayPrice(email: string | undefined): string {
-  return email?.toLowerCase().endsWith(STUDENT_EMAIL_SUFFIX) ? '₹1' : '₹49';
+  return isCollegeEmail(email) ? 'Free' : '₹49';
 }
 
 const FEATURES = [
   `Everything in Free (${FREE_CATEGORY} stays open either way)`,
-  'All 158 questions across every pattern, unlocked',
+  'All 309 questions across every pattern, unlocked',
   'Full step-by-step visualizers for every problem',
   'Progress tracking, streaks and solve counts across all categories',
   '3 premium AI mock interviews (Gemini), on top of the 10 free ones',
@@ -28,7 +27,10 @@ export default function UpgradePage() {
   const [status, setStatus] = useState<'idle' | 'starting'>('idle');
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const isStudent = !!session?.user.email.toLowerCase().endsWith(STUDENT_EMAIL_SUFFIX);
+  const isStudent = isCollegeEmail(session?.user.email);
+  const [codeSent, setCodeSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
   useEffect(() => onAuthChange(() => setSession(getSession())), []);
 
   async function startCheckout() {
@@ -50,7 +52,7 @@ export default function UpgradePage() {
         name: 'VizuCode',
         description: 'Unlock every pattern',
         prefill: { name: session.user.firstName, email: session.user.email },
-        theme: { color: '#b96f27' },
+        theme: { color: '#2563eb' },
         handler: (response) => {
           verifyPayment(session.token, {
             razorpay_order_id: response.razorpay_order_id,
@@ -79,6 +81,34 @@ export default function UpgradePage() {
     }
   }
 
+  async function sendCode() {
+    if (!session) return;
+    setError(null);
+    setVerifying(true);
+    try {
+      await sendCollegeCode(session.token);
+      setCodeSent(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send the code.');
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  async function verify() {
+    if (!session) return;
+    setError(null);
+    setVerifying(true);
+    try {
+      await verifyCollegeCode(session.token, code);
+      navigate('/');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not verify the code.');
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   return (
     <main className="auth-wrap">
       <div className="panel auth-panel upgrade-panel">
@@ -91,11 +121,11 @@ export default function UpgradePage() {
 
         <div className="price-row">
           <span className="price-amount mono">{displayPrice(session?.user.email)}</span>
-          <span className="price-period">one-time</span>
+          <span className="price-period">{isStudent ? 'for IET DAVV students' : 'one-time'}</span>
         </div>
 
         <ul className="feature-list">
-          {FEATURES.map((f) => (
+          {(isStudent ? [...FEATURES.slice(0, -1), '10 free AI mock interviews'] : FEATURES).map((f) => (
             <li key={f}>
               <span className="feature-check" aria-hidden>✓</span>
               {f}
@@ -104,15 +134,41 @@ export default function UpgradePage() {
         </ul>
 
         {session?.user.isPro ? (
-          <p className="auth-hint upgrade-note">You're already Pro — everything is unlocked.</p>
-        ) : session ? (
+          <p className="auth-hint upgrade-note">
+            {isStudent
+              ? 'Your IET DAVV account is verified — everything is free and unlocked.'
+              : "You're already Pro — everything is unlocked."}
+          </p>
+        ) : session && isStudent ? (
           <>
-            {isStudent && (
-              <p className="auth-hint upgrade-note">
-                IET DAVV student? Sign out and use "Sign in with Google" with your college account — Pro
-                is free.
+            <p className="auth-hint upgrade-note">
+              IET DAVV students get everything free. Verify <b>{session.user.email}</b> with a 6-digit code.
+            </p>
+            {codeSent && <CodeField id="college-code" value={code} onChange={setCode} />}
+            {codeSent ? (
+              <button className="btn primary auth-submit" onClick={verify} disabled={verifying || code.length !== 6}>
+                {verifying ? 'Checking…' : 'Verify and unlock'}
+              </button>
+            ) : (
+              <button className="btn primary auth-submit" onClick={sendCode} disabled={verifying}>
+                {verifying ? 'Sending…' : 'Send code to my college email'}
+              </button>
+            )}
+            {codeSent && (
+              <div className="auth-row">
+                <button className="link-btn" type="button" onClick={sendCode} disabled={verifying}>
+                  Resend code
+                </button>
+              </div>
+            )}
+            {error && (
+              <p className="input-error" role="alert">
+                {error}
               </p>
             )}
+          </>
+        ) : session ? (
+          <>
             <button className="btn primary auth-submit" onClick={startCheckout} disabled={status === 'starting'}>
               {status === 'starting' ? 'Opening Razorpay…' : 'Pay with Razorpay'}
             </button>
