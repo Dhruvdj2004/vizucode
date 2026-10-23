@@ -2,8 +2,10 @@
 // the PDF or LaTeX. An uploaded .tex is kept exactly as it is — the AI only
 // patches the lines a request is about, so everything else downloads unchanged.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { getSession } from '../lib/auth';
 import {
+  RESUME_READY,
   editResume,
   fetchFile,
   listVersions,
@@ -76,7 +78,51 @@ function historyToChat(list: ResumeVersion[]): ChatLine[] {
   return lines;
 }
 
+/** #/resume: the editor once its service is deployed, "in progress" until then. */
 export default function ResumePage() {
+  return RESUME_READY ? <ResumeEditor /> : <ResumeComingSoon />;
+}
+
+function ResumeComingSoon() {
+  useEffect(() => {
+    document.title = 'Resume Editor — VizuCode';
+    return () => {
+      document.title = 'VizuCode — LeetCode Visualizer';
+    };
+  }, []);
+  return (
+    <main>
+      <div className="viz-header">
+        <div className="eyebrow">In progress</div>
+        <h1 className="page-title">Resume Editor</h1>
+        <p className="serif desc">
+          Upload your resume, ask for changes in plain English, and download a clean PDF or LaTeX file. We’re putting
+          the finishing touches on it.
+        </p>
+      </div>
+      <div className="panel resume-soon">
+        <span className="resume-soon-badge mono">coming soon</span>
+        <ul className="resume-notes">
+          <li>
+            <b>Edit by chatting:</b> “make my project bullets stronger”, “add TypeScript to skills”.
+          </li>
+          <li>
+            <b>Your layout stays yours:</b> a .tex file is kept exactly as it is; only the lines you ask about change.
+          </li>
+          <li>
+            <b>Every version saved:</b> go back to any earlier version in one click.
+          </li>
+        </ul>
+        <p className="faint resume-soon-foot">
+          Meanwhile, practise talking about that resume:{' '}
+          <Link to="/interview">try an AI mock interview →</Link>
+        </p>
+      </div>
+    </main>
+  );
+}
+
+function ResumeEditor() {
   const [sid, setSid] = useState<string | null>(readSid);
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [viewing, setViewing] = useState<number | null>(null);

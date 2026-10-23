@@ -11,6 +11,7 @@ import { fetchInterviewHome, type InterviewHome } from '../lib/interview';
 import { CORE_MODULES, REVISION_MODULES } from '../content/registry';
 import { moduleStats } from '../content/module';
 import { Icon } from '../components/Icon';
+import { RESUME_READY } from '../lib/resume';
 import InterviewerBot from './interview/InterviewerBot';
 
 interface Cell {
@@ -243,10 +244,12 @@ export default function DashboardPage() {
           <span className="dash-card-icon c">
             <Icon name="file-text" size={20} />
           </span>
-          <h3 className="dash-card-title">Resume editor</h3>
+          <h3 className="dash-card-title">
+            Resume editor{!RESUME_READY && <span className="nav-soon">soon</span>}
+          </h3>
           <p className="dash-card-text">Upload your resume and ask for changes in plain English. Download the PDF or LaTeX.</p>
           <div className="dash-card-foot mono">
-            edit resume <Icon name="arrow-right" />
+            {RESUME_READY ? 'edit resume' : 'in progress'} <Icon name="arrow-right" />
           </div>
         </Link>
 

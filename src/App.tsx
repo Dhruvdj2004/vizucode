@@ -5,6 +5,7 @@ import { navSection } from './content/navKeys';
 import { Logo } from './components/Logo';
 import InterviewerBot from './pages/interview/InterviewerBot';
 import { Icon } from './components/Icon';
+import { RESUME_READY } from './lib/resume';
 
 function getInitialTheme(): 'light' | 'dark' {
   const saved = localStorage.getItem('vizucode-theme');
@@ -55,7 +56,7 @@ export default function App() {
             Aptitude
           </Link>
           <Link to="/resume" className={section === 'resume' ? 'on' : ''}>
-            Resume
+            Resume{!RESUME_READY && <span className="nav-soon">soon</span>}
           </Link>
           <Link to="/news" className={section === 'news' ? 'on' : ''}>
             AI News

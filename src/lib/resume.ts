@@ -5,6 +5,12 @@ import { getSession } from './auth';
 
 const BASE = (import.meta.env.VITE_RESUME_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:8000';
 
+/**
+ * The editor needs its own service (resume-editor/). Until VITE_RESUME_API_URL
+ * points at a deployed one, the site shows the section as "in progress".
+ */
+export const RESUME_READY = !!import.meta.env.VITE_RESUME_API_URL;
+
 export interface ResumeVersion {
   version: number;
   summary: string | null;
