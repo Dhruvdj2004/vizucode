@@ -25,7 +25,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 FONTS = os.environ.get('VIDEOGEN_FONTS', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'fonts'))
-W, H, FPS = 1080, 1920, 30
+W, H, FPS = int(os.environ.get('VIDEOGEN_W', 1080)), int(os.environ.get('VIDEOGEN_H', 1920)), 30   # landscape: VIDEOGEN_W=1920 VIDEOGEN_H=1080
 SR = 48000
 
 # ---------------- palette ----------------

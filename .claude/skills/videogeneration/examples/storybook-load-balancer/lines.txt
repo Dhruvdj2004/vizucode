@@ -1,0 +1,12 @@
+hook|Hi, I am Chintu! What happens when a million people open the same website, at the same time? Let me explain load balancers, in one minute!
+problem|A website runs on a computer, called a server. But one server can only handle so many people. Too many visitors, and it slows down, or even crashes.
+idea|Think of a busy restaurant. Instead of one cashier, we open three counters, and put a manager at the door, who sends each customer to a counter. That manager, is the load balancer.
+w0|Request one goes to server A.
+w1|Request two, server B.
+w2|Request three, server C.
+w3|Then back to A. Taking turns like this is called round robin.
+w4|Now, server B crashes!
+w5|The load balancer keeps checking every server, sees that B is down, and skips it.
+w6|Users never even notice.
+algos|How does it pick a server? Taking turns is one way. It can also pick the server with the fewest users, or the one closest to you.
+outro|So, a load balancer spreads traffic across many servers, so the website stays fast, and never goes down. Learn more on vizu code dot site, and follow at vizu code 26 for more.

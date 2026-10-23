@@ -127,3 +127,30 @@ defines its timeline + 5 scenes (hook, problem, brute, idea, walk). Start from t
   stamp) → the one key idea → animated walkthrough with an explicit question per step ("Is 7 in seen?")
   → code → complexity → CTA (vizucode.site + Follow @vizucode26).
 - Music bed is quiet and ducks under the voice; SFX mark every state change.
+
+## Storybook style (system design, beginners) and long-form landscape videos
+
+A second look used for concept videos, such as system design for beginners. It has a light paper/sky background
+and cartoon characters, and is not the dark DSA look. Templates: `examples/storybook-api-gateway/reel.py` (the most
+complete one: Whisper/edge word timings via `vo/<key>.words.json`, word-accurate captions, a talking kid
+character `kid()` with mouth driven by voice amplitude, servers with faces, a storybook bg) and
+`examples/storybook-load-balancer/reel.py`. Their theme helpers (`make_story_bg`, `card`, `bubble`, `kid`,
+`server`, `person`, `envelope`...) are defined inside those reel.py files. Copy them; do not edit the examples.
+
+- **Characters.** Chintu is the brand's kid mascot: a naughty, funny boy in an orange `</>` t-shirt, drawn by
+  `kid()`. For two-character videos he is paired with **Meera**, a smart, calm girl who explains things (an
+  original character; never use or imitate copyrighted characters such as Shinchan, Shizuka or Doraemon). Chintu
+  asks the "silly" questions viewers secretly have and Meera answers with everyday analogies. If
+  `examples/storybook-characters/characters.py` exists, import Chintu and Meera from it so every video looks the same.
+- **Voices.** Kid voices are an adult voice with the pitch raised and the speed unchanged. Put a `vo/voices.txt` next to
+  `lines.txt` (`chintu|Aman|1.2` and `meera|Tara|1.12`) and prefix every line key with its speaker
+  (`chintu_hook`, `meera_1`, ...). `make_vo.sh` then records each line with that speaker's voice. With edge-tts it also
+  writes `<key>.words.json` word timings, so captions and cues are word-accurate without Whisper.
+- **Landscape (YouTube, 1920x1080).** Run every render with `VIDEOGEN_W=1920 VIDEOGEN_H=1080` in the environment so
+  `engine.W/H` (frame size, glow, encode) match. The engine's built-in DSA scenes (`code`, `outro`, captions at y=1480)
+  are laid out for portrait, so long-form videos draw their own scenes and captions (centred near the
+  bottom, y ≈ 960) and their own header (wordmark top-left, chapter title top-right).
+- **Long videos (4–10 min).** Split the script into chapters (one scene function each, with a title card). Keep
+  each VO line short (≤ 2 sentences) so the speakers alternate. Render stills from every chapter before the
+  full render. Run fit_size.sh with a target ≤ 90 MB (GitHub rejects files over 100 MB) and put a
+  `<slug>.md` next to the video with YouTube chapter timestamps and a description.

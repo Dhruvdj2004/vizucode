@@ -1,0 +1,11 @@
+hook|Hi, I am Chintu! How does one tap in a food app reach so many services? Let me explain the API gateway!
+problem|Old apps were one giant program, called a monolith. If one part breaks, the whole app goes down.
+micro|So we cut it into small apps, called microservices. Users, orders, payments. Each does one job.
+idea|But your phone can't talk to every service. That's messy! So we add one front door, like a hotel receptionist. That's the API gateway.
+w0|You tap, order food. It goes to the gateway.
+w1|First, are you logged in? Yes!
+w2|Then it sends it to the order service.
+w3|The order service asks the payment service to charge you.
+w4|One neat reply goes back to your phone.
+jobs|The gateway checks who you are, sends requests to the right service, and blocks spammers.
+outro|Microservices do the work. The gateway is the front door. Learn more on vizu code dot site, and follow at vizu code 26 for more.
