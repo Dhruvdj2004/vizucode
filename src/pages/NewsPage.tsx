@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchNews, type NewsDay } from '../lib/api';
 import { getSession, onAuthChange } from '../lib/auth';
+import { Icon } from '../components/Icon';
 
 /** "2026-09-24" → "Thursday, 24 September 2026", read as a calendar date (no TZ shift). */
 function longDate(day: string): string {
@@ -116,7 +117,7 @@ export default function NewsPage() {
                     </p>
                   )}
                   <a className="news-read" href={it.url} target="_blank" rel="noopener noreferrer">
-                    Read on {it.source} ↗
+                    Read on {it.source} <Icon name="arrow-up-right" size={14} />
                   </a>
                 </div>
               </li>

@@ -131,3 +131,33 @@ alter table user_sessions enable row level security;
 alter table feedback enable row level security;
 alter table aptitude_attempts enable row level security;
 alter table ai_news enable row level security;
+
+-- AI mock interviews (server/interview.ts). The resume PDF itself is never
+-- stored — data holds only Gemini's short profile summary, the generated
+-- questions, and the graded answers.
+create table if not exists interviews (
+  id         text primary key,
+  user_id    integer not null references users(id) on delete cascade,
+  role       text not null,
+  status     text not null check (status in ('active', 'done')),
+  created_at timestamptz not null default now(),
+  data       jsonb not null
+);
+
+create index if not exists idx_interviews_user on interviews (user_id, created_at desc);
+
+alter table interviews enable row level security;
+
+-- Paid AI interviews (₹19 each, server/interview.ts). One row per verified
+-- Razorpay payment; payment_id as the key makes crediting idempotent.
+create table if not exists interview_purchases (
+  payment_id text primary key,
+  order_id   text not null,
+  user_id    integer not null references users(id) on delete cascade,
+  amount     integer not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_interview_purchases_user on interview_purchases (user_id);
+
+alter table interview_purchases enable row level security;

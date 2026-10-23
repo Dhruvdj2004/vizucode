@@ -19,6 +19,7 @@ import { paymentRouter } from './payment';
 import { feedbackRouter } from './feedback';
 import { aptitudeRouter } from './aptitude';
 import { newsRouter } from './news';
+import { interviewRouter } from './interview';
 import { pool } from './db';
 
 // In production set ALLOWED_ORIGIN to the deployed frontend URL
@@ -28,7 +29,6 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN;
 export const app = express();
 app.disable('x-powered-by');
 app.use(cors(ALLOWED_ORIGIN ? { origin: ALLOWED_ORIGIN } : {}));
-app.use(express.json({ limit: '16kb' }));
 
 // Security headers on every response.
 app.use((_req, res, next) => {
@@ -39,10 +39,17 @@ app.use((_req, res, next) => {
   next();
 });
 
+// AI mock interview (JWT required) — see server/interview.ts. Mounted before
+// the global 16kb JSON parser because it takes resume PDFs and recorded audio
+// (it parses its own bodies, up to ~4.4 MB).
+app.use('/api/interview', rateLimit('interview'), interviewRouter);
+
+app.use(express.json({ limit: '16kb' }));
+
 // Simple in-memory rate limit: per-IP, per-minute window. On Vercel this is
 // per-instance, not global — a soft limit there, not a hard guarantee.
 const WINDOW_MS = 60_000;
-const LIMITS = { read: 300, trace: 60, auth: 20, payment: 20 } as const;
+const LIMITS = { read: 300, trace: 60, auth: 20, payment: 20, interview: 30 } as const;
 type LimitKind = keyof typeof LIMITS;
 const hits = new Map<string, { windowStart: number; counts: Record<LimitKind, number> }>();
 function rateLimit(kind: LimitKind) {
@@ -51,7 +58,7 @@ function rateLimit(kind: LimitKind) {
     const now = Date.now();
     let entry = hits.get(ip);
     if (!entry || now - entry.windowStart > WINDOW_MS) {
-      entry = { windowStart: now, counts: { read: 0, trace: 0, auth: 0, payment: 0 } };
+      entry = { windowStart: now, counts: { read: 0, trace: 0, auth: 0, payment: 0, interview: 0 } };
       hits.set(ip, entry);
     }
     if (hits.size > 10_000) hits.clear(); // crude memory guard

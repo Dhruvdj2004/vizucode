@@ -5,6 +5,7 @@ import { deadlineOf } from '../../aptitude/engine';
 import { finishAttempt, getActive, setActive } from '../../aptitude/store';
 import type { Attempt, AttemptStatus } from '../../aptitude/types';
 import { QuestionBody, fmtClock, useAptUser } from '../../aptitude/ui';
+import { Icon } from '../../components/Icon';
 
 const WARN_AT = [10, 5, 1]; // minutes remaining
 const LETTERS = ['A', 'B', 'C', 'D'];
@@ -179,7 +180,7 @@ export default function AptitudeTest() {
 
       {toast && (
         <div className="apt-toast" role="alert">
-          ⏱ {toast}
+          <Icon name="timer" /> {toast}
         </div>
       )}
 

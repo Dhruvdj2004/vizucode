@@ -8,6 +8,7 @@ import { getTopic, isTopicLocked, moduleStats } from '../content/module';
 import { DgDefs } from '../content/dgm';
 import { Blocks, InterviewList } from '../components/ContentBlocks';
 import { getSession, onAuthChange } from '../lib/auth';
+import { Icon } from '../components/Icon';
 
 export default function ModuleTopicPage({ mod }: { mod: ContentModule }) {
   const { slug } = useParams();
@@ -81,7 +82,7 @@ export default function ModuleTopicPage({ mod }: { mod: ContentModule }) {
           <p className="serif desc">{topic.blurb}</p>
         </div>
         <div className="panel db-gate">
-          <h2>🔒 This topic is part of Pro</h2>
+          <h2><Icon name="lock" /> This topic is part of Pro</h2>
           <p className="serif" style={{ maxWidth: '38rem', margin: '0 auto 1rem' }}>
             The first {stats.free} topics are free to read. Unlock the full {mod.nav} module — all {stats.topics}{' '}
             topics, diagrams and interview questions — along with every DSA visualizer.

@@ -307,7 +307,7 @@ async function main() {
   console.log('Practice again gives a different set');
   await go(`#/aptitude/result/${remote.attempts[0].id}`);
   await waitFor(`document.body.innerText.includes('Practice again')`);
-  await clickText('button', '↻ Practice again');
+  await clickText('button', 'Practice again');
   await waitFor(`!!document.querySelector('.apt-topbar')`);
   const again = await active();
   const overlap = again.questionIds.filter((id) => a0.questionIds.includes(id)).length;

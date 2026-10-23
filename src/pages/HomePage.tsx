@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchQuestions, fetchProgress, updateProgress, type QuestionRow, type Streak } from '../lib/api';
 import { getSession, onAuthChange } from '../lib/auth';
 import { isCategoryLocked } from '../lib/plan';
@@ -7,6 +7,7 @@ import LeetCodeIcon from '../components/LeetCodeIcon';
 import ProgressRing from '../components/ProgressRing';
 import ModuleCards from '../components/ModuleCards';
 import { CORE_MODULES, REVISION_MODULES } from '../content/registry';
+import { Icon } from '../components/Icon';
 
 export default function HomePage() {
   const [rows, setRows] = useState<QuestionRow[] | null>(null);
@@ -18,6 +19,16 @@ export default function HomePage() {
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const navigate = useNavigate();
+  // /dsa?cat=Trees (from the dashboard) opens that topic and scrolls to it.
+  const [params] = useSearchParams();
+  const focusCat = params.get('cat');
+  useEffect(() => {
+    if (!focusCat || !rows) return;
+    setOpen((o) => ({ ...o, [focusCat]: true }));
+    requestAnimationFrame(() =>
+      document.getElementById(`cat-${focusCat}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    );
+  }, [focusCat, rows]);
 
   useEffect(() => onAuthChange(() => setSession(getSession())), []);
 
@@ -137,7 +148,7 @@ export default function HomePage() {
           </div>
           <div className="progress-diffs">
             {(['Easy', 'Medium', 'Hard'] as const).map((d) => {
-              const dot = d === 'Easy' ? 'var(--accent-2)' : d === 'Medium' ? 'var(--accent)' : 'var(--accent-3)';
+              const dot = d === 'Easy' ? 'var(--easy)' : d === 'Medium' ? 'var(--medium)' : 'var(--hard)';
               const { solved: s, total: t } = stats.diff[d];
               return (
                 <div key={d} className="diff-line">
@@ -210,13 +221,13 @@ export default function HomePage() {
         const locked = isCategoryLocked(cat, session?.user);
         const isOpen = searching || !!open[cat];
         return (
-          <section key={cat} className="panel cat">
+          <section key={cat} id={`cat-${cat}`} className="panel cat">
             <button
               className="cat-head"
               onClick={() => setOpen((o) => ({ ...o, [cat]: !o[cat] }))}
               aria-expanded={isOpen}
             >
-              <span className={`chev ${isOpen ? 'open' : ''}`}>▶</span>
+              <span className={`chev ${isOpen ? 'open' : ''}`}><Icon name="chevron" size={14} /></span>
               {cat}
               <span className="count">
                 {searching
@@ -244,7 +255,7 @@ export default function HomePage() {
                       }
                       title={session ? (isSolved ? 'Mark unsolved' : 'Mark solved') : 'Sign in to track progress'}
                     >
-                      ✓
+                      <Icon name="check" size={13} />
                     </button>
                     <span className="qid mono">#{q.id}</span>
                     <span className="qtitle">{q.title}</span>
@@ -264,7 +275,7 @@ export default function HomePage() {
                       locked ? (
                         <Link to="/upgrade">
                           <button className="btn primary locked" title="Upgrade to unlock">
-                            🔒 Visualize
+                            <Icon name="lock" /> Visualize
                           </button>
                         </Link>
                       ) : (

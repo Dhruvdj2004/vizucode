@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import type { ContentModule } from '../content/module';
 import { isTopicLocked, moduleStats, moduleUnits } from '../content/module';
 import { getSession, onAuthChange } from '../lib/auth';
+import { Icon } from '../components/Icon';
 
 export default function ModulePage({ mod }: { mod: ContentModule }) {
   const [session, setSession] = useState(getSession);
@@ -41,11 +42,10 @@ export default function ModulePage({ mod }: { mod: ContentModule }) {
                 >
                   <div className="db-card-top">
                     <span className="db-card-num">{String(t.num).padStart(2, '0')}</span>
-                    {locked && <span className="db-card-lock">🔒</span>}
+                    {locked && <span className="db-card-lock"><Icon name="lock" label="Pro" /></span>}
                     <span className="db-card-mins">{t.minutes} min</span>
                   </div>
                   <div className="db-card-title">{t.title}</div>
-                  <p className="db-card-blurb">{t.blurb}</p>
                   <div className="db-chips">
                     {t.free && <span className="db-chip free">Free</span>}
                     {t.tags.map((tag) => (

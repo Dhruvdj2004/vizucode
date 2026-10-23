@@ -3,6 +3,7 @@ import { dashboardStats, deadlineOf, scoreAttempt } from '../../aptitude/engine'
 import { CATEGORIES, CATEGORY_BY_KEY } from '../../aptitude/taxonomy';
 import { QUESTION_BANK } from '../../aptitude/bank';
 import { Bar, STATUS_LABEL, fmtClock, fmtDate, fmtDuration, pct, useAptHistory } from '../../aptitude/ui';
+import { EmojiIcon } from '../../components/Icon';
 
 const MODES = [
   { key: 'full', icon: '📝', title: 'Full Test', meta: '20 questions · 20 min', desc: 'Pick any mix of topics. Balanced 8 easy / 6 medium / 6 hard.' },
@@ -49,7 +50,7 @@ export default function AptitudeHome() {
         <Stat num={stats.testsCompleted} lbl="Tests completed" />
         <Stat num={stats.testsCompleted ? `${Math.round(stats.avgScorePct)}%` : '—'} lbl="Average score" />
         <Stat num={stats.testsCompleted ? fmtDuration(stats.avgTimeSec) : '—'} lbl="Average time" />
-        <Stat num={`${stats.streak} 🔥`} lbl={stats.streak === 1 ? 'Day streak' : 'Days streak'} />
+        <Stat num={stats.streak} lbl={stats.streak === 1 ? 'Day streak' : 'Days streak'} />
       </div>
 
       <Link to="/aptitude/coverage" className="panel apt-coverage-cta">
@@ -68,7 +69,7 @@ export default function AptitudeHome() {
         {MODES.map((m) => (
           <Link key={m.key} to={`/aptitude/start/${m.key}`} className="panel apt-mode">
             <span className="apt-mode-icon" aria-hidden>
-              {m.icon}
+              <EmojiIcon emoji={m.icon} size={22} />
             </span>
             <span className="apt-mode-title">{m.title}</span>
             <span className="apt-mode-meta mono">{m.meta}</span>

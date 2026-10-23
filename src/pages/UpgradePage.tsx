@@ -20,6 +20,7 @@ const FEATURES = [
   'All 158 questions across every pattern, unlocked',
   'Full step-by-step visualizers for every problem',
   'Progress tracking, streaks and solve counts across all categories',
+  '3 premium AI mock interviews (Gemini), on top of the 10 free ones',
 ];
 
 export default function UpgradePage() {
@@ -103,7 +104,7 @@ export default function UpgradePage() {
         </ul>
 
         {session?.user.isPro ? (
-          <p className="auth-hint upgrade-note">You're already Pro — everything is unlocked. 🎉</p>
+          <p className="auth-hint upgrade-note">You're already Pro — everything is unlocked.</p>
         ) : session ? (
           <>
             {isStudent && (
@@ -131,7 +132,7 @@ export default function UpgradePage() {
         )}
 
         <p className="auth-alt">
-          <Link to="/">← Back to questions</Link>
+          <Link to="/dsa">← Back to questions</Link>
         </p>
       </div>
     </main>
