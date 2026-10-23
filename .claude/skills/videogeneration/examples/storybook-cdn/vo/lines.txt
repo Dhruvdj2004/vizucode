@@ -1,0 +1,55 @@
+chintu_h1|Meera! I'm in Delhi, eating samosas, and this video started instantly!
+meera_h1|Nice! What's so surprising about that?
+chintu_h2|But the company's servers are in America! How is it so fast?
+meera_h2|Great question, Chintu. The answer is a CDN, a Content Delivery Network.
+chintu_h3|C D N? Sounds like a new chips brand.
+meera_h3|Ha! Let me explain it with something you love. Pizza.
+meera_p1|Imagine a pizza company with just one kitchen, in a faraway city. Every order travels all the way from there.
+chintu_p1|So my pizza takes two hours and arrives cold? Tragic.
+meera_p3|Exactly. Now the company opens small branches in every city, close to you.
+meera_p4|Each branch makes the same pizzas. So your order comes from the nearest one, in fifteen minutes.
+chintu_p2|Hot pizza, short trip. I love these branches.
+meera_p5|That is the whole idea of a CDN. Keep copies close to the people who need them.
+meera_e1|In tech, the main kitchen is called the origin server. Here, it is in the USA.
+meera_e2|The branches are called edge servers. They sit in cities all over the world, like Mumbai, Delhi, Singapore and London.
+chintu_e1|Edge server? Are they sitting on the edge of a cliff?
+meera_e3|No, silly! The edge of the network, close to users. Each location is called a PoP, a point of presence.
+meera_e4|Without a CDN, your request crosses the ocean to the USA and back. That takes about two hundred and fifty milliseconds.
+meera_e5|With a CDN, the Delhi edge server answers. Only about twenty milliseconds!
+chintu_e3|Twenty! That's faster than I can finish a samosa.
+chintu_m1|But wait. How does the Delhi server already have the video? Does it know everything?
+meera_m1|Not at first! The very first time someone in Delhi asks for it, the edge server doesn't have it.
+meera_m2|That's a cache miss. So the edge fetches it from the origin in the USA, and keeps a copy.
+chintu_m2|Like the branch calling the main kitchen for a new recipe, just once.
+meera_m4|Now the next person in Delhi asks. The edge already has it. That's a cache hit! Super fast.
+chintu_m3|Hey, this is just caching! We learned that in the last episode!
+meera_m5|Yes! A CDN is caching, spread across the whole world, close to every user.
+chintu_w1|So can we put everything on a CDN? My homework? My lunch?
+meera_w1|Not your lunch. CDNs are best for static files, things that are the same for everyone.
+meera_w2|Images, videos, and the CSS and JavaScript files that build a website.
+chintu_w2|And my bank balance?
+meera_w3|No. That is personal and changes all the time, so it comes from the origin.
+meera_w4|A CDN also protects the origin. Most requests stop at the edge, so the main server stays calm.
+chintu_w3|Even during the IPL final, when the whole country is watching?
+meera_w5|Exactly! Or during a big sale. The edges soak up the crowd, so the origin doesn't crash.
+chintu_w4|But what if the recipe changes? The branches will serve old pizza!
+meera_w6|Good catch. Every copy has a TTL, a time to live. After that, the edge fetches a fresh copy.
+meera_w7|And if you need it gone right now, you purge it. That tells every edge to delete the old file.
+chintu_w5|Purge! I want to purge my report card.
+meera_r2|You use CDNs every day! YouTube and Netflix keep popular videos close to your city, so they start quickly.
+meera_r3|Instagram photos load fast because they come from a nearby edge, not one faraway server.
+chintu_r1|Who runs all these edge servers?
+meera_r4|Companies like Cloudflare, Akamai and Amazon CloudFront run huge CDNs that anyone can use.
+chintu_c2|Origin. The main server, like the main kitchen.
+meera_c1|Edge server. A nearby copy, like a local branch.
+chintu_c3|Cache hit at the edge. The file is already close by, so it is super fast.
+meera_c2|And TTL and purge. How long a copy lives, and how to delete it early.
+meera_q0|Quiz time! Answer before the timer ends.
+chintu_q1|Question one. What do we call the main server where the original files live?
+meera_a1|The origin server!
+chintu_q2|Question two. Is the very first request at an edge server a cache hit, or a cache miss?
+meera_a2|A cache miss. The edge fetches the file from the origin, then keeps a copy.
+chintu_q3|Question three. You changed your logo, but users still see the old one. What do you do?
+meera_a3|Purge it from the CDN, or wait for its TTL to run out.
+chintu_o1|I got two out of three! Next episode, Database Sharding.
+meera_o1|Practise system design on vizu code dot site, and follow at vizu code 26 for more!
