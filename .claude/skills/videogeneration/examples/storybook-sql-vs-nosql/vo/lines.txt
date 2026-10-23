@@ -1,0 +1,68 @@
+chintu_1a|Meera, help! I am building my own app. A snack delivery app called Chintu Eats!
+meera_1b|Ooh, free samosas for me! So what's the problem?
+chintu_1c|My friends are fighting! Rohan shouts, use MySQL! Priya shouts, no, use MongoDB!
+chintu_1d|Which one do I pick? My brain feels like a samosa in a pizza box.
+meera_1e|Relax. MySQL is a SQL database. MongoDB is a NoSQL database. Let's learn both.
+meera_2a|Think of your school register. Roll number, name, class. Every student gets the same columns.
+chintu_2c|Can I add a column called favourite snack?
+meera_2d|Then you must change the whole register. That's SQL. Neat, fixed and strict.
+chintu_2e|And NoSQL?
+meera_2f|NoSQL is a box of note cards. Each card can hold different things.
+meera_2g|Aarav's card has his hobbies. Zoya's card has her pet's name.
+chintu_2h|My card would just say, snacks, snacks, and more snacks.
+meera_3a|A SQL database stores data in tables. Columns on top, one row per item.
+meera_3b|The columns are fixed in advance. That plan is called the schema.
+chintu_3c|So my app has a users table. Name, city, phone.
+meera_3d|Right. And orders go in an orders table, each with a user id.
+meera_3e|That user id links the two tables. It's called a relation.
+meera_3h|When we need both, a join matches each order to its user, using the user id.
+chintu_3i|How do I ask the database a question?
+meera_3j|You write SQL. Select name from users, where city is Delhi.
+chintu_3k|That's almost English! Select samosa from kitchen!
+meera_3l|And SQL has a superpower, called ACID transactions.
+meera_3m|You send a friend 100 rupees. Money leaves your account, and enters theirs.
+meera_3n|ACID means both steps happen, or neither does. Money never vanishes midway.
+chintu_3o|So the bank can't eat my money. Only I eat things!
+meera_4a|Now, NoSQL. The most popular kind is a document database, like MongoDB.
+meera_4b|Each user is one document, written in JSON. Like a note card with labels.
+chintu_4c|Wait, my orders are inside my document too?
+meera_4d|Yes! Everything sits together, so one read gets it all. No join needed.
+meera_4e|And the next document can have different fields.
+meera_4g|There are other NoSQL types too. Key value stores, like Redis, are a giant dictionary. Remember our caching episode?
+meera_4h|Wide column stores, like Cassandra, handle tons of writes.
+meera_4i|And graph databases, like Neo4j, store connections. Like friends of friends.
+chintu_4j|So that's how apps know my friend's friend owns a samosa shop!
+chintu_5a|What happens when a million people use Chintu Eats?
+meera_5b|A SQL database usually scales up. You buy a bigger machine.
+chintu_5c|Like buying a bigger lunch box!
+meera_5d|But even the biggest lunch box has a limit, and it costs a lot.
+meera_5e|You can shard SQL across machines, but joins and transactions get harder.
+meera_5f|Many NoSQL databases are built to scale out. Add more normal machines, and the data spreads across them, like in our sharding episode.
+chintu_5g|More lunch boxes, instead of one giant one!
+meera_5i|The trade off? A strict schema keeps data clean. A flexible one lets you move fast, but your app must handle messy fields.
+chintu_6a|Okay, okay. Just tell me when to use which!
+meera_6b|Use SQL when data must be correct and connected. Payments, banking, orders. That's why banks use SQL.
+meera_6d|Use NoSQL when data is huge, fast, or shaped differently.
+meera_6e|Chat messages, activity feeds, and product catalogues, where a phone and a shirt have different fields.
+meera_6f|Instagram style feeds and WhatsApp style chats use NoSQL to handle billions of items.
+chintu_6g|So I have to pick only one?
+meera_6h|Nope! Many companies use both. SQL for payments, NoSQL for chats and feeds.
+chintu_6i|So both my friends were right! They each get a samosa. A small one.
+meera_7a|Recap! Structure: SQL has tables. NoSQL has documents, key values, wide columns, or graphs.
+meera_7b|Schema: SQL is strict and fixed. NoSQL is flexible.
+meera_7c|Scaling: SQL usually scales up. NoSQL scales out.
+meera_7d|Best for: SQL for payments and orders. NoSQL for chats, feeds, and huge scale.
+chintu_7e|Got it! Strict register, flexible note cards!
+meera_8a|Quiz time! Three questions, three seconds each.
+meera_8b|Question one. A banking app that moves money. SQL or NoSQL?
+chintu_8c|Umm, NoSQL? It sounds cooler!
+meera_8d|Nope, SQL! Money needs ACID transactions.
+meera_8e|Question two. A chat app with billions of messages. SQL or NoSQL?
+chintu_8f|NoSQL! Lots of note cards!
+meera_8g|Correct! NoSQL spreads huge data across many machines.
+meera_8h|Question three. What is the fixed plan of columns in a SQL table called?
+chintu_8i|The snack plan?
+meera_8j|The schema! How many did you get right?
+chintu_8k|Thanks Meera! Now I can finally build Chintu Eats!
+meera_8l|Practise system design on vizu code dot site, and follow at vizu code 26 for part seven!
+chintu_8m|Bye bye! I am off to find a samosa!
