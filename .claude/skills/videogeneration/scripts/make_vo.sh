@@ -11,6 +11,6 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 cd "$WORK/vo"
 while IFS='|' read -r key text || [[ -n "$key" ]]; do
   [[ -z "$key" || "$key" == \#* ]] && continue
-  python3 "$HERE/tts.py" "$key.wav" "$VOICE" "$RATE" "$text"
+  python3 "$HERE/tts.py" "$key.wav" "$VOICE" "$RATE" "$text" < /dev/null
   printf "%-10s %5.2fs\n" "$key" "$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$key.wav")"
 done < lines.txt
