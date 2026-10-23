@@ -41,12 +41,13 @@ import { LEVELS, ROLES } from '../src/lib/interviewOptions';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash';
-// Free interviews run on Groq (cheaper); Pro and paid interviews on Gemini.
+// Gemini runs only the PRO_INTERVIEWS included with paid ₹49 Pro. Every other
+// interview (free, college, ₹19 extras) runs on Groq only — never on Gemini.
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL ?? 'openai/gpt-oss-120b';
 const GROQ_WHISPER_MODEL = process.env.GROQ_WHISPER_MODEL ?? 'whisper-large-v3';
 
-/** Which AI runs an interview: Groq for free interviews, Gemini for Pro and paid ones. */
+/** Which AI runs an interview: Gemini for paid Pro's included ones, Groq for everything else. */
 type Engine = 'gemini' | 'groq';
 
 /**
@@ -215,8 +216,9 @@ async function groqJson<T>(
 }
 
 /**
- * One AI call on the interview's engine. A Groq failure (rate limit, outage,
- * bad output) falls back to Gemini, so a free interview never just breaks.
+ * One AI call on the interview's engine. Groq interviews never fall back to
+ * Gemini: a failed call is retried once on Groq, then the student is asked to
+ * try again.
  */
 async function llm<T>(
   engine: Engine,
@@ -226,12 +228,19 @@ async function llm<T>(
   temperature = 0.4,
   effort: 'low' | 'medium' = 'low'
 ): Promise<T> {
-  const textOnly = parts.every((p) => 'text' in p);
-  if (engine === 'groq' && GROQ_API_KEY && textOnly) {
-    try {
-      return await groqJson(parts.map((p) => (p as { text: string }).text).join('\n\n'), schema, parse, temperature, effort);
-    } catch (e) {
-      console.error('[interview] Groq failed, using Gemini instead:', e instanceof Error ? e.message : e);
+  if (engine === 'groq') {
+    if (!GROQ_API_KEY) throw new AiError('AI is not configured on this server.');
+    if (!parts.every((p) => 'text' in p)) throw new Error('Groq calls take text only');
+    const prompt = parts.map((p) => (p as { text: string }).text).join('\n\n');
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await groqJson(prompt, schema, parse, temperature, effort);
+      } catch (e) {
+        console.error(`[interview] Groq failed (try ${attempt + 1}):`, e instanceof Error ? e.message : e);
+        if (attempt >= 1 || e instanceof RateLimited) {
+          throw new AiError('The AI interviewer is busy right now. Please try again in a minute.');
+        }
+      }
     }
   }
   return gemini(parts, schema, parse, temperature);
@@ -239,6 +248,9 @@ async function llm<T>(
 
 const S = { type: 'STRING' } as const;
 const STRS = { type: 'ARRAY', items: S } as const;
+
+/** A PDF with no text layer (a scan or a photo), which a Groq interview can't read. */
+class ScannedPdfError extends Error {}
 
 const resumeTextSchema = z.object({ isResume: z.boolean(), text: z.string().max(40_000) });
 
@@ -249,10 +261,11 @@ const resumeTextSchema = z.object({ isResume: z.boolean(), text: z.string().max(
  */
 async function readResume(pdfBase64: string, engine: Engine): Promise<string | null> {
   if (engine === 'groq') {
-    // Free interviews: read the PDF's text on the server, no AI needed. Scanned
-    // (image-only) resumes have no text layer and fall through to Gemini.
+    // Groq interviews: read the PDF's text on the server, no AI needed. A
+    // scanned (image-only) resume has no text layer; Groq can't read images.
     const text = await pdfText(pdfBase64);
     if (text.split(/\s+/).length >= 30) return text;
+    throw new ScannedPdfError();
   }
   const r = await gemini(
     [
@@ -659,13 +672,17 @@ export class NoSpeechError extends Error {}
  * unclear recording with.
  */
 async function transcribe(audio: string, mime: string, lang: Interview['lang'], engine: Engine): Promise<string> {
-  if (engine === 'groq' && GROQ_API_KEY) {
-    const text = await whisper(audio, mime, lang).catch((e) => {
-      if (e instanceof NoSpeechError) throw e;
-      console.error('[interview] Whisper failed, using Gemini instead:', e instanceof Error ? e.message : e);
-      return null;
-    });
-    if (text !== null) return text;
+  if (engine === 'groq') {
+    if (!GROQ_API_KEY) throw new AiError('AI is not configured on this server.');
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await whisper(audio, mime, lang);
+      } catch (e) {
+        if (e instanceof NoSpeechError) throw e;
+        console.error(`[interview] Whisper failed (try ${attempt + 1}):`, e instanceof Error ? e.message : e);
+        if (attempt >= 1) throw new AiError('Could not process your answer right now. Please record it again in a minute.');
+      }
+    }
   }
   const prompt = `Transcribe the speech in this audio recording exactly as spoken.
 ${lang === 'hinglish' ? 'The speaker may use English, Hindi or a mix. Write Hindi words in Roman script (Hinglish), not Devanagari.' : 'The speaker uses English, possibly with an Indian accent.'}
@@ -948,6 +965,16 @@ async function countStarted(userId: number): Promise<number> {
   return r.rows[0].n as number;
 }
 
+/** Interviews this account has had on Gemini — paid Pro gets PRO_INTERVIEWS of them. */
+async function countGemini(userId: number): Promise<number> {
+  if (!pool) return [...mem.values()].filter((iv) => iv.userId === userId && iv.engine === 'gemini').length;
+  const r = await pool.query(
+    "select count(*)::int as n from interviews where user_id = $1 and data->>'engine' = 'gemini'",
+    [userId]
+  );
+  return r.rows[0].n as number;
+}
+
 // ---------- paid interview credits ----------
 
 // payment_id -> purchase (dev fallback for the interview_purchases table).
@@ -1127,17 +1154,30 @@ interviewRouter.post('/', wrap(async (req, res) => {
     report: null,
     createdAt: Date.now(),
   };
-  // Pro's own interviews (the first PRO_INTERVIEWS) and every paid one run on
-  // Gemini; the included free ones run on Groq.
-  const proSlots = interviewPro(user) ? PRO_INTERVIEWS : 0;
-  const freeSlot = q.used >= proSlots && q.used < q.included;
-  let engine: Engine = freeSlot && GROQ_API_KEY ? 'groq' : 'gemini';
+  // Only paid ₹49 Pro's own interviews (the first PRO_INTERVIEWS) run on
+  // Gemini. Free, college and ₹19 extra interviews all run on Groq.
+  const geminiSlot = interviewPro(user) && (await countGemini(user.id)) < PRO_INTERVIEWS;
+  const engine: Engine = geminiSlot ? 'gemini' : 'groq';
+  if (engine === 'groq' && !GROQ_API_KEY) {
+    res.status(503).json({ error: 'AI is not configured on this server.' });
+    return;
+  }
   iv.engine = engine;
   await save(iv);
   console.log(`[interview] start ${iv.id} user=${user.id} engine=${engine}`);
   try {
     void forgetOldFingerprints().catch((e) => console.error('[interview] fingerprint cleanup failed:', e));
-    const text = await readResume(resume, engine);
+    let text: string | null;
+    try {
+      text = await readResume(resume, engine);
+    } catch (e) {
+      if (!(e instanceof ScannedPdfError)) throw e;
+      await remove(iv);
+      res.status(400).json({
+        error: 'This PDF is a scan or photo, so we can’t read its text. Please upload a PDF exported from Word, Google Docs or LaTeX.',
+      });
+      return;
+    }
     if (!text) {
       await remove(iv);
       res.status(400).json({ error: 'This PDF does not look like a resume. Please upload your resume or CV.' });
@@ -1177,9 +1217,6 @@ interviewRouter.post('/', wrap(async (req, res) => {
         });
         return;
       }
-      // This one is paid for, so it gets the Pro engine.
-      engine = 'gemini';
-      iv.engine = engine;
     }
 
     const history = historyFrom(await pastInterviews(user.id, keys, iv.id));
