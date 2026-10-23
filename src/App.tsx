@@ -7,6 +7,19 @@ import InterviewerBot from './pages/interview/InterviewerBot';
 import { Icon } from './components/Icon';
 import { RESUME_READY } from './lib/resume';
 
+const INSTAGRAM_URL = 'https://www.instagram.com/vizucode26/';
+
+function InstagramIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="2" width="20" height="20" rx="5" />
+      <circle cx="12" cy="12" r="4.2" />
+      <circle cx="17.6" cy="6.4" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function getInitialTheme(): 'light' | 'dark' {
   const saved = localStorage.getItem('vizucode-theme');
   if (saved === 'light' || saved === 'dark') return saved;
@@ -98,6 +111,16 @@ export default function App() {
               Sign in
             </Link>
           )}
+          <a
+            className="btn icon"
+            href={INSTAGRAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="VizuCode on Instagram"
+            title="Follow @vizucode26 on Instagram"
+          >
+            <InstagramIcon />
+          </a>
           <button
             className="btn icon"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -108,6 +131,13 @@ export default function App() {
         </div>
       </header>
       <Outlet />
+      <footer className="site-footer">
+        <span className="faint">© {new Date().getFullYear()} VizuCode</span>
+        <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="footer-social">
+          <InstagramIcon size={15} />
+          <span>Follow us on Instagram @vizucode26</span>
+        </a>
+      </footer>
     </div>
   );
 }

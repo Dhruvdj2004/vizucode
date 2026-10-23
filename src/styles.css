@@ -695,6 +695,19 @@ section.panel.cat:only-of-type { border-radius: var(--r-lg); }
 /* ============ Auth (login / register) ============ */
 .header-actions { display: flex; align-items: center; gap: 0.6rem; }
 .header-actions .btn { text-decoration: none; }
+.header-actions a.btn.icon { display: inline-flex; align-items: center; color: var(--ink); }
+
+/* ============ Footer ============ */
+.site-footer {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 0.75rem; margin-top: 3rem; padding: 1.25rem 0 1.5rem;
+  border-top: 1px solid var(--line); font-size: 0.875rem;
+}
+.footer-social {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  color: var(--ink-soft); text-decoration: none;
+}
+.footer-social:hover { color: var(--accent); }
 .auth-greeting { font-size: 0.85rem; color: var(--ink-soft); }
 .auth-wrap { display: flex; justify-content: center; padding: 2rem 0 3rem; }
 .auth-panel { width: 100%; max-width: 400px; padding: 1.75rem; }
