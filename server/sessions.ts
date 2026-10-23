@@ -16,6 +16,8 @@ interface SessionStore {
   list(userId: number): Promise<DeviceSession[]>;
   create(userId: number, label: string): Promise<DeviceSession>;
   revoke(userId: number, sessionId: string): Promise<void>;
+  /** Signs the user out everywhere (after a password reset). */
+  revokeAll(userId: number): Promise<void>;
   exists(userId: number, sessionId: string): Promise<boolean>;
 }
 
@@ -46,6 +48,9 @@ export const sessionStore: SessionStore = db
       async revoke(userId, sessionId) {
         await db.query('delete from user_sessions where id = $1 and user_id = $2', [sessionId, userId]);
       },
+      async revokeAll(userId) {
+        await db.query('delete from user_sessions where user_id = $1', [userId]);
+      },
       async exists(userId, sessionId) {
         const r = await db.query('select 1 from user_sessions where id = $1 and user_id = $2', [sessionId, userId]);
         return (r.rowCount ?? 0) > 0;
@@ -65,6 +70,9 @@ export const sessionStore: SessionStore = db
       async revoke(userId, sessionId) {
         const list = memSessions.get(userId);
         if (list) memSessions.set(userId, list.filter((s) => s.id !== sessionId));
+      },
+      async revokeAll(userId) {
+        memSessions.delete(userId);
       },
       async exists(userId, sessionId) {
         return !!memSessions.get(userId)?.some((s) => s.id === sessionId);

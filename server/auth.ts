@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { pool } from './db';
 import { sessionStore, deviceLabel, MAX_DEVICES } from './sessions';
+import { sendCode, verifyCode, CodeError } from './emailCodes';
 
 const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID;
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
@@ -18,6 +19,11 @@ if (!process.env.JWT_SECRET) {
   console.warn('[auth] JWT_SECRET not set — using the dev fallback. Set it in production.');
 }
 const FREE_PRO_EMAIL_SUFFIX = '@ietdavv.edu.in';
+
+/** IET DAVV accounts get everything free (Pro, no payments) once the address is verified. */
+export function isCollegeEmail(email: string): boolean {
+  return email.toLowerCase().endsWith(FREE_PRO_EMAIL_SUFFIX);
+}
 const TOKEN_TTL = '7d';
 const BCRYPT_ROUNDS = 10;
 
@@ -43,6 +49,7 @@ interface UserStore {
    * (password-less) account if none existed.
    */
   findOrCreateGoogle(email: string, firstName: string, googleId: string): Promise<User>;
+  setPassword(id: number, passwordHash: string): Promise<void>;
 }
 
 const memUsers = new Map<string, User>();
@@ -111,6 +118,9 @@ const store: UserStore = db
         );
         return { id: r.rows[0].id, email, firstName, passwordHash: null, isPro: false };
       },
+      async setPassword(id, passwordHash) {
+        await db.query('update users set password_hash = $1 where id = $2', [passwordHash, id]);
+      },
     }
   : {
       async findByEmail(email) {
@@ -135,6 +145,10 @@ const store: UserStore = db
         void googleId; // not tracked in the dev in-memory store
         return user;
       },
+      async setPassword(id, passwordHash) {
+        const user = [...memUsers.values()].find((u) => u.id === id);
+        if (user) user.passwordHash = passwordHash;
+      },
     };
 
 // ---------- zod schemas ----------
@@ -155,6 +169,16 @@ const registerSchema = z.object({
   password: passwordSchema,
   firstName: z.string({ error: 'First name is required.' }).trim().min(1, 'First name is required.').max(60),
 });
+
+const codeSchema = z
+  .string({ error: 'Enter the 6-digit code.' })
+  .trim()
+  .regex(/^\d{6}$/, 'Enter the 6-digit code from the email.');
+
+const verifyRegisterSchema = z.object({ email: emailSchema, code: codeSchema });
+const forgotSchema = z.object({ email: emailSchema });
+const resetSchema = z.object({ email: emailSchema, code: codeSchema, password: passwordSchema });
+const collegeVerifySchema = z.object({ code: codeSchema });
 
 const loginSchema = z.object({
   email: emailSchema,
@@ -240,7 +264,10 @@ export const authRouter = Router();
 const wrap =
   (fn: (req: AuthedRequest, res: Response) => Promise<void>) =>
   (req: Request, res: Response, next: NextFunction) => {
-    fn(req as AuthedRequest, res).catch(next);
+    fn(req as AuthedRequest, res).catch((e) => {
+      if (e instanceof CodeError) res.status(e.status).json({ error: e.message });
+      else next(e);
+    });
   };
 
 /** POST /api/auth/register — body: { email, password, firstName } */
@@ -252,6 +279,17 @@ authRouter.post('/register', wrap(async (req, res) => {
   }
   const { email, password, firstName } = parsed.data;
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  // College accounts become Pro, so the address must be proven first: email a
+  // code and create the account only in /register/verify.
+  if (isCollegeEmail(email)) {
+    if (await store.findByEmail(email)) {
+      res.status(409).json({ error: 'An account with this email already exists.' });
+      return;
+    }
+    await sendCode(email, 'register', { passwordHash, firstName });
+    res.status(202).json({ verify: true, email });
+    return;
+  }
   const user = await store.create(email, firstName, passwordHash);
   if (!user) {
     res.status(409).json({ error: 'An account with this email already exists.' });
@@ -259,6 +297,109 @@ authRouter.post('/register', wrap(async (req, res) => {
   }
   const session = await sessionStore.create(user.id, deviceLabel(req.headers['user-agent']));
   res.status(201).json({ token: signToken(user, session.id), user: publicUser(user) });
+}));
+
+/** POST /api/auth/register/verify — body: { email, code }. Creates the college account (as Pro) after the emailed code checks out. */
+authRouter.post('/register/verify', wrap(async (req, res) => {
+  const parsed = verifyRegisterSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: firstIssue(parsed.error) });
+    return;
+  }
+  const { email, code } = parsed.data;
+  const pending = (await verifyCode(email, 'register', code)) as { passwordHash: string; firstName: string } | null;
+  if (!pending?.passwordHash) {
+    res.status(400).json({ error: 'That code has expired — sign up again.' });
+    return;
+  }
+  const created = await store.create(email, pending.firstName, pending.passwordHash);
+  if (!created) {
+    res.status(409).json({ error: 'An account with this email already exists.' });
+    return;
+  }
+  const user = (await store.markPro(created.id)) ?? created;
+  const session = await sessionStore.create(user.id, deviceLabel(req.headers['user-agent']));
+  res.status(201).json({ token: signToken(user, session.id), user: publicUser(user) });
+}));
+
+/**
+ * POST /api/auth/password/forgot — body: { email }. Emails a reset code if the
+ * account exists. Always answers the same way so it can't be used to find out
+ * which emails are registered.
+ */
+authRouter.post('/password/forgot', wrap(async (req, res) => {
+  const parsed = forgotSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: firstIssue(parsed.error) });
+    return;
+  }
+  const { email } = parsed.data;
+  if (await store.findByEmail(email)) {
+    try {
+      await sendCode(email, 'reset');
+    } catch (e) {
+      // A cooldown hit would reveal the account exists; answer as usual.
+      if (!(e instanceof CodeError) || e.status !== 429) throw e;
+    }
+  }
+  res.json({ ok: true });
+}));
+
+/** POST /api/auth/password/reset — body: { email, code, password }. Sets the new password and signs out every device. */
+authRouter.post('/password/reset', wrap(async (req, res) => {
+  const parsed = resetSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: firstIssue(parsed.error) });
+    return;
+  }
+  const { email, code, password } = parsed.data;
+  await verifyCode(email, 'reset', code);
+  const user = await store.findByEmail(email);
+  if (!user) {
+    res.status(400).json({ error: 'That code has expired — ask for a new one.' });
+    return;
+  }
+  await store.setPassword(user.id, await bcrypt.hash(password, BCRYPT_ROUNDS));
+  await sessionStore.revokeAll(user.id);
+  // The code proved they own the inbox, which is all a college upgrade needs.
+  if (!user.isPro && isCollegeEmail(email)) await store.markPro(user.id);
+  res.json({ ok: true });
+}));
+
+/** POST /api/auth/college/send — signed in, @ietdavv.edu.in, not Pro yet: emails a code to prove the address. */
+authRouter.post('/college/send', requireAuth, wrap(async (req, res) => {
+  const { email, isPro } = req.user!;
+  if (!isCollegeEmail(email)) {
+    res.status(400).json({ error: 'Only @ietdavv.edu.in accounts can do this.' });
+    return;
+  }
+  if (isPro) {
+    res.status(400).json({ error: "You're already Pro." });
+    return;
+  }
+  await sendCode(email.toLowerCase(), 'college');
+  res.json({ ok: true });
+}));
+
+/** POST /api/auth/college/verify — body: { code }. Marks the account Pro and returns a fresh token. */
+authRouter.post('/college/verify', requireAuth, wrap(async (req, res) => {
+  const parsed = collegeVerifySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: firstIssue(parsed.error) });
+    return;
+  }
+  const { id, email, sid } = req.user!;
+  if (!isCollegeEmail(email)) {
+    res.status(400).json({ error: 'Only @ietdavv.edu.in accounts can do this.' });
+    return;
+  }
+  await verifyCode(email.toLowerCase(), 'college', parsed.data.code);
+  const fresh = await markUserPro(id, sid);
+  if (!fresh) {
+    res.status(404).json({ error: 'Account not found.' });
+    return;
+  }
+  res.json(fresh);
 }));
 
 /** POST /api/auth/login — body: { email, password }. 409s with the device list if already at MAX_DEVICES. */
@@ -338,7 +479,7 @@ authRouter.post('/google', wrap(async (req, res) => {
   // College accounts get Pro for free. Granted only here, never on password
   // register/login: Google has verified the address, whereas anyone can type
   // a college email into the sign-up form.
-  if (!user.isPro && email.endsWith(FREE_PRO_EMAIL_SUFFIX)) {
+  if (!user.isPro && isCollegeEmail(email)) {
     user = (await store.markPro(user.id)) ?? user;
   }
   const sessions = await sessionStore.list(user.id);

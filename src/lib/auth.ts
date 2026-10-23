@@ -76,8 +76,72 @@ async function postAuth(path: string, body: Record<string, string>): Promise<Ses
   return session;
 }
 
-export function register(email: string, password: string, firstName: string): Promise<Session> {
-  return postAuth('/api/auth/register', { email, password, firstName });
+/** POSTs JSON and returns the parsed body, throwing the server's error message on a non-2xx. */
+async function postJson<T>(path: string, body: Record<string, string>, token?: string): Promise<T & { status: number }> {
+  let res: globalThis.Response;
+  try {
+    res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error('Cannot reach the server — is `npm run server` running?');
+  }
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? 'Something went wrong — try again.');
+  return { ...data, status: res.status };
+}
+
+/** College emails (@ietdavv.edu.in) get Pro free once the address is verified. */
+export const COLLEGE_EMAIL_SUFFIX = '@ietdavv.edu.in';
+export const isCollegeEmail = (email: string | undefined) => !!email?.trim().toLowerCase().endsWith(COLLEGE_EMAIL_SUFFIX);
+
+/**
+ * Signs up. Returns the new session, or `{ verify: true }` for a college
+ * email: the server has emailed a code, and the account is created by
+ * verifyRegistration() once the student enters it.
+ */
+export async function register(
+  email: string,
+  password: string,
+  firstName: string
+): Promise<Session | { verify: true }> {
+  const data = await postJson<Partial<Session> & { verify?: boolean }>('/api/auth/register', { email, password, firstName });
+  if (data.verify) return { verify: true };
+  if (!data.token || !data.user) throw new Error('Something went wrong — try again.');
+  const session = { token: data.token, user: data.user };
+  setSession(session);
+  return session;
+}
+
+/** Finishes a college sign-up with the emailed code. */
+export function verifyRegistration(email: string, code: string): Promise<Session> {
+  return postAuth('/api/auth/register/verify', { email, code });
+}
+
+/** Emails a password-reset code (the server answers the same whether or not the account exists). */
+export async function forgotPassword(email: string): Promise<void> {
+  await postJson('/api/auth/password/forgot', { email });
+}
+
+/** Sets a new password with the emailed code. Every device is signed out; sign in again afterwards. */
+export async function resetPassword(email: string, code: string, password: string): Promise<void> {
+  await postJson('/api/auth/password/reset', { email, code, password });
+}
+
+/** Signed-in college account: email a code that proves the address. */
+export async function sendCollegeCode(token: string): Promise<void> {
+  await postJson('/api/auth/college/send', {}, token);
+}
+
+/** Signed-in college account: check the code, become Pro, and store the fresh session. */
+export async function verifyCollegeCode(token: string, code: string): Promise<Session> {
+  const data = await postJson<Partial<Session>>('/api/auth/college/verify', { code }, token);
+  if (!data.token || !data.user) throw new Error('Something went wrong — try again.');
+  const session = { token: data.token, user: data.user };
+  setSession(session);
+  return session;
 }
 
 /** Throws DeviceLimitError (carrying the signed-in device list) at the device cap, like login(). */

@@ -10,6 +10,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const VisualizerPage = lazy(() => import('./pages/VisualizerPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const NewsPage = lazy(() => import('./pages/NewsPage'));
@@ -257,6 +258,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             />
             <Route path="login" element={<LoginPage />} />
             <Route path="register" element={<RegisterPage />} />
+            <Route path="forgot-password" element={<ForgotPasswordPage />} />
             <Route path="upgrade" element={<UpgradePage />} />
             <Route path="feedback" element={<FeedbackPage />} />
             <Route path="news" element={<NewsPage />} />

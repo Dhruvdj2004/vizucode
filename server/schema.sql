@@ -77,6 +77,20 @@ create table if not exists user_sessions (
 
 create index if not exists idx_sessions_user on user_sessions (user_id);
 
+-- One-time 6-digit email codes (server/emailCodes.ts): college sign-up,
+-- forgot password, and college verification for existing accounts. Only a
+-- hash of the code is stored. One live code per (email, purpose).
+create table if not exists email_codes (
+  email      text not null,
+  purpose    text not null,
+  code_hash  text not null,
+  data       jsonb,
+  attempts   integer not null default 0,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  primary key (email, purpose)
+);
+
 -- Public feedback/suggestions with a 1-5 star rating. Anyone can submit —
 -- no auth required — so there is deliberately no user_id / foreign key.
 create table if not exists feedback (
