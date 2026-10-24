@@ -226,23 +226,48 @@ def generic(url):
     }
 
 
+BAD_LINK = "We couldn't open that link. Check the URL."
+NOT_A_QUESTION = ("This doesn't look like a coding question (no examples found on the page). "
+                  "Check the link, or fill the form in by hand.")
+
+
 def scrape(url):
     host = urlparse(url).netloc.lower()
     if "leetcode." in host:
-        return leetcode(url)
-    if "geeksforgeeks." in host:
-        return gfg(url)
-    if "codechef." in host:
-        return codechef(url)
-    return generic(url)
+        data = leetcode(url)
+    elif "geeksforgeeks." in host:
+        data = gfg(url)
+    elif "codechef." in host:
+        data = codechef(url)
+    else:
+        data = generic(url)
+    # A real problem page always shows at least one sample input/output.
+    if not data.get("examples"):
+        raise ValueError(NOT_A_QUESTION)
+    return data
+
+
+def friendly(e):
+    """Turn any failure into one short sentence a teacher can act on."""
+    if isinstance(e, ValueError):  # our own messages are already readable
+        return str(e)
+    if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
+        if e.response.status_code in (401, 403, 429):
+            return "That site blocked the request. Fill the form in by hand."
+        return BAD_LINK
+    if isinstance(e, (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+                      requests.exceptions.InvalidURL, requests.exceptions.MissingSchema)):
+        return BAD_LINK
+    return "We couldn't read that page. Fill the form in by hand."
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 2 or not sys.argv[1].startswith(("http://", "https://")):
-        print(json.dumps({"error": "Give one http(s) URL."}))
+        print(json.dumps({"error": BAD_LINK}))
         sys.exit(1)
     try:
         print(json.dumps(scrape(sys.argv[1]), ensure_ascii=False))
-    except Exception as e:  # report every failure as JSON so the server can show it
-        print(json.dumps({"error": f"Couldn't read that page: {e}"}))
+    except Exception as e:  # report every failure as one friendly JSON message
+        print(f"[scrape_question] {type(e).__name__}: {e}", file=sys.stderr)
+        print(json.dumps({"error": friendly(e)}))
         sys.exit(1)
