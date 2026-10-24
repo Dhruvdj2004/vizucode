@@ -279,27 +279,18 @@ authRouter.post('/register', wrap(async (req, res) => {
   }
   const { email, password, firstName } = parsed.data;
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-  // College accounts become Pro, so the address must be proven first: email a
-  // code and create the account only in /register/verify.
-  if (isCollegeEmail(email)) {
-    if (await store.findByEmail(email)) {
-      res.status(409).json({ error: 'An account with this email already exists.' });
-      return;
-    }
-    await sendCode(email, 'register', { passwordHash, firstName });
-    res.status(202).json({ verify: true, email });
-    return;
-  }
-  const user = await store.create(email, firstName, passwordHash);
-  if (!user) {
+  // Every password sign-up proves it owns the address first: email a code and
+  // create the account only in /register/verify. (College accounts also
+  // become Pro there, so this is what stops a typed-in college email.)
+  if (await store.findByEmail(email)) {
     res.status(409).json({ error: 'An account with this email already exists.' });
     return;
   }
-  const session = await sessionStore.create(user.id, deviceLabel(req.headers['user-agent']));
-  res.status(201).json({ token: signToken(user, session.id), user: publicUser(user) });
+  await sendCode(email, 'register', { passwordHash, firstName });
+  res.status(202).json({ verify: true, email });
 }));
 
-/** POST /api/auth/register/verify — body: { email, code }. Creates the college account (as Pro) after the emailed code checks out. */
+/** POST /api/auth/register/verify — body: { email, code }. Creates the account after the emailed code checks out (college accounts as Pro). */
 authRouter.post('/register/verify', wrap(async (req, res) => {
   const parsed = verifyRegisterSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -317,7 +308,7 @@ authRouter.post('/register/verify', wrap(async (req, res) => {
     res.status(409).json({ error: 'An account with this email already exists.' });
     return;
   }
-  const user = (await store.markPro(created.id)) ?? created;
+  const user = isCollegeEmail(email) ? ((await store.markPro(created.id)) ?? created) : created;
   const session = await sessionStore.create(user.id, deviceLabel(req.headers['user-agent']));
   res.status(201).json({ token: signToken(user, session.id), user: publicUser(user) });
 }));
