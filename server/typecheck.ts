@@ -4,13 +4,21 @@
 // (lib/types, lib/parse, lib/trace) is read from the real repo. The browser
 // preview only strips types, so this is what stops a module that runs but
 // would break the site's build from being published.
-import ts from 'typescript';
 import path from 'node:path';
+import type * as TS from 'typescript';
+
+// Loaded on first use only: the API is one serverless function, and pulling in
+// the compiler on every cold start would slow down every other route.
+let tsMod: typeof TS | null = null;
+async function loadTs(): Promise<typeof TS> {
+  tsMod ??= ((await import('typescript')) as unknown as { default: typeof TS }).default;
+  return tsMod;
+}
 
 const ROOT = process.cwd();
-let options: ts.CompilerOptions | null = null;
+let options: TS.CompilerOptions | null = null;
 
-function compilerOptions(): ts.CompilerOptions {
+function compilerOptions(ts: typeof TS): TS.CompilerOptions {
   if (options) return options;
   const cfg = ts.readConfigFile(path.join(ROOT, 'tsconfig.json'), ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(cfg.config, ts.sys, ROOT);
@@ -19,9 +27,10 @@ function compilerOptions(): ts.CompilerOptions {
 }
 
 /** Type errors as "line N: message", at most 20 of them; [] means it compiles. */
-export function typecheckModule(code: string, slug: string): string[] {
+export async function typecheckModule(code: string, slug: string): Promise<string[]> {
+  const ts = await loadTs();
   const file = path.join(ROOT, 'src', 'problems', 'generated', `${slug}.ts`);
-  const opts = compilerOptions();
+  const opts = compilerOptions(ts);
   const host = ts.createCompilerHost(opts);
   const baseGet = host.getSourceFile.bind(host);
   host.getSourceFile = (name, lang, onError, shouldCreate) =>

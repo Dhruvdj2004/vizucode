@@ -237,7 +237,14 @@ export default function TeacherQuestionPage() {
             disabled={!!busy || (info !== null && !info.ai)}
             onClick={() =>
               act('generate', async () => {
-                const r = await teacherApi.generate(req.id, prompt, sample);
+                let r = await teacherApi.generate(req.id, prompt, sample);
+                // tsc errors go back to Gemini, one round per request (each fits the server's time limit).
+                for (let round = 1; r.typeErrors.length && round <= 2; round++) {
+                  setBusy(`fix:${round}`);
+                  setCode(r.code);
+                  setTypeErrors(r.typeErrors);
+                  r = await teacherApi.fix(req.id);
+                }
                 setTypeErrors(r.typeErrors);
                 setCode(r.code);
                 setDirty(false);
@@ -246,7 +253,13 @@ export default function TeacherQuestionPage() {
               })
             }
           >
-            {busy === 'generate' ? 'Gemini is writing it… (up to a few minutes)' : code ? 'Regenerate' : 'Generate'}
+            {busy === 'generate'
+              ? 'Gemini is writing it… (about a minute)'
+              : busy?.startsWith('fix:')
+                ? `Fixing ${typeErrors.length} type error(s), round ${busy.slice(4)} of 2…`
+                : code
+                  ? 'Regenerate'
+                  : 'Generate'}
           </button>
           {!!req.generations?.length && (
             <p className="tp-hint">

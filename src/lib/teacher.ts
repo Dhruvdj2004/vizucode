@@ -153,6 +153,8 @@ export const teacherApi = {
       prompt,
       sample,
     }),
+  /** One automatic type-fix round (Gemini fixes the tsc errors). */
+  fix: (id: number) => call<{ code: string; typeErrors: string[] }>(`/api/teacher/requests/${id}/fix`, tToken(), 'POST', {}),
   saveCode: (id: number, code: string) =>
     call<{ typeErrors: string[] }>(`/api/teacher/requests/${id}/code`, tToken(), 'PUT', { code }),
   /** Sends the question for review: a pull request to main (or an update to the open one). */

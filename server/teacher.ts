@@ -15,11 +15,12 @@ import express from 'express';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { execFile, execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pool } from './db';
 import { typecheckModule } from './typecheck';
+import { scrapeQuestion, ScrapeError } from './scrape';
 import { catalog } from '../src/data/catalog';
 import { problemRegistry } from '../src/problems';
 
@@ -28,8 +29,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_CODE_MODEL = process.env.GEMINI_CODE_MODEL ?? process.env.GEMINI_MODEL ?? 'gemini-3.6-flash';
 const GITHUB_REPO = process.env.GITHUB_REPO ?? 'Dhruvdj2004/vizucode';
 const PUBLISH_BRANCH = process.env.PUBLISH_BRANCH ?? 'main';
-const PYTHON_BIN =
-  process.env.PYTHON_BIN ?? (existsSync('/opt/miniconda3/bin/python') ? '/opt/miniconda3/bin/python' : 'python3');
+/** Generate + fix calls allowed per teacher per day (protects the Gemini credit). */
+const DAILY_GENERATIONS = Number(process.env.TEACHER_DAILY_GENERATIONS ?? 40);
 const ROOT = process.cwd();
 
 export const CATEGORIES = [...new Set(catalog.map((q) => q.category))];
@@ -287,38 +288,37 @@ async function getRequest(id: number): Promise<RequestRow> {
   return r.rows[0];
 }
 
-// ---------- scraping (Python + BeautifulSoup) ----------
+// ---------- per-IP / per-teacher limits ----------
 
-function scrape(url: string): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      PYTHON_BIN,
-      ['-I', path.join(ROOT, 'scripts', 'scrape_question.py'), url],
-      { timeout: 45_000, maxBuffer: 4 * 1024 * 1024 },
-      (err, stdout, stderr) => {
-        let data: Record<string, unknown> | null = null;
-        try {
-          data = JSON.parse(stdout);
-        } catch {
-          /* handled below */
-        }
-        if (data && typeof data.error === 'string') return reject(new HttpError(422, data.error));
-        if (err || !data) {
-          console.error('[teacher] scraper failed:', err?.message, stderr.slice(0, 500));
-          const missing = /No module named/.test(stderr);
-          return reject(
-            new HttpError(
-              500,
-              missing
-                ? 'The scraper needs Python packages: pip install -r scripts/requirements-scraper.txt'
-                : "Couldn't read that page. Fill the form in by hand."
-            )
-          );
-        }
-        resolve(data);
-      }
-    );
-  });
+// Sign-in attempts per IP per 15 minutes (per instance on Vercel: a soft limit).
+const LOGIN_WINDOW_MS = 15 * 60_000;
+const LOGIN_MAX = 10;
+const loginHits = new Map<string, { start: number; n: number }>();
+function loginAllowed(ip: string): boolean {
+  const now = Date.now();
+  const e = loginHits.get(ip);
+  if (!e || now - e.start > LOGIN_WINDOW_MS) {
+    loginHits.set(ip, { start: now, n: 1 });
+    return true;
+  }
+  e.n++;
+  return e.n <= LOGIN_MAX;
+}
+
+/** Gemini calls (generate + fix) this teacher made since midnight UTC. */
+async function generationsToday(teacherId: number): Promise<number> {
+  const r = await pool!.query(
+    `select count(*)::int as n
+       from question_requests q, jsonb_array_elements(q.generations) g
+      where q.teacher_id = $1 and (g->>'at')::timestamptz >= date_trunc('day', now() at time zone 'utc') at time zone 'utc'`,
+    [teacherId]
+  );
+  return r.rows[0].n;
+}
+
+async function checkDailyLimit(teacherId: number): Promise<void> {
+  if ((await generationsToday(teacherId)) >= DAILY_GENERATIONS)
+    throw new HttpError(429, `Daily limit reached (${DAILY_GENERATIONS} AI generations). It resets at midnight UTC.`);
 }
 
 // ---------- teacher auth ----------
@@ -359,13 +359,15 @@ export const teacherRouter = Router();
 teacherRouter.use(express.json({ limit: '2mb' }));
 
 const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
+  // A username like "name@school" is fine too: it's only an account identifier.
+  email: z.string().trim().toLowerCase().min(3, 'Enter your email.').max(120),
   password: z.string().min(1, 'Password is required.').max(72),
 });
 
 teacherRouter.post(
   '/login',
   wrap(async (req, res) => {
+    if (!loginAllowed(req.ip ?? 'unknown')) throw new HttpError(429, 'Too many sign-in attempts. Wait 15 minutes and try again.');
     await ensureTables();
     const { email, password } = loginSchema.parse(req.body);
     const r = await pool!.query('select id, email, name, password_hash, active from teachers where email = $1', [email]);
@@ -392,8 +394,14 @@ teacherRouter.post(
   requireTeacher,
   wrap(async (req, res) => {
     const { url } = z.object({ url: z.string().trim().url('Enter a valid URL.').max(500) }).parse(req.body);
-    const data = await scrape(url);
-    if (typeof data.category !== 'string' || !CATEGORIES.includes(data.category)) data.category = 'Arrays & Hashing';
+    let data;
+    try {
+      data = await scrapeQuestion(url);
+    } catch (e) {
+      if (e instanceof ScrapeError) throw new HttpError(422, e.message);
+      throw e;
+    }
+    if (!CATEGORIES.includes(data.category)) data.category = 'Arrays & Hashing';
     res.json({ question: data });
   })
 );
@@ -420,7 +428,7 @@ teacherRouter.get(
   requireTeacher,
   wrap(async (req: TeacherRequest, res) => {
     const row = await syncReview(await ownRequest(req));
-    const typeErrors = row.generated_code && row.status !== 'published' ? typecheckModule(row.generated_code, row.slug) : [];
+    const typeErrors = row.generated_code && row.status !== 'published' ? await typecheckModule(row.generated_code, row.slug) : [];
     res.json({ request: { ...toApi(row, true), typeErrors } });
   })
 );
@@ -482,7 +490,7 @@ teacherRouter.put(
     const row = await ownRequest(req);
     if (row.status === 'published') throw new HttpError(409, 'Already published.');
     await pool!.query('update question_requests set generated_code = $1, updated_at = now() where id = $2', [code, row.id]);
-    res.json({ ok: true, typeErrors: typecheckModule(code, row.slug) });
+    res.json({ ok: true, typeErrors: await typecheckModule(code, row.slug) });
   })
 );
 
@@ -495,20 +503,44 @@ teacherRouter.post(
       .parse(req.body ?? {});
     const row = await ownRequest(req);
     if (row.status === 'published') throw new HttpError(409, 'Already published.');
+    await checkDailyLimit(req.teacher!.id);
     const started = Date.now();
     const code = await generateVisualizer(row, prompt, sample);
-    const entry = { at: new Date().toISOString(), prompt, ms: Date.now() - started, model: GEMINI_CODE_MODEL };
-    await pool!.query(
-      `update question_requests
-          set generated_code = $1,
-              generations = generations || $2::jsonb,
-              updated_at = now()
-        where id = $3`,
-      [code, JSON.stringify([entry]), row.id]
-    );
-    res.json({ code, generation: entry, typeErrors: typecheckModule(code, row.slug) });
+    res.json(await saveGeneration(row, code, { prompt, kind: 'generate', ms: Date.now() - started }));
   })
 );
+
+// One type-fix round per request (each Gemini call fits the serverless time
+// limit); the page calls this again while errors remain, up to MAX_TYPE_FIXES.
+teacherRouter.post(
+  '/requests/:id/fix',
+  requireTeacher,
+  wrap(async (req: TeacherRequest, res) => {
+    const row = await ownRequest(req);
+    if (row.status === 'published') throw new HttpError(409, 'Already published.');
+    if (!row.generated_code) throw new HttpError(409, 'Generate the visualizer first.');
+    const errors = await typecheckModule(row.generated_code, row.slug);
+    if (!errors.length) {
+      res.json({ code: row.generated_code, typeErrors: [] });
+      return;
+    }
+    await checkDailyLimit(req.teacher!.id);
+    const started = Date.now();
+    const code = await fixTypeErrors(row.generated_code, errors);
+    res.json(await saveGeneration(row, code, { prompt: '(auto type fix)', kind: 'fix', ms: Date.now() - started }));
+  })
+);
+
+async function saveGeneration(row: RequestRow, code: string, meta: { prompt: string; kind: string; ms: number }) {
+  const entry = { at: new Date().toISOString(), ...meta, model: GEMINI_CODE_MODEL };
+  await pool!.query(
+    `update question_requests
+        set generated_code = $1, generations = generations || $2::jsonb, updated_at = now()
+      where id = $3`,
+    [code, JSON.stringify([entry]), row.id]
+  );
+  return { code, generation: entry, typeErrors: await typecheckModule(code, row.slug) };
+}
 
 teacherRouter.post(
   '/requests/:id/publish',
@@ -533,7 +565,7 @@ teacherRouter.post(
     if (!row.generated_code) throw new HttpError(409, 'Generate (and preview) the visualizer first.');
     if (s.slug !== row.slug) throw new HttpError(400, `The code's slug must be "${row.slug}".`);
     if (problemRegistry[row.slug]) throw new HttpError(409, 'This question already has a visualizer on the site.');
-    const typeErrors = typecheckModule(row.generated_code, row.slug);
+    const typeErrors = await typecheckModule(row.generated_code, row.slug);
     if (typeErrors.length)
       throw new HttpError(409, `The code has ${typeErrors.length} TypeScript error(s), so it would break the site build. Regenerate or fix them first.`);
 
@@ -616,27 +648,39 @@ ${row.notes ? `\nTeacher's notes: ${row.notes}` : ''}
 ${previous && extra ? `\n## Previous version (revise it; keep what works)\n${previous}` : ''}
 ${extra ? `\n## Teacher's instructions for this version (highest priority)\n${extra}` : ''}`;
 
-  let code = await geminiModule(prompt);
-  // tsc is stricter than the browser preview (which only strips types): feed
-  // its errors back to Gemini so what gets published also builds.
-  for (let round = 0; round < MAX_TYPE_FIXES; round++) {
-    const errors = typecheckModule(code, row.slug);
-    if (!errors.length) break;
-    console.log(`[teacher] #${row.id} type errors (round ${round + 1}): ${errors.length}`);
-    code = await geminiModule(
-      `This TypeScript module must compile under strict mode, but tsc reports these errors:\n${errors.join('\n')}\n\n` +
-        `Fix them without changing the behaviour. Output ONLY the full corrected module, no markdown fences.\n` +
-        `Reminder of the types it must satisfy:\n${readSrc('src/lib/types.ts')}\n\n## Module\n${code}`
-    );
-  }
-  return code;
+  return geminiModule(prompt);
 }
 
-const MAX_TYPE_FIXES = 2;
+/**
+ * tsc is stricter than the browser preview (which only strips types): send its
+ * errors back to Gemini so what gets published also builds.
+ */
+async function fixTypeErrors(code: string, errors: string[]): Promise<string> {
+  return geminiModule(
+    `This TypeScript module must compile under strict mode, but tsc reports these errors:\n${errors.join('\n')}\n\n` +
+      `Fix them without changing the behaviour. Output ONLY the full corrected module, no markdown fences.\n` +
+      `Reminder of the types it must satisfy:\n${readSrc('src/lib/types.ts')}\n\n## Module\n${code}`
+  );
+}
 
-/** One Gemini call that must return a whole visualizer module. */
+/** One Gemini call that must return a whole visualizer module; retries a busy/overloaded model briefly. */
 async function geminiModule(prompt: string): Promise<string> {
-  const r = await fetch(
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await geminiModuleOnce(prompt);
+    } catch (e) {
+      const busy = e instanceof HttpError && /HTTP (500|503)\b/.test(e.message);
+      if (!busy || attempt >= 3) throw e;
+      console.warn(`[teacher] Gemini busy, retry ${attempt}`);
+      await new Promise((r) => setTimeout(r, 2000 * attempt));
+    }
+  }
+}
+
+async function geminiModuleOnce(prompt: string): Promise<string> {
+  let r: globalThis.Response;
+  try {
+    r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_CODE_MODEL}:generateContent`,
     {
       method: 'POST',
@@ -645,14 +689,22 @@ async function geminiModule(prompt: string): Promise<string> {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.3, maxOutputTokens: 32768 },
       }),
-      signal: AbortSignal.timeout(240_000),
+      // Stay inside the serverless function limit (vercel.json maxDuration).
+      signal: AbortSignal.timeout(Number(process.env.GEMINI_TIMEOUT_MS ?? 55_000)),
     }
   );
+  } catch (e) {
+    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError'))
+      throw new HttpError(504, 'Gemini took too long this time. Click Generate again (it usually finishes in under a minute).');
+    throw new HttpError(502, "Couldn't reach Gemini. Try again in a minute.");
+  }
   if (!r.ok) {
     console.error(`[teacher] Gemini HTTP ${r.status}: ${(await r.text()).slice(0, 400)}`);
     if (r.status === 402)
       throw new HttpError(502, 'Gemini credits are used up. Top up the project at https://ai.studio/projects and try again.');
     if (r.status === 429) throw new HttpError(502, 'Gemini rate limit hit. Wait a minute and try again.');
+    if (r.status === 503 || r.status === 500)
+      throw new HttpError(503, `Gemini is overloaded right now (HTTP ${r.status}). Try again in a minute.`);
     throw new HttpError(502, `Gemini returned HTTP ${r.status}. Try again in a minute.`);
   }
   const data = (await r.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
