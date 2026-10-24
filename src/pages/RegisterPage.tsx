@@ -65,11 +65,11 @@ export default function RegisterPage() {
     return (
       <main className="auth-wrap">
         <div className="panel auth-panel">
-          <div className="eyebrow">Verify college email</div>
+          <div className="eyebrow">Verify your email</div>
           <h1 className="auth-title">Check your inbox</h1>
           <p className="auth-sub">
-            We sent a 6-digit code to <b>{email}</b>. Enter it to create your account. IET DAVV accounts get
-            everything free.
+            We sent a 6-digit code to <b>{email}</b>. Enter it to create your account.
+            {isCollegeEmail(email) && ' IET DAVV accounts get everything free.'} Can't find it? Check your spam folder.
           </p>
           <form onSubmit={onVerify} noValidate>
             <CodeField id="reg-code" value={code} onChange={setCode} />
@@ -142,7 +142,7 @@ export default function RegisterPage() {
             hint="At least 8 characters."
           />
           {isCollegeEmail(email) && (
-            <p className="auth-hint">IET DAVV email: we'll send you a code to verify it, then everything is free.</p>
+            <p className="auth-hint">IET DAVV email: once you verify it, everything is free.</p>
           )}
           {error && (
             <p className="input-error" role="alert">
@@ -150,7 +150,7 @@ export default function RegisterPage() {
             </p>
           )}
           <button className="btn primary auth-submit" type="submit" disabled={busy}>
-            {busy ? 'Creating account…' : isCollegeEmail(email) ? 'Send verification code' : 'Create account'}
+            {busy ? 'Sending code…' : 'Send verification code'}
           </button>
         </form>
         <div className="auth-divider">or</div>
