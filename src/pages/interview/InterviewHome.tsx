@@ -196,7 +196,7 @@ export default function InterviewHome() {
                   )
                 ) : (
                   <>
-                    Your {home.included} free interviews are used · ₹{home.price} per interview
+                    {home.included === 1 ? 'Your free interview is used' : `Your ${home.included} free interviews are used`} · ₹{home.price} per interview
                     {!home.proPlan && !home.college && (
                       <>
                         {' '}· or <Link to="/upgrade">get Pro</Link> for {home.proIncluded} more

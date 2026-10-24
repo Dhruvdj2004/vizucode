@@ -1687,9 +1687,12 @@ svg.dg { display: block; width: 100%; height: auto; font-family: var(--font-sans
 .iv-launch, .site-nav a, .header-actions .btn, .auth-greeting, .site-brand .eyebrow { white-space: nowrap; }
 /* The dashboard greets the student by name, so the header doesn't need to. */
 .auth-greeting, .site-brand .eyebrow { display: none; }
-@media (max-width: 1360px) and (min-width: 641px) {
-  .site-header { flex-wrap: wrap; row-gap: 0.75rem; }
+/* Laptops and desktops: brand and buttons share the top row, the section
+   links get their own centred row underneath. */
+@media (min-width: 641px) {
+  .site-header { flex-wrap: wrap; row-gap: 0.6rem; }
   .header-actions { margin-left: auto; }
+  .site-nav { order: 3; width: 100%; justify-content: center; }
 }
 /* Smallest phones (360–400px): tighten the header buttons so they fit one row. */
 @media (max-width: 400px) {

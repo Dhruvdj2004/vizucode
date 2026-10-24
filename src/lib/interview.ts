@@ -77,7 +77,7 @@ export interface InterviewHome extends InterviewQuota {
   proIncluded: number;
   /** Paid Pro (the college upgrade doesn't count for interviews). */
   proPlan: boolean;
-  /** @ietdavv.edu.in account: 10 free interviews on Groq, never offered Pro. */
+  /** @ietdavv.edu.in account: 10 free interviews on Groq once verified, never offered Pro. */
   college?: boolean;
   aiReady: boolean;
   paymentsReady: boolean;
