@@ -2480,5 +2480,13 @@ export const catalog: CatalogEntry[] = [
     "difficulty": "Medium",
     "leetcode": "https://leetcode.com/problems/interval-list-intersections/",
     "slug": "interval-list-intersections"
+  },
+  {
+    "id": 310,
+    "category": "Strings",
+    "title": "Justified Text",
+    "difficulty": "Medium",
+    "leetcode": "https://www.geeksforgeeks.org/dsa/justify-the-given-text-based-on-the-given-width-of-each-line/",
+    "slug": "justified-text"
   }
 ];
