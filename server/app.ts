@@ -21,7 +21,7 @@ import { aptitudeRouter } from './aptitude';
 import { newsRouter } from './news';
 import { interviewRouter } from './interview';
 import { pool } from './db';
-import { teacherRouter, adminRouter } from './teacher';
+import { teacherRouter } from './teacher';
 
 // In production set ALLOWED_ORIGIN to the deployed frontend URL
 // (e.g. https://vizucode.vercel.app). Unset = permissive, for local dev.
@@ -45,11 +45,10 @@ app.use((_req, res, next) => {
 // (it parses its own bodies, up to ~4.4 MB).
 app.use('/api/interview', rateLimit('interview'), interviewRouter);
 
-// Teacher panel + admin review — see server/teacher.ts. Mounted before the
-// global 16kb JSON parser: requests carry whole problem statements and
-// generated visualizer code, so these routers parse their own bodies.
+// Teacher panel — see server/teacher.ts. Mounted before the global 16kb JSON
+// parser: requests carry whole problem statements and generated visualizer
+// code, so the router parses its own bodies.
 app.use('/api/teacher', rateLimit('read'), teacherRouter);
-app.use('/api/admin', rateLimit('read'), adminRouter);
 
 app.use(express.json({ limit: '16kb' }));
 

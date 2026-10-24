@@ -1,15 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { adminApi, MATCH_LABEL, type RequestFull } from '../../lib/teacher';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import {
+  getTeacherSession,
+  MATCH_LABEL,
+  statusLabel,
+  teacherApi,
+  type RequestFull,
+  type TeacherInfo,
+} from '../../lib/teacher';
 import { compileVisualizer, type CompileResult } from '../../lib/compileVisualizer';
 import { toStatic } from '../../lib/serialize';
 import VisualizerPage from '../VisualizerPage';
 
-export default function AdminRequestPage() {
+/** One question, start to finish: check duplicates, generate with Gemini, preview, edit, publish. */
+export default function TeacherQuestionPage() {
   const id = Number(useParams().id);
+  const navigate = useNavigate();
+  const session = getTeacherSession();
+  const [info, setInfo] = useState<TeacherInfo | null>(null);
   const [req, setReq] = useState<RequestFull | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState('');
   const [prompt, setPrompt] = useState('');
   const [sample, setSample] = useState(0);
   const [code, setCode] = useState('');
@@ -17,20 +27,26 @@ export default function AdminRequestPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [check, setCheck] = useState<CompileResult | null>(null);
   const [published, setPublished] = useState<{ url: string; branch: string } | null>(null);
+  const [typeErrors, setTypeErrors] = useState<string[]>([]);
 
   const load = useCallback(() => {
-    adminApi
+    teacherApi
       .get(id)
       .then(({ request }) => {
         setReq(request);
-        setNote(request.adminNote);
+        setTypeErrors(request.typeErrors ?? []);
         setCode(request.generatedCode ?? '');
         setDirty(false);
       })
       .catch((e) => setError(e.message));
   }, [id]);
 
-  useEffect(load, [load]);
+  useEffect(() => {
+    if (!session) return;
+    load();
+    teacherApi.me().then(setInfo).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
 
   const expected = req?.examples[sample]?.output ?? req?.examples[0]?.output;
 
@@ -51,6 +67,8 @@ export default function AdminRequestPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [req?.generatedCode]);
 
+  if (!session) return <Navigate to="/teacher/login" replace />;
+
   async function act(label: string, fn: () => Promise<unknown>) {
     setError(null);
     setBusy(label);
@@ -66,32 +84,53 @@ export default function AdminRequestPage() {
   if (error && !req) return <div className="panel input-error">{error}</div>;
   if (!req) return <div className="panel serif">Loading…</div>;
 
-  const canPublish = req.status === 'accepted' && !!check?.def && check.errors.length === 0 && !dirty;
+  const isPublished = req.status === 'published';
+  const exactOnSite = req.siteMatches.some((m) => m.kind === 'exact' && m.hasVisualizer);
+  const canPublish =
+    !isPublished && !exactOnSite && !!check?.def && check.errors.length === 0 && typeErrors.length === 0 && !dirty;
 
   return (
     <div className="tp-wrap">
       <div className="tp-head">
         <div>
           <div className="eyebrow">
-            <Link to="/admin">Requests</Link> / #{req.id}
+            <Link to="/teacher">My questions</Link> / #{req.id}
           </div>
           <h1 className="page-title">{req.title}</h1>
           <div className="tp-row">
-            <span className={`tp-pill ${req.status}`}>{req.status}</span>
+            <span className={`tp-pill ${isPublished ? 'published' : 'pending'}`}>{statusLabel(req.status)}</span>
             <span className={`tp-pill ${req.difficulty}`}>{req.difficulty}</span>
             <span className="tp-pill">{req.category}</span>
             <span className="tp-pill">slug: {req.slug}</span>
-
           </div>
         </div>
+        {!isPublished && (
+          <button
+            className="btn"
+            disabled={!!busy}
+            onClick={() =>
+              act('delete', async () => {
+                if (!window.confirm(`Delete "${req.title}"? This can't be undone.`)) return;
+                await teacherApi.remove(req.id);
+                navigate('/teacher');
+              })
+            }
+          >
+            Delete
+          </button>
+        )}
       </div>
 
       {error && <p className="input-error">{error}</p>}
 
-      {req.siteMatches.length > 0 && req.status !== 'published' && (
+      {req.siteMatches.length > 0 && !isPublished && (
         <div className="panel tp-dup">
           <h2 style={{ marginTop: 0 }}>Already on VizuCode?</h2>
-          <p className="serif">This request looks like a question the site already lists. Check before accepting.</p>
+          <p className="serif">
+            {exactOnSite
+              ? 'This exact question already has a visualizer on the site, so it cannot be published again.'
+              : 'This looks like a question the site already lists. Check it before generating.'}
+          </p>
           <div className="tp-list">
             {req.siteMatches.map((m) => (
               <div className="tp-item" key={m.slug}>
@@ -117,8 +156,7 @@ export default function AdminRequestPage() {
 
       <div className="panel">
         <p className="tp-hint">
-          From {req.teacher ? `${req.teacher.name} (${req.teacher.email})` : 'a deleted teacher'} ·{' '}
-          {new Date(req.createdAt).toLocaleString()}
+          Added {new Date(req.createdAt).toLocaleString()}
           {req.sourceUrl && (
             <>
               {' '}
@@ -150,49 +188,18 @@ export default function AdminRequestPage() {
         {req.hiddenTests.length > 0 && <p className="tp-hint">{req.hiddenTests.length} hidden test case(s) attached.</p>}
         {req.notes && (
           <p>
-            <b>Teacher's notes:</b> {req.notes}
+            <b>Notes:</b> {req.notes}
           </p>
         )}
       </div>
 
-      {req.status !== 'published' && (
+      {!isPublished && (
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Decision</h2>
-          <div className="tp-field">
-            <label>Note to the teacher (optional)</label>
-            <input className="tp-input" value={note} onChange={(e) => setNote(e.target.value)} />
-          </div>
-          <div className="tp-row">
-            <button
-              className="btn primary"
-              disabled={!!busy || req.status === 'accepted'}
-              onClick={() => act('accept', async () => {
-                await adminApi.decide(req.id, 'accept', note);
-                load();
-              })}
-            >
-              {req.status === 'accepted' ? 'Accepted' : 'Accept'}
-            </button>
-            <button
-              className="btn"
-              disabled={!!busy || req.status === 'rejected'}
-              onClick={() => act('reject', async () => {
-                await adminApi.decide(req.id, 'reject', note);
-                load();
-              })}
-            >
-              {req.status === 'rejected' ? 'Rejected' : 'Reject'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {req.status === 'accepted' && (
-        <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Generate the visualizer</h2>
+          <h2 style={{ marginTop: 0 }}>1. Generate the visualizer</h2>
+          {info && !info.ai && <p className="input-error">The server has no GEMINI_API_KEY, so generating is off.</p>}
           <div className="tp-grid">
             <div className="tp-field">
-              <label>Sample test case sent to Gemini</label>
+              <label>Sample test case to build it from</label>
               <select value={sample} onChange={(e) => setSample(Number(e.target.value))}>
                 {req.examples.map((e, i) => (
                   <option key={i} value={i}>
@@ -203,20 +210,21 @@ export default function AdminRequestPage() {
             </div>
           </div>
           <div className="tp-field">
-            <label>Extra instructions (optional; used when regenerating)</label>
+            <label>Extra instructions (optional; use them to fix things when you regenerate)</label>
             <textarea
               style={{ minHeight: '4rem' }}
-              placeholder="e.g. use the array widget with l/r pointers, show the brute force, keep it under 30 steps"
+              placeholder="e.g. use the array widget with l/r pointers, show the brute force too, keep it under 30 steps"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
           </div>
           <button
             className="btn primary"
-            disabled={!!busy}
+            disabled={!!busy || (info !== null && !info.ai)}
             onClick={() =>
               act('generate', async () => {
-                const r = await adminApi.generate(req.id, prompt, sample);
+                const r = await teacherApi.generate(req.id, prompt, sample);
+                setTypeErrors(r.typeErrors);
                 setCode(r.code);
                 setDirty(false);
                 await runCheck(r.code);
@@ -228,7 +236,8 @@ export default function AdminRequestPage() {
           </button>
           {!!req.generations?.length && (
             <p className="tp-hint">
-              {req.generations.length} generation(s) so far · last {new Date(req.generations[req.generations.length - 1].at).toLocaleString()}
+              {req.generations.length} generation(s) so far · last{' '}
+              {new Date(req.generations[req.generations.length - 1].at).toLocaleString()}
             </p>
           )}
         </div>
@@ -236,25 +245,26 @@ export default function AdminRequestPage() {
 
       {code && (
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Code</h2>
+          <h2 style={{ marginTop: 0 }}>2. Check the code</h2>
           <textarea
             className="tp-code"
             spellCheck={false}
             value={code}
-            readOnly={req.status !== 'accepted'}
+            readOnly={isPublished}
             onChange={(e) => {
               setCode(e.target.value);
               setDirty(true);
             }}
           />
-          {req.status === 'accepted' && (
+          {!isPublished && (
             <div className="tp-row" style={{ marginTop: '0.6rem' }}>
               <button
                 className="btn"
                 disabled={!dirty || !!busy}
                 onClick={() =>
                   act('save', async () => {
-                    await adminApi.saveCode(req.id, code);
+                    const r = await teacherApi.saveCode(req.id, code);
+                    setTypeErrors(r.typeErrors);
                     setDirty(false);
                     await runCheck(code);
                   })
@@ -267,6 +277,11 @@ export default function AdminRequestPage() {
           )}
           {check && (
             <div className="tp-msgs">
+              {typeErrors.map((m) => (
+                <div className="err" key={'ts' + m}>
+                  ✗ TypeScript {m}
+                </div>
+              ))}
               {check.errors.map((m) => (
                 <div className="err" key={m}>
                   ✗ {m}
@@ -277,9 +292,9 @@ export default function AdminRequestPage() {
                   ! {m}
                 </div>
               ))}
-              {check.def && check.errors.length === 0 && (
+              {check.def && check.errors.length === 0 && typeErrors.length === 0 && (
                 <div className="tp-ok">
-                  ✓ Compiles and runs: {check.steps} steps, result {check.result}
+                  ✓ Type-checks, runs: {check.steps} steps, result {check.result}
                 </div>
               )}
             </div>
@@ -290,34 +305,43 @@ export default function AdminRequestPage() {
       {check?.def && check.errors.length === 0 && (
         <div className="tp-preview">
           <div className="eyebrow faint" style={{ marginBottom: '0.8rem' }}>
-            Live preview (not published)
+            3. Live preview {isPublished ? '' : '(not published yet)'}
           </div>
           <VisualizerPage previewDef={check.def} />
         </div>
       )}
 
-      {req.status === 'accepted' && code && (
+      {!isPublished && code && (
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Publish</h2>
+          <h2 style={{ marginTop: 0 }}>4. Publish</h2>
           <p className="serif">
-            Commits <code>src/problems/generated/{req.slug}.ts</code>, its registry line and its catalog entry to GitHub,
-            and adds it to the database. Vercel then redeploys the site.
+            Adds this question and its visualizer to VizuCode
+            {info ? ` (commit to ${info.github.repo} on ${info.github.branch})` : ''}. The live site updates after the
+            next deploy.
           </p>
           <button
             className="btn primary"
             disabled={!canPublish || !!busy}
             onClick={() =>
               act('publish', async () => {
-                if (!window.confirm(`Publish "${req.title}" to GitHub now?`)) return;
-                const r = await adminApi.publish(req.id, toStatic(check!.def!));
+                if (!window.confirm(`Publish "${req.title}" to VizuCode now?`)) return;
+                const r = await teacherApi.publish(req.id, toStatic(check!.def!));
                 setPublished({ url: r.url, branch: r.branch });
                 load();
               })
             }
           >
-            {busy === 'publish' ? 'Publishing…' : 'Publish to GitHub'}
+            {busy === 'publish' ? 'Publishing…' : 'Publish to VizuCode'}
           </button>
-          {!canPublish && <p className="tp-hint">Publishing unlocks once the code is saved and passes every check.</p>}
+          {!canPublish && (
+            <p className="tp-hint">
+              {exactOnSite
+                ? 'Blocked: this question is already on the site.'
+                : typeErrors.length
+                  ? 'Blocked: fix the TypeScript errors above (Regenerate usually does it), or the site build would break.'
+                  : 'Publishing unlocks once the code is saved and passes every check above.'}
+            </p>
+          )}
         </div>
       )}
 
@@ -331,7 +355,8 @@ export default function AdminRequestPage() {
               </a>
             ) : (
               <code>{req.publishedCommit}</code>
-            )}
+            )}{' '}
+            · <a href={`#/visualize/${req.slug}`}>Open on the site</a>
           </p>
         </div>
       )}

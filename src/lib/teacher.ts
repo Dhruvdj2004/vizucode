@@ -1,7 +1,6 @@
-// Client for the teacher panel (/api/teacher/*) and the admin review panel
-// (/api/admin/*). Teachers have their own login and token, separate from
-// student accounts; admins use their normal VizuCode session.
-import { getSession } from './auth';
+// Client for the teacher panel (/api/teacher/*). Teachers have their own login
+// and token, separate from student accounts, and do everything themselves:
+// add a question, generate its visualizer with Gemini, preview, publish.
 
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
 export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'published';
@@ -68,6 +67,8 @@ export interface RequestFull extends RequestSummary {
   hiddenTests: HiddenTest[];
   notes: string;
   generatedCode?: string | null;
+  /** tsc errors in generatedCode (server-side check; publishing needs none). */
+  typeErrors?: string[];
   generations?: { at: string; prompt: string; ms: number; model: string }[];
 }
 
@@ -124,8 +125,16 @@ export async function teacherLogin(email: string, password: string): Promise<Tea
   return r.teacher;
 }
 
+export interface TeacherInfo {
+  teacher: Teacher;
+  categories: string[];
+  ai: boolean;
+  model: string;
+  github: { repo: string; branch: string; ready: boolean };
+}
+
 export const teacherApi = {
-  me: () => call<{ teacher: Teacher; categories: string[] }>('/api/teacher/me', tToken()),
+  me: () => call<TeacherInfo>('/api/teacher/me', tToken()),
   scrape: (url: string) =>
     call<{ question: Partial<QuestionDraft> & { tags?: string[]; source?: string } }>(
       '/api/teacher/scrape',
@@ -135,43 +144,22 @@ export const teacherApi = {
     ),
   list: () => call<{ requests: RequestSummary[] }>('/api/teacher/requests', tToken()),
   get: (id: number) => call<{ request: RequestFull }>(`/api/teacher/requests/${id}`, tToken()),
-  create: (d: QuestionDraft) =>
-    call<{ id: number; slug: string; alreadyOnSite: boolean }>('/api/teacher/requests', tToken(), 'POST', d),
-};
-
-// ---------- admin ----------
-
-const aToken = () => getSession()?.token;
-
-export interface AdminInfo {
-  admin: string;
-  categories: string[];
-  ai: boolean;
-  model: string;
-  github: { repo: string; branch: string; ready: boolean };
-}
-
-export const adminApi = {
-  me: () => call<AdminInfo>('/api/admin/me', aToken()),
-  teachers: () =>
-    call<{ teachers: (Teacher & { active: boolean; created_at: string; requests: number })[] }>(
-      '/api/admin/teachers',
-      aToken()
-    ),
-  addTeacher: (t: { email: string; name: string; password: string }) =>
-    call<{ id: number }>('/api/admin/teachers', aToken(), 'POST', t),
-  updateTeacher: (id: number, patch: { active?: boolean; password?: string }) =>
-    call('/api/admin/teachers/' + id, aToken(), 'PATCH', patch),
-  list: (status?: RequestStatus) =>
-    call<{ requests: RequestSummary[] }>('/api/admin/requests' + (status ? `?status=${status}` : ''), aToken()),
-  get: (id: number) => call<{ request: RequestFull }>(`/api/admin/requests/${id}`, aToken()),
-  decide: (id: number, decision: 'accept' | 'reject', note: string) =>
-    call(`/api/admin/requests/${id}/decision`, aToken(), 'POST', { decision, note }),
+  create: (d: QuestionDraft) => call<{ id: number; slug: string }>('/api/teacher/requests', tToken(), 'POST', d),
+  remove: (id: number) => call(`/api/teacher/requests/${id}`, tToken(), 'DELETE'),
   generate: (id: number, prompt: string, sample: number) =>
-    call<{ code: string }>(`/api/admin/requests/${id}/generate`, aToken(), 'POST', { prompt, sample }),
-  saveCode: (id: number, code: string) => call(`/api/admin/requests/${id}/code`, aToken(), 'PUT', { code }),
+    call<{ code: string; typeErrors: string[] }>(`/api/teacher/requests/${id}/generate`, tToken(), 'POST', {
+      prompt,
+      sample,
+    }),
+  saveCode: (id: number, code: string) =>
+    call<{ typeErrors: string[] }>(`/api/teacher/requests/${id}/code`, tToken(), 'PUT', { code }),
   publish: (id: number, staticDef: unknown) =>
-    call<{ commit: string; url: string; branch: string }>(`/api/admin/requests/${id}/publish`, aToken(), 'POST', {
+    call<{ commit: string; url: string; branch: string }>(`/api/teacher/requests/${id}/publish`, tToken(), 'POST', {
       static: staticDef,
     }),
 };
+
+/** Status shown to teachers: everything before publishing is a draft they are working on. */
+export function statusLabel(s: RequestStatus): string {
+  return s === 'published' ? 'published' : 'draft';
+}

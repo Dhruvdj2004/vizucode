@@ -40,7 +40,11 @@ export async function compileVisualizer(source: string, expectedSlug: string, ex
     return { errors: [`Syntax error: ${e instanceof Error ? e.message : e}`], warnings };
   }
 
-  const bad = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]).filter((m) => !(m in MODULES));
+  // Only real import/export-from statements (the word "from" also shows up inside trace text).
+  const bad = [...source.matchAll(/^\s*(?:import|export)\b[^;'"]*?\bfrom\s*['"]([^'"]+)['"]/gm)]
+    .map((m) => m[1])
+    .filter((m) => !(m in MODULES));
+  if (/\brequire\s*\(|\bimport\s*\(/.test(source)) return { errors: ['Dynamic imports/require are not allowed.'], warnings };
   if (bad.length) return { errors: [`Imports not allowed: ${bad.join(', ')}`], warnings };
 
   const mod: { exports: Record<string, unknown> } = { exports: {} };

@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
   getTeacherSession,
+  statusLabel,
   teacherApi,
   teacherLogout,
   type Difficulty,
@@ -31,7 +32,6 @@ export default function TeacherPage() {
   const [scraping, setScraping] = useState(false);
   const [scrapeMsg, setScrapeMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
 
@@ -87,7 +87,6 @@ export default function TeacherPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setSaved(null);
     setBusy(true);
     try {
       const r = await teacherApi.create({
@@ -95,15 +94,10 @@ export default function TeacherPage() {
         examples: draft.examples.filter((x) => x.input || x.output),
         hiddenTests: draft.hiddenTests.filter((x) => x.input || x.output),
       });
-      setSaved(
-        r.alreadyOnSite
-          ? `Sent as request (#${r.id}). Note: VizuCode already has a visualizer for "${r.slug}".`
-          : `Sent! Request #${r.id} is waiting for review.`
-      );
       setDraft(EMPTY);
       setScrapeUrl('');
       setScrapeMsg(null);
-      refresh();
+      navigate(`/teacher/q/${r.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send the request.');
     } finally {
@@ -117,7 +111,7 @@ export default function TeacherPage() {
         <div>
           <div className="eyebrow">Teacher panel</div>
           <h1 className="page-title">Hi, {session.teacher.name}</h1>
-          <p className="serif desc">Request a step-by-step visualization for any DSA question.</p>
+          <p className="serif desc">Add any DSA question, generate its step-by-step visualizer, check it, and publish it.</p>
         </div>
         <button
           className="btn"
@@ -131,7 +125,7 @@ export default function TeacherPage() {
       </div>
 
       <form className="panel" onSubmit={onSubmit} noValidate>
-        <h2 style={{ marginTop: 0 }}>New request</h2>
+        <h2 style={{ marginTop: 0 }}>Add a question</h2>
 
         <div className="tp-field">
           <label htmlFor="src-url">Question link (LeetCode, GeeksforGeeks, CodeChef…): optional</label>
@@ -279,7 +273,7 @@ export default function TeacherPage() {
         </div>
 
         <div className="tp-field">
-          <label htmlFor="q-notes">Notes for the VizuCode team (optional)</label>
+          <label htmlFor="q-notes">Notes for the AI (optional; it reads these when generating)</label>
           <textarea
             id="q-notes"
             style={{ minHeight: '3.5rem' }}
@@ -294,41 +288,39 @@ export default function TeacherPage() {
             {error}
           </p>
         )}
-        {saved && <p className="tp-ok">{saved}</p>}
         <button className="btn primary" type="submit" disabled={busy}>
-          {busy ? 'Sending…' : 'Send request'}
+          {busy ? 'Saving…' : 'Add question & continue'}
         </button>
       </form>
 
       <div className="panel">
-        <h2 style={{ marginTop: 0 }}>My requests</h2>
+        <h2 style={{ marginTop: 0 }}>My questions</h2>
         {requests === null ? (
           <p className="serif">Loading…</p>
         ) : requests.length === 0 ? (
-          <p className="serif">No requests yet.</p>
+          <p className="serif">No questions yet.</p>
         ) : (
           <div className="tp-list">
             {requests.map((r) => (
-              <div className="tp-item" key={r.id}>
+              <Link className="tp-item" key={r.id} to={`/teacher/q/${r.id}`}>
                 <div>
                   <div className="t">
                     #{r.id} {r.title}
                   </div>
                   <div className="sub">
-                    {r.category} · sent {new Date(r.createdAt).toLocaleDateString()}
-                    {r.adminNote ? ` · Team note: ${r.adminNote}` : ''}
+                    {r.category} · added {new Date(r.createdAt).toLocaleDateString()}
                   </div>
                 </div>
                 <div className="tp-row">
-                  <span className={`tp-pill ${r.difficulty}`}>{r.difficulty}</span>
-                  <span className={`tp-pill ${r.status}`}>{r.status}</span>
-                  {r.status === 'published' && (
-                    <a className="btn" href={`#/visualize/${r.slug}`}>
-                      Open
-                    </a>
+                  {r.siteMatches[0] && r.status !== 'published' && (
+                    <span className={`tp-pill ${r.siteMatches[0].hasVisualizer ? 'rejected' : 'pending'}`}>
+                      {r.siteMatches[0].hasVisualizer ? 'on site' : 'in list'}: {r.siteMatches[0].title}
+                    </span>
                   )}
+                  <span className={`tp-pill ${r.difficulty}`}>{r.difficulty}</span>
+                  <span className={`tp-pill ${r.status === 'published' ? 'published' : 'pending'}`}>{statusLabel(r.status)}</span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

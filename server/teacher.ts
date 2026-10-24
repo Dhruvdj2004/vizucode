@@ -1,15 +1,15 @@
-// Teacher panel + admin review (local server for now).
+// Teacher panel (local server for now).
 //
-// Teachers (accounts created by an admin, not self sign-up) log in with email +
+// Teachers (accounts created with scripts/add-teacher.mjs, no self sign-up) log in with email +
 // password and request a visualizer for any DSA question — typed in by hand or
 // scraped from a LeetCode / GeeksforGeeks / CodeChef URL by
 // scripts/scrape_question.py (requests + BeautifulSoup).
 //
-// Admins (site users whose email is in ADMIN_EMAILS) review requests, accept or
-// reject them, have Gemini write the visualizer (a ProblemDef TS module) from
-// the question + one sample test case, preview it in the browser, regenerate
-// with extra instructions, and publish: one commit to GitHub (the new file,
-// its registry entry and its catalog entry) plus an upsert into Postgres.
+// Teachers then do the whole job themselves on their own questions: have Gemini
+// write the visualizer (a ProblemDef TS module) from the question + one sample
+// test case, preview it in the browser, regenerate with extra instructions or
+// edit the code, and publish: one commit to GitHub (the new file, its registry
+// entry and its catalog entry) plus an upsert into Postgres.
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import express from 'express';
 import { z } from 'zod';
@@ -19,15 +19,11 @@ import { execFile, execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pool } from './db';
-import { requireAuth, type AuthedRequest } from './auth';
+import { typecheckModule } from './typecheck';
 import { catalog } from '../src/data/catalog';
 import { problemRegistry } from '../src/problems';
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'vizucode-dev-secret-change-me';
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? '')
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_CODE_MODEL = process.env.GEMINI_CODE_MODEL ?? process.env.GEMINI_MODEL ?? 'gemini-3.6-flash';
 const GITHUB_REPO = process.env.GITHUB_REPO ?? 'Dhruvdj2004/vizucode';
@@ -345,7 +341,7 @@ async function requireTeacher(req: TeacherRequest, res: Response, next: NextFunc
 }
 
 export const teacherRouter = Router();
-teacherRouter.use(express.json({ limit: '256kb' }));
+teacherRouter.use(express.json({ limit: '2mb' }));
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
@@ -367,7 +363,13 @@ teacherRouter.post(
 );
 
 teacherRouter.get('/me', requireTeacher, (req: TeacherRequest, res) => {
-  res.json({ teacher: req.teacher, categories: CATEGORIES });
+  res.json({
+    teacher: req.teacher,
+    categories: CATEGORIES,
+    ai: !!GEMINI_API_KEY,
+    model: GEMINI_CODE_MODEL,
+    github: { repo: GITHUB_REPO, branch: PUBLISH_BRANCH, ready: !!githubToken() },
+  });
 });
 
 teacherRouter.post(
@@ -390,16 +392,20 @@ teacherRouter.get(
   })
 );
 
+/** The signed-in teacher's own question, or 404. */
+async function ownRequest(req: TeacherRequest): Promise<RequestRow> {
+  const row = await getRequest(Number(req.params.id));
+  if (row.teacher_id !== req.teacher!.id) throw new HttpError(404, 'Question not found.');
+  return row;
+}
+
 teacherRouter.get(
   '/requests/:id',
   requireTeacher,
   wrap(async (req: TeacherRequest, res) => {
-    const row = await getRequest(Number(req.params.id));
-    if (row.teacher_id !== req.teacher!.id) throw new HttpError(404, 'Request not found.');
-    const out = toApi(row, true) as Record<string, unknown>;
-    delete out.generatedCode;
-    delete out.generations;
-    res.json({ request: out });
+    const row = await ownRequest(req);
+    const typeErrors = row.generated_code && row.status !== 'published' ? typecheckModule(row.generated_code, row.slug) : [];
+    res.json({ request: { ...toApi(row, true), typeErrors } });
   })
 );
 
@@ -410,11 +416,14 @@ teacherRouter.post(
     const b = requestSchema.parse(req.body);
     const slug = slugFor(b.title, b.sourceUrl || undefined);
     if (!slug) throw new HttpError(400, 'The title needs some letters or numbers.');
+    if (problemRegistry[slug]) throw new HttpError(409, 'VizuCode already has a visualizer for this question.');
     const dup = await pool!.query(
-      `select id from question_requests where slug = $1 and status in ('pending', 'accepted')`,
+      `select q.id, t.name from question_requests q left join teachers t on t.id = q.teacher_id
+        where q.slug = $1 and q.status <> 'published'`,
       [slug]
     );
-    if (dup.rows[0]) throw new HttpError(409, 'This question has already been requested and is being reviewed.');
+    if (dup.rows[0])
+      throw new HttpError(409, `This question is already being built (#${dup.rows[0].id} by ${dup.rows[0].name ?? 'another teacher'}).`);
     const r = await pool!.query(
       `insert into question_requests
          (teacher_id, source_url, title, slug, difficulty, category, description, examples, constraints, hidden_tests, notes)
@@ -433,139 +442,42 @@ teacherRouter.post(
         b.notes,
       ]
     );
-    res.status(201).json({ id: r.rows[0].id, slug, alreadyOnSite: !!problemRegistry[slug] });
+    res.status(201).json({ id: r.rows[0].id, slug });
   })
 );
 
-// ---------- admin ----------
-
-async function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction): Promise<void> {
-  await requireAuth(req, res, () => {
-    if (!ADMIN_EMAILS.includes(req.user!.email.toLowerCase())) {
-      res.status(403).json({ error: 'Admins only. Add your email to ADMIN_EMAILS on the server.' });
-      return;
-    }
-    ensureTables().then(() => next(), next);
-  });
-}
-
-export const adminRouter = Router();
-adminRouter.use(express.json({ limit: '2mb' }));
-adminRouter.use(requireAdmin);
-
-adminRouter.get('/me', (req: AuthedRequest, res) => {
-  res.json({
-    admin: req.user!.email,
-    categories: CATEGORIES,
-    ai: !!GEMINI_API_KEY,
-    model: GEMINI_CODE_MODEL,
-    github: { repo: GITHUB_REPO, branch: PUBLISH_BRANCH, ready: !!githubToken() },
-  });
-});
-
-adminRouter.get(
-  '/teachers',
-  wrap(async (_req, res) => {
-    const r = await pool!.query(
-      `select t.id, t.email, t.name, t.active, t.created_at,
-              (select count(*)::int from question_requests q where q.teacher_id = t.id) as requests
-         from teachers t order by t.created_at desc`
-    );
-    res.json({ teachers: r.rows });
-  })
-);
-
-adminRouter.post(
-  '/teachers',
-  wrap(async (req, res) => {
-    const b = z
-      .object({
-        email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
-        name: z.string().trim().min(1, 'Name is required.').max(80),
-        password: z.string().min(8, 'Password must be at least 8 characters.').max(72),
-      })
-      .parse(req.body);
-    const hash = await bcrypt.hash(b.password, 10);
-    try {
-      const r = await pool!.query(
-        'insert into teachers (email, name, password_hash) values ($1, $2, $3) returning id',
-        [b.email, b.name, hash]
-      );
-      res.status(201).json({ id: r.rows[0].id });
-    } catch (e) {
-      if ((e as { code?: string }).code === '23505') throw new HttpError(409, 'A teacher with this email already exists.');
-      throw e;
-    }
-  })
-);
-
-adminRouter.patch(
-  '/teachers/:id',
-  wrap(async (req, res) => {
-    const b = z
-      .object({ active: z.boolean().optional(), password: z.string().min(8).max(72).optional() })
-      .parse(req.body);
-    if (b.active !== undefined) await pool!.query('update teachers set active = $1 where id = $2', [b.active, req.params.id]);
-    if (b.password)
-      await pool!.query('update teachers set password_hash = $1 where id = $2', [await bcrypt.hash(b.password, 10), req.params.id]);
-    res.json({ ok: true });
-  })
-);
-
-adminRouter.get(
-  '/requests',
-  wrap(async (req, res) => {
-    const status = typeof req.query.status === 'string' ? req.query.status : '';
-    const r = status
-      ? await pool!.query(`${REQUEST_SELECT} where q.status = $1 order by q.created_at desc`, [status])
-      : await pool!.query(`${REQUEST_SELECT} order by q.created_at desc limit 300`);
-    res.json({ requests: r.rows.map((row: RequestRow) => toApi(row, false)) });
-  })
-);
-
-adminRouter.get(
+teacherRouter.delete(
   '/requests/:id',
-  wrap(async (req, res) => {
-    res.json({ request: toApi(await getRequest(Number(req.params.id)), true) });
-  })
-);
-
-adminRouter.post(
-  '/requests/:id/decision',
-  wrap(async (req, res) => {
-    const b = z
-      .object({ decision: z.enum(['accept', 'reject']), note: z.string().trim().max(2000).default('') })
-      .parse(req.body);
-    const row = await getRequest(Number(req.params.id));
-    if (row.status === 'published') throw new HttpError(409, 'This request is already published.');
-    await pool!.query(
-      `update question_requests set status = $1, admin_note = $2, updated_at = now() where id = $3`,
-      [b.decision === 'accept' ? 'accepted' : 'rejected', b.note, row.id]
-    );
+  requireTeacher,
+  wrap(async (req: TeacherRequest, res) => {
+    const row = await ownRequest(req);
+    if (row.status === 'published') throw new HttpError(409, 'Published questions are live on the site and cannot be deleted here.');
+    await pool!.query('delete from question_requests where id = $1', [row.id]);
     res.json({ ok: true });
   })
 );
 
-adminRouter.put(
+teacherRouter.put(
   '/requests/:id/code',
-  wrap(async (req, res) => {
+  requireTeacher,
+  wrap(async (req: TeacherRequest, res) => {
     const { code } = z.object({ code: z.string().min(20).max(400_000) }).parse(req.body);
-    await pool!.query('update question_requests set generated_code = $1, updated_at = now() where id = $2', [
-      code,
-      Number(req.params.id),
-    ]);
-    res.json({ ok: true });
+    const row = await ownRequest(req);
+    if (row.status === 'published') throw new HttpError(409, 'Already published.');
+    await pool!.query('update question_requests set generated_code = $1, updated_at = now() where id = $2', [code, row.id]);
+    res.json({ ok: true, typeErrors: typecheckModule(code, row.slug) });
   })
 );
 
-adminRouter.post(
+teacherRouter.post(
   '/requests/:id/generate',
-  wrap(async (req, res) => {
+  requireTeacher,
+  wrap(async (req: TeacherRequest, res) => {
     const { prompt, sample } = z
       .object({ prompt: z.string().trim().max(4000).default(''), sample: z.number().int().min(0).max(9).default(0) })
       .parse(req.body ?? {});
-    const row = await getRequest(Number(req.params.id));
-    if (row.status !== 'accepted') throw new HttpError(409, 'Accept the request before generating.');
+    const row = await ownRequest(req);
+    if (row.status === 'published') throw new HttpError(409, 'Already published.');
     const started = Date.now();
     const code = await generateVisualizer(row, prompt, sample);
     const entry = { at: new Date().toISOString(), prompt, ms: Date.now() - started, model: GEMINI_CODE_MODEL };
@@ -577,13 +489,14 @@ adminRouter.post(
         where id = $3`,
       [code, JSON.stringify([entry]), row.id]
     );
-    res.json({ code, generation: entry });
+    res.json({ code, generation: entry, typeErrors: typecheckModule(code, row.slug) });
   })
 );
 
-adminRouter.post(
+teacherRouter.post(
   '/requests/:id/publish',
-  wrap(async (req, res) => {
+  requireTeacher,
+  wrap(async (req: TeacherRequest, res) => {
     const staticSchema = z
       .object({
         slug: z.string(),
@@ -598,11 +511,14 @@ adminRouter.post(
       })
       .passthrough();
     const { static: s } = z.object({ static: staticSchema }).parse(req.body);
-    const row = await getRequest(Number(req.params.id));
-    if (row.status !== 'accepted') throw new HttpError(409, 'Only accepted requests can be published.');
+    const row = await ownRequest(req);
+    if (row.status === 'published') throw new HttpError(409, 'Already published.');
     if (!row.generated_code) throw new HttpError(409, 'Generate (and preview) the visualizer first.');
     if (s.slug !== row.slug) throw new HttpError(400, `The code's slug must be "${row.slug}".`);
     if (problemRegistry[row.slug]) throw new HttpError(409, 'This question already has a visualizer on the site.');
+    const typeErrors = typecheckModule(row.generated_code, row.slug);
+    if (typeErrors.length)
+      throw new HttpError(409, `The code has ${typeErrors.length} TypeScript error(s), so it would break the site build. Regenerate or fix them first.`);
 
     const commit = await publishToGithub(row);
     await upsertDb(row, s as never, commit.catalogId);
@@ -679,13 +595,33 @@ ${row.constraints || '(none given)'}
 SAMPLE TEST CASE to use as the default input: ${sample ? `Input: ${sample.input} -> Output: ${sample.output}` : 'the first example'}
 ${row.notes ? `\nTeacher's notes: ${row.notes}` : ''}
 ${previous && extra ? `\n## Previous version (revise it; keep what works)\n${previous}` : ''}
-${extra ? `\n## Admin's instructions for this version (highest priority)\n${extra}` : ''}`;
+${extra ? `\n## Teacher's instructions for this version (highest priority)\n${extra}` : ''}`;
 
+  let code = await geminiModule(prompt);
+  // tsc is stricter than the browser preview (which only strips types): feed
+  // its errors back to Gemini so what gets published also builds.
+  for (let round = 0; round < MAX_TYPE_FIXES; round++) {
+    const errors = typecheckModule(code, row.slug);
+    if (!errors.length) break;
+    console.log(`[teacher] #${row.id} type errors (round ${round + 1}): ${errors.length}`);
+    code = await geminiModule(
+      `This TypeScript module must compile under strict mode, but tsc reports these errors:\n${errors.join('\n')}\n\n` +
+        `Fix them without changing the behaviour. Output ONLY the full corrected module, no markdown fences.\n` +
+        `Reminder of the types it must satisfy:\n${readSrc('src/lib/types.ts')}\n\n## Module\n${code}`
+    );
+  }
+  return code;
+}
+
+const MAX_TYPE_FIXES = 2;
+
+/** One Gemini call that must return a whole visualizer module. */
+async function geminiModule(prompt: string): Promise<string> {
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_CODE_MODEL}:generateContent`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY! },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.3, maxOutputTokens: 32768 },
@@ -820,7 +756,7 @@ export async function publishToGithub(row: RequestRow): Promise<{ sha: string; u
     ],
   });
   const commit = await gh<{ sha: string; html_url: string }>('POST', '/git/commits', {
-    message: `Add ${row.title} visualizer (teacher request #${row.id})\n\nGenerated with Gemini from the teacher panel and reviewed in the admin preview.`,
+    message: `Add ${row.title} visualizer (teacher panel #${row.id})\n\nGenerated with Gemini in the teacher panel and checked in its live preview.`,
     tree: tree.sha,
     parents: [parentSha],
   });

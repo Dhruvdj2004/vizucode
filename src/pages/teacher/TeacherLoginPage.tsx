@@ -29,7 +29,7 @@ export default function TeacherLoginPage() {
       <div className="panel auth-panel">
         <div className="eyebrow">Teacher panel</div>
         <h1 className="auth-title">Teacher sign in</h1>
-        <p className="auth-sub">Request a visualizer for any DSA question. Accounts are created by the VizuCode team.</p>
+        <p className="auth-sub">Build and publish step-by-step visualizers for DSA questions. Accounts are created by the VizuCode team.</p>
         <form onSubmit={onSubmit} noValidate>
           <div className="field auth-field">
             <label htmlFor="t-email">Email</label>
