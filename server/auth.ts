@@ -219,6 +219,11 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     return;
   }
   const userId = Number(payload.sub);
+  // Teacher-panel tokens share the secret but carry no user/session — not a student login.
+  if (!Number.isInteger(userId) || !payload.sid) {
+    res.status(401).json({ error: 'Sign in to continue.' });
+    return;
+  }
   try {
     if (!(await sessionStore.exists(userId, payload.sid))) {
       res.status(401).json({ error: 'You were signed out on this device.' });

@@ -37,6 +37,7 @@ import { dp3 } from './dp3';
 import { dp4 } from './dp4';
 import { greedyStrings2 } from './greedyStrings2';
 import { mathBits2 } from './mathBits2';
+import { generatedProblems } from './generated';
 
 const all: ProblemDef[] = [
   ...binarySearchProblems,
@@ -77,6 +78,7 @@ const all: ProblemDef[] = [
   ...dp4,
   ...greedyStrings2,
   ...mathBits2,
+  ...generatedProblems,
 ];
 
 /** slug -> problem definition, for questions that have a visualizer built. */

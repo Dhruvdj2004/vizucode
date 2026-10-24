@@ -37,6 +37,10 @@ const AptitudeResult = lazy(() => import('./pages/aptitude/AptitudeResult'));
 const AptitudeCoverage = lazy(() => import('./pages/aptitude/AptitudeCoverage'));
 const InterviewHome = lazy(() => import('./pages/interview/InterviewHome'));
 const InterviewSession = lazy(() => import('./pages/interview/InterviewSession'));
+const TeacherLoginPage = lazy(() => import('./pages/teacher/TeacherLoginPage'));
+const TeacherPage = lazy(() => import('./pages/teacher/TeacherPage'));
+const AdminPage = lazy(() => import('./pages/admin/AdminPage'));
+const AdminRequestPage = lazy(() => import('./pages/admin/AdminRequestPage'));
 
 function PageFallback() {
   return <div className="page-loading">Loading…</div>;
@@ -253,6 +257,24 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               element={
                 <RequireAuth>
                   <InterviewSession />
+                </RequireAuth>
+              }
+            />
+            <Route path="teacher/login" element={<TeacherLoginPage />} />
+            <Route path="teacher" element={<TeacherPage />} />
+            <Route
+              path="admin"
+              element={
+                <RequireAuth>
+                  <AdminPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="admin/request/:id"
+              element={
+                <RequireAuth>
+                  <AdminRequestPage />
                 </RequireAuth>
               }
             />
