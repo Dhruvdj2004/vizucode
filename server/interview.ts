@@ -25,9 +25,10 @@
 // goes a little deeper. The same resume showing up on a new account doesn't
 // get a second free interview.
 //
-// Every account includes FREE_INTERVIEWS (on Groq); Pro accounts get
-// PRO_INTERVIEWS more on top (on Gemini, used first). After that each
-// interview costs ₹19 (on Gemini), paid through Razorpay (POST /pay/order, then
+// Included interviews: a regular free account gets FREE_INTERVIEWS (1); a
+// verified college account and paid Pro get FULL_INTERVIEWS (10), all on Groq;
+// paid Pro also gets PRO_INTERVIEWS (3) on Gemini. After that each interview
+// costs ₹19 (on Groq), paid through Razorpay (POST /pay/order, then
 // /pay/verify adds one credit). Backed by the interviews and
 // interview_purchases tables when DATABASE_URL is set, otherwise in-memory
 // maps (dev fallback).
@@ -51,11 +52,12 @@ const GROQ_WHISPER_MODEL = process.env.GROQ_WHISPER_MODEL ?? 'whisper-large-v3';
 type Engine = 'gemini' | 'groq';
 
 /**
- * Included interviews: every account gets FREE_INTERVIEWS on Groq; Pro adds
- * PRO_INTERVIEWS on Gemini. College accounts (@ietdavv.edu.in) get Pro free,
- * but for interviews they count as free accounts: 10 on Groq.
+ * Included interviews. Regular free accounts: FREE_INTERVIEWS on Groq.
+ * Verified college accounts (@ietdavv.edu.in, Pro for free) and paid Pro:
+ * FULL_INTERVIEWS on Groq. Paid Pro also gets PRO_INTERVIEWS on Gemini.
  */
-export const FREE_INTERVIEWS = 10;
+export const FREE_INTERVIEWS = 1;
+export const FULL_INTERVIEWS = 10;
 export const PRO_INTERVIEWS = 3;
 const COLLEGE_EMAIL_SUFFIX = '@ietdavv.edu.in';
 /** Price of one extra interview, in paise (₹19). Set here, never taken from the client. */
@@ -1013,8 +1015,13 @@ function interviewPro(user: { isPro: boolean; email: string }): boolean {
   return user.isPro && !user.email.toLowerCase().endsWith(COLLEGE_EMAIL_SUFFIX);
 }
 
+/** Groq interviews included: 10 for verified college accounts and paid Pro (both have isPro), 1 otherwise. */
+function groqIncludedFor(user: { isPro: boolean }): number {
+  return user.isPro ? FULL_INTERVIEWS : FREE_INTERVIEWS;
+}
+
 function includedFor(user: { isPro: boolean; email: string }): number {
-  return FREE_INTERVIEWS + (interviewPro(user) ? PRO_INTERVIEWS : 0);
+  return groqIncludedFor(user) + (interviewPro(user) ? PRO_INTERVIEWS : 0);
 }
 
 async function quota(user: { id: number; isPro: boolean; email: string }): Promise<Quota> {
@@ -1113,8 +1120,9 @@ interviewRouter.get('/', wrap(async (req, res) => {
     ...q,
     isPro: req.user!.isPro,
     price: INTERVIEW_PRICE_PAISE / 100,
-    proIncluded: PRO_INTERVIEWS,
-    freeIncluded: FREE_INTERVIEWS,
+    // How many more interviews upgrading to Pro would add for this account.
+    proIncluded: FULL_INTERVIEWS + PRO_INTERVIEWS - includedFor(req.user!),
+    freeIncluded: groqIncludedFor(req.user!),
     proPlan: interviewPro(req.user!),
     college: req.user!.email.toLowerCase().endsWith(COLLEGE_EMAIL_SUFFIX),
     aiReady: !!GEMINI_API_KEY || !!GROQ_API_KEY,
