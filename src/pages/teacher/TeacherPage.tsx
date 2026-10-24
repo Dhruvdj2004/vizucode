@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
   getTeacherSession,
+  statusClass,
   statusLabel,
   teacherApi,
   teacherLogout,
@@ -111,7 +112,7 @@ export default function TeacherPage() {
         <div>
           <div className="eyebrow">Teacher panel</div>
           <h1 className="page-title">Hi, {session.teacher.name}</h1>
-          <p className="serif desc">Add any DSA question, generate its step-by-step visualizer, check it, and publish it.</p>
+          <p className="serif desc">Add any DSA question, generate its step-by-step visualizer, check it, and send it for review.</p>
         </div>
         <button
           className="btn"
@@ -309,6 +310,7 @@ export default function TeacherPage() {
                   </div>
                   <div className="sub">
                     {r.category} · added {new Date(r.createdAt).toLocaleDateString()}
+                    {r.adminNote ? ` · ${r.adminNote}` : ''}
                   </div>
                 </div>
                 <div className="tp-row">
@@ -318,7 +320,7 @@ export default function TeacherPage() {
                     </span>
                   )}
                   <span className={`tp-pill ${r.difficulty}`}>{r.difficulty}</span>
-                  <span className={`tp-pill ${r.status === 'published' ? 'published' : 'pending'}`}>{statusLabel(r.status)}</span>
+                  <span className={`tp-pill ${statusClass(r.status)}`}>{statusLabel(r.status)}</span>
                 </div>
               </Link>
             ))}

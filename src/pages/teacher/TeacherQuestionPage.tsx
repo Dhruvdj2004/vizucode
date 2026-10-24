@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import {
   getTeacherSession,
   MATCH_LABEL,
+  statusClass,
   statusLabel,
   teacherApi,
   type RequestFull,
@@ -26,7 +27,6 @@ export default function TeacherQuestionPage() {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [check, setCheck] = useState<CompileResult | null>(null);
-  const [published, setPublished] = useState<{ url: string; branch: string } | null>(null);
   const [typeErrors, setTypeErrors] = useState<string[]>([]);
 
   const load = useCallback(() => {
@@ -98,7 +98,7 @@ export default function TeacherQuestionPage() {
           </div>
           <h1 className="page-title">{req.title}</h1>
           <div className="tp-row">
-            <span className={`tp-pill ${isPublished ? 'published' : 'pending'}`}>{statusLabel(req.status)}</span>
+            <span className={`tp-pill ${statusClass(req.status)}`}>{statusLabel(req.status)}</span>
             <span className={`tp-pill ${req.difficulty}`}>{req.difficulty}</span>
             <span className="tp-pill">{req.category}</span>
             <span className="tp-pill">slug: {req.slug}</span>
@@ -122,6 +122,20 @@ export default function TeacherQuestionPage() {
       </div>
 
       {error && <p className="input-error">{error}</p>}
+      {req.adminNote && req.status === 'pending' && <p className="input-error">{req.adminNote}</p>}
+
+      {req.status === 'in_review' && req.review && (
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>In review</h2>
+          <p className="serif">
+            Sent to the VizuCode team as{' '}
+            <a href={req.review.url} target="_blank" rel="noreferrer">
+              pull request #{req.review.number}
+            </a>
+            . It goes live once they merge it. You can still regenerate or edit below and click <b>Update the review</b>.
+          </p>
+        </div>
+      )}
 
       {req.siteMatches.length > 0 && !isPublished && (
         <div className="panel tp-dup">
@@ -313,25 +327,25 @@ export default function TeacherQuestionPage() {
 
       {!isPublished && code && (
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>4. Publish</h2>
+          <h2 style={{ marginTop: 0 }}>4. Send for review</h2>
           <p className="serif">
-            Adds this question and its visualizer to VizuCode
-            {info ? ` (commit to ${info.github.repo} on ${info.github.branch})` : ''}. The live site updates after the
-            next deploy.
+            Sends this question and its visualizer to the VizuCode team as a pull request
+            {info ? ` to ${info.github.repo} (${info.github.branch})` : ''}. It goes live on the site once they merge it.
           </p>
           <button
             className="btn primary"
             disabled={!canPublish || !!busy}
             onClick={() =>
               act('publish', async () => {
-                if (!window.confirm(`Publish "${req.title}" to VizuCode now?`)) return;
-                const r = await teacherApi.publish(req.id, toStatic(check!.def!));
-                setPublished({ url: r.url, branch: r.branch });
+                const again = req.status === 'in_review';
+                if (!window.confirm(again ? `Update the review of "${req.title}" with this version?` : `Send "${req.title}" for review?`))
+                  return;
+                await teacherApi.publish(req.id, toStatic(check!.def!));
                 load();
               })
             }
           >
-            {busy === 'publish' ? 'Publishing…' : 'Publish to VizuCode'}
+            {busy === 'publish' ? 'Sending…' : req.status === 'in_review' ? 'Update the review' : 'Send for review'}
           </button>
           {!canPublish && (
             <p className="tp-hint">
@@ -339,24 +353,27 @@ export default function TeacherQuestionPage() {
                 ? 'Blocked: this question is already on the site.'
                 : typeErrors.length
                   ? 'Blocked: fix the TypeScript errors above (Regenerate usually does it), or the site build would break.'
-                  : 'Publishing unlocks once the code is saved and passes every check above.'}
+                  : 'Unlocks once the code is saved and passes every check above.'}
             </p>
           )}
         </div>
       )}
 
-      {(published || req.publishedCommit) && (
+      {isPublished && (
         <div className="panel">
           <p className="tp-ok">
-            Published{published ? ` to ${published.branch}` : ''}.{' '}
-            {published ? (
-              <a href={published.url} target="_blank" rel="noreferrer">
-                View commit
-              </a>
-            ) : (
-              <code>{req.publishedCommit}</code>
-            )}{' '}
-            · <a href={`#/visualize/${req.slug}`}>Open on the site</a>
+            Published: the review was merged
+            {req.review ? (
+              <>
+                {' '}
+                (
+                <a href={req.review.url} target="_blank" rel="noreferrer">
+                  #{req.review.number}
+                </a>
+                )
+              </>
+            ) : null}
+            . · <a href={`#/visualize/${req.slug}`}>Open on the site</a> (live after the deploy finishes)
           </p>
         </div>
       )}

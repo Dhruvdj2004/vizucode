@@ -3,7 +3,7 @@
 // add a question, generate its visualizer with Gemini, preview, publish.
 
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
-export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'published';
+export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'in_review' | 'published';
 
 export interface Example {
   input: string;
@@ -43,6 +43,8 @@ export interface RequestSummary {
   /** Questions already on the site that this request probably duplicates. */
   siteMatches: SiteMatch[];
   publishedCommit: string | null;
+  /** The pull request this question was sent for review in, if any. */
+  review: { number: number; url: string; branch: string } | null;
 }
 
 export interface SiteMatch {
@@ -153,13 +155,19 @@ export const teacherApi = {
     }),
   saveCode: (id: number, code: string) =>
     call<{ typeErrors: string[] }>(`/api/teacher/requests/${id}/code`, tToken(), 'PUT', { code }),
+  /** Sends the question for review: a pull request to main (or an update to the open one). */
   publish: (id: number, staticDef: unknown) =>
-    call<{ commit: string; url: string; branch: string }>(`/api/teacher/requests/${id}/publish`, tToken(), 'POST', {
+    call<{ review: { number: number; url: string; branch: string } }>(`/api/teacher/requests/${id}/publish`, tToken(), 'POST', {
       static: staticDef,
     }),
 };
 
-/** Status shown to teachers: everything before publishing is a draft they are working on. */
+/** Status shown to teachers: draft (working on it), in review (pull request open), published (merged). */
 export function statusLabel(s: RequestStatus): string {
-  return s === 'published' ? 'published' : 'draft';
+  return s === 'published' ? 'published' : s === 'in_review' ? 'in review' : 'draft';
+}
+
+/** CSS pill class for a status. */
+export function statusClass(s: RequestStatus): string {
+  return s === 'published' ? 'published' : s === 'in_review' ? 'accepted' : 'pending';
 }

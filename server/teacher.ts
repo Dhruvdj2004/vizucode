@@ -72,6 +72,15 @@ function ensureTables(): Promise<void> {
          updated_at       timestamptz not null default now()
        );
        create index if not exists idx_requests_status on question_requests (status, created_at desc);
+       -- Publishing opens a pull request; the question goes live when it is merged.
+       alter table question_requests add column if not exists pr_number  integer;
+       alter table question_requests add column if not exists pr_url     text;
+       alter table question_requests add column if not exists pr_branch  text;
+       alter table question_requests add column if not exists static_def jsonb;
+       alter table question_requests add column if not exists catalog_id integer;
+       alter table question_requests drop constraint if exists question_requests_status_check;
+       alter table question_requests add constraint question_requests_status_check
+         check (status in ('pending', 'accepted', 'rejected', 'in_review', 'published'));
        alter table teachers enable row level security;
        alter table question_requests enable row level security;`
     )
@@ -229,6 +238,11 @@ type RequestRow = {
   generated_code: string | null;
   generations: unknown;
   published_commit: string | null;
+  pr_number: number | null;
+  pr_url: string | null;
+  pr_branch: string | null;
+  static_def: unknown;
+  catalog_id: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -249,6 +263,7 @@ function toApi(r: RequestRow, full: boolean) {
     alreadyOnSite: !!problemRegistry[r.slug],
     siteMatches: findSiteMatches(r.slug, r.title),
     publishedCommit: r.published_commit,
+    review: r.pr_number ? { number: r.pr_number, url: r.pr_url, branch: r.pr_branch } : null,
   };
   if (!full) return base;
   return {
@@ -388,7 +403,8 @@ teacherRouter.get(
   requireTeacher,
   wrap(async (req: TeacherRequest, res) => {
     const r = await pool!.query(`${REQUEST_SELECT} where q.teacher_id = $1 order by q.created_at desc`, [req.teacher!.id]);
-    res.json({ requests: r.rows.map((row: RequestRow) => toApi(row, false)) });
+    const rows: RequestRow[] = await Promise.all(r.rows.map((row: RequestRow) => syncReview(row)));
+    res.json({ requests: rows.map((row) => toApi(row, false)) });
   })
 );
 
@@ -403,7 +419,7 @@ teacherRouter.get(
   '/requests/:id',
   requireTeacher,
   wrap(async (req: TeacherRequest, res) => {
-    const row = await ownRequest(req);
+    const row = await syncReview(await ownRequest(req));
     const typeErrors = row.generated_code && row.status !== 'published' ? typecheckModule(row.generated_code, row.slug) : [];
     res.json({ request: { ...toApi(row, true), typeErrors } });
   })
@@ -452,6 +468,7 @@ teacherRouter.delete(
   wrap(async (req: TeacherRequest, res) => {
     const row = await ownRequest(req);
     if (row.status === 'published') throw new HttpError(409, 'Published questions are live on the site and cannot be deleted here.');
+    if (row.pr_number) await closeReview(row).catch((e) => console.error('[teacher] closing review failed:', e.message));
     await pool!.query('delete from question_requests where id = $1', [row.id]);
     res.json({ ok: true });
   })
@@ -520,13 +537,15 @@ teacherRouter.post(
     if (typeErrors.length)
       throw new HttpError(409, `The code has ${typeErrors.length} TypeScript error(s), so it would break the site build. Regenerate or fix them first.`);
 
-    const commit = await publishToGithub(row);
-    await upsertDb(row, s as never, commit.catalogId);
+    const review = await sendForReview(row);
     await pool!.query(
-      `update question_requests set status = 'published', published_commit = $1, updated_at = now() where id = $2`,
-      [commit.sha, row.id]
+      `update question_requests
+          set status = 'in_review', pr_number = $1, pr_url = $2, pr_branch = $3, static_def = $4,
+              catalog_id = $5, admin_note = '', updated_at = now()
+        where id = $6`,
+      [review.number, review.url, review.branch, JSON.stringify(s), review.catalogId, row.id]
     );
-    res.json({ ok: true, commit: commit.sha, url: commit.url, branch: PUBLISH_BRANCH });
+    res.json({ ok: true, review: { number: review.number, url: review.url, branch: review.branch } });
   })
 );
 
@@ -661,7 +680,7 @@ function githubToken(): string | null {
   }
 }
 
-async function gh<T>(method: string, url: string, body?: unknown): Promise<T> {
+async function gh<T>(method: string, url: string, body?: unknown, allow404 = false): Promise<T> {
   const token = githubToken();
   if (!token) throw new HttpError(503, 'No GitHub token: set GITHUB_TOKEN or run `gh auth login` on the server.');
   const r = await fetch(`https://api.github.com/repos/${GITHUB_REPO}${url}`, {
@@ -674,20 +693,51 @@ async function gh<T>(method: string, url: string, body?: unknown): Promise<T> {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (allow404 && (r.status === 404 || r.status === 422 && method === 'DELETE')) return null as T;
   if (!r.ok) {
     const msg = (await r.text()).slice(0, 300);
     console.error(`[teacher] GitHub ${method} ${url} -> ${r.status}: ${msg}`);
-    throw new HttpError(502, `GitHub refused the publish (HTTP ${r.status}).`);
+    throw new HttpError(502, `GitHub refused the request (HTTP ${r.status}).`);
   }
-  return (await r.json()) as T;
+  return (r.status === 204 ? null : await r.json()) as T;
 }
 
-async function ghFile(file: string, ref: string): Promise<string> {
-  const f = await gh<{ content: string }>('GET', `/contents/${file}?ref=${ref}`);
-  return Buffer.from(f.content, 'base64').toString('utf8');
+async function ghFile(file: string, ref: string, allow404 = false): Promise<string | null> {
+  const f = await gh<{ content: string } | null>('GET', `/contents/${file}?ref=${ref}`, undefined, allow404);
+  return f ? Buffer.from(f.content, 'base64').toString('utf8') : null;
 }
 
 const GEN_INDEX = 'src/problems/generated/index.ts';
+const REGISTRY = 'src/problems/index.ts';
+
+/** generated/index.ts as it looks before any question is added (used when main doesn't have it yet). */
+export const EMPTY_GEN_INDEX = `// Visualizers published from the teacher panel (written by Gemini, checked in
+// its live preview, merged after review). Publishing adds one import above
+// \`@generated-imports\` and one entry above \`@generated-list\` per question,
+// so keep both marker comments.
+import type { ProblemDef } from '../../lib/types';
+// @generated-imports
+
+export const generatedProblems: ProblemDef[] = [
+  // @generated-list
+];
+`;
+
+/** Wires generated/index.ts into the problem registry (only needed once, on a main that predates the folder). */
+export function wireRegistry(src: string): string {
+  if (src.includes("from './generated'")) return src;
+  const lastImport = src.lastIndexOf('\nimport ');
+  const eol = src.indexOf('\n', lastImport + 1);
+  const close = src.indexOf('\n];', src.indexOf('const all: ProblemDef[] = ['));
+  if (lastImport < 0 || close < 0) throw new HttpError(500, `Unexpected ${REGISTRY} format; publish by hand.`);
+  return (
+    src.slice(0, eol + 1) +
+    "import { generatedProblems } from './generated';\n" +
+    src.slice(eol + 1, close) +
+    '\n  ...generatedProblems,' +
+    src.slice(close)
+  );
+}
 const CATALOG = 'src/data/catalog.ts';
 
 /**
@@ -703,7 +753,7 @@ export function applyPublishEdits(
   let index = indexSrc;
   const ident = 'p_' + row.slug.replace(/[^a-z0-9]/gi, '_');
   if (!index.includes('// @generated-imports') || !index.includes('  // @generated-list'))
-    throw new HttpError(500, `${GEN_INDEX} is missing its marker comments; merge the teacher-panel branch first.`);
+    throw new HttpError(500, `${GEN_INDEX} is missing its marker comments; publish by hand.`);
   if (!index.includes(`'./${row.slug}'`)) {
     index = index
       .replace('// @generated-imports', `import { problem as ${ident} } from './${row.slug}';\n// @generated-imports`)
@@ -739,29 +789,122 @@ export function applyPublishEdits(
   return { index, catalog: cat, catalogId };
 }
 
-export async function publishToGithub(row: RequestRow): Promise<{ sha: string; url: string; catalogId: number }> {
+function reviewBranch(row: Pick<RequestRow, 'id' | 'slug'>): string {
+  return `teacher-panel/${row.id}-${row.slug}`.slice(0, 120);
+}
+
+/**
+ * Puts the question on its own branch as one commit on top of the current
+ * main (rebuilt from scratch each time, so it never conflicts with other
+ * questions merged in the meantime) and opens a pull request for review —
+ * or updates the open one.
+ */
+export async function sendForReview(
+  row: RequestRow
+): Promise<{ number: number; url: string; branch: string; catalogId: number }> {
+  const branch = row.pr_branch ?? reviewBranch(row);
+  const commit = await commitOnMain(row);
+  const exists = await gh('GET', `/git/ref/heads/${encodeURIComponent(branch)}`, undefined, true);
+  if (exists) await gh('PATCH', `/git/refs/heads/${encodeURIComponent(branch)}`, { sha: commit.sha, force: true });
+  else await gh('POST', '/git/refs', { ref: `refs/heads/${branch}`, sha: commit.sha });
+
+  if (row.pr_number) {
+    const pr = await gh<{ state: string; html_url: string }>('GET', `/pulls/${row.pr_number}`);
+    if (pr.state === 'open') return { number: row.pr_number, url: pr.html_url, branch, catalogId: commit.catalogId };
+  }
+  const examples = (row.examples as { input: string; output: string }[]) ?? [];
+  const pr = await gh<{ number: number; html_url: string }>('POST', '/pulls', {
+    title: `Teacher panel: add ${row.title} visualizer`,
+    head: branch,
+    base: PUBLISH_BRANCH,
+    body: [
+      `Submitted from the teacher panel by **${row.teacher_name ?? 'a teacher'}** (${row.teacher_email ?? 'unknown'}), question #${row.id}.`,
+      '',
+      `- **${row.title}** · ${row.difficulty} · ${row.category}${row.source_url ? ` · [source](${row.source_url})` : ''}`,
+      `- Sample: \`${(examples[0]?.input ?? '').slice(0, 120)}\` → \`${(examples[0]?.output ?? '').slice(0, 120)}\``,
+      '- Generated with Gemini; passed the type check and the in-browser run check.',
+      '',
+      `Merge to publish it: Vercel deploys main, and the teacher panel adds the question to the database the next time it is opened. Close without merging to send it back to the teacher as a draft.`,
+    ].join('\n'),
+  });
+  return { number: pr.number, url: pr.html_url, branch, catalogId: commit.catalogId };
+}
+
+/** Builds (but doesn't push to main) one commit on top of main with the module + its two edits. */
+async function commitOnMain(row: RequestRow): Promise<{ sha: string; catalogId: number }> {
   const ref = await gh<{ object: { sha: string } }>('GET', `/git/ref/heads/${PUBLISH_BRANCH}`);
   const parentSha = ref.object.sha;
   const parent = await gh<{ tree: { sha: string } }>('GET', `/git/commits/${parentSha}`);
-
-  const edits = applyPublishEdits(await ghFile(GEN_INDEX, parentSha), await ghFile(CATALOG, parentSha), row);
-  const { index, catalog: cat, catalogId } = edits;
-
-  const tree = await gh<{ sha: string }>('POST', '/git/trees', {
-    base_tree: parent.tree.sha,
-    tree: [
-      { path: `src/problems/generated/${row.slug}.ts`, mode: '100644', type: 'blob', content: row.generated_code },
-      { path: GEN_INDEX, mode: '100644', type: 'blob', content: index },
-      { path: CATALOG, mode: '100644', type: 'blob', content: cat },
-    ],
-  });
-  const commit = await gh<{ sha: string; html_url: string }>('POST', '/git/commits', {
+  const existingIndex = await ghFile(GEN_INDEX, parentSha, true);
+  const { index, catalog: cat, catalogId } = applyPublishEdits(
+    existingIndex ?? EMPTY_GEN_INDEX,
+    (await ghFile(CATALOG, parentSha))!,
+    row
+  );
+  const files = [
+    { path: `src/problems/generated/${row.slug}.ts`, mode: '100644', type: 'blob', content: row.generated_code },
+    { path: GEN_INDEX, mode: '100644', type: 'blob', content: index },
+    { path: CATALOG, mode: '100644', type: 'blob', content: cat },
+  ];
+  // First question ever on this main: also register the generated folder.
+  if (!existingIndex)
+    files.push({ path: REGISTRY, mode: '100644', type: 'blob', content: wireRegistry((await ghFile(REGISTRY, parentSha))!) });
+  const tree = await gh<{ sha: string }>('POST', '/git/trees', { base_tree: parent.tree.sha, tree: files });
+  const commit = await gh<{ sha: string }>('POST', '/git/commits', {
     message: `Add ${row.title} visualizer (teacher panel #${row.id})\n\nGenerated with Gemini in the teacher panel and checked in its live preview.`,
     tree: tree.sha,
     parents: [parentSha],
   });
-  await gh('PATCH', `/git/refs/heads/${PUBLISH_BRANCH}`, { sha: commit.sha });
-  return { sha: commit.sha, url: commit.html_url, catalogId };
+  return { sha: commit.sha, catalogId };
+}
+
+async function closeReview(row: RequestRow): Promise<void> {
+  if (row.pr_number) await gh('PATCH', `/pulls/${row.pr_number}`, { state: 'closed' });
+  if (row.pr_branch) await gh('DELETE', `/git/refs/heads/${encodeURIComponent(row.pr_branch)}`, undefined, true);
+}
+
+// Don't ask GitHub about the same pull request more than once a minute.
+const lastSync = new Map<number, number>();
+
+/**
+ * For a question in review, looks at its pull request: merged -> mark it
+ * published and add it to the database (the deploy of main brings the code);
+ * closed -> back to draft; open but conflicting -> rebuild it on today's main.
+ */
+async function syncReview(row: RequestRow): Promise<RequestRow> {
+  if (row.status !== 'in_review' || !row.pr_number) return row;
+  if (Date.now() - (lastSync.get(row.id) ?? 0) < 60_000) return row;
+  lastSync.set(row.id, Date.now());
+  try {
+    const pr = await gh<{ state: string; merged: boolean; merge_commit_sha: string | null; mergeable_state?: string }>(
+      'GET',
+      `/pulls/${row.pr_number}`
+    );
+    if (pr.merged) {
+      if (row.static_def) await upsertDb(row, row.static_def as never, row.catalog_id ?? 0);
+      await pool!.query(
+        `update question_requests set status = 'published', published_commit = $1, updated_at = now() where id = $2`,
+        [pr.merge_commit_sha, row.id]
+      );
+      return { ...row, status: 'published', published_commit: pr.merge_commit_sha };
+    }
+    if (pr.state === 'closed') {
+      const note = 'The review was closed without merging. Fix it and send it for review again.';
+      await pool!.query(
+        `update question_requests set status = 'pending', admin_note = $1, pr_number = null, pr_url = null, updated_at = now() where id = $2`,
+        [note, row.id]
+      );
+      return { ...row, status: 'pending', admin_note: note, pr_number: null, pr_url: null };
+    }
+    if (pr.mergeable_state === 'dirty') {
+      // Another question was merged first and touched the same lines: rebuild on top of main.
+      const fresh = await sendForReview(row);
+      await pool!.query('update question_requests set catalog_id = $1 where id = $2', [fresh.catalogId, row.id]);
+    }
+  } catch (e) {
+    console.error(`[teacher] review sync for #${row.id} failed:`, e instanceof Error ? e.message : e);
+  }
+  return row;
 }
 
 /** Same rows `npm run db:seed` would write, so the live API lists it without a re-seed. */
