@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { adminApi, type RequestFull } from '../../lib/teacher';
+import { adminApi, MATCH_LABEL, type RequestFull } from '../../lib/teacher';
 import { compileVisualizer, type CompileResult } from '../../lib/compileVisualizer';
 import { toStatic } from '../../lib/serialize';
 import VisualizerPage from '../VisualizerPage';
@@ -81,12 +81,39 @@ export default function AdminRequestPage() {
             <span className={`tp-pill ${req.difficulty}`}>{req.difficulty}</span>
             <span className="tp-pill">{req.category}</span>
             <span className="tp-pill">slug: {req.slug}</span>
-            {req.alreadyOnSite && <span className="tp-pill rejected">already on the site</span>}
+
           </div>
         </div>
       </div>
 
       {error && <p className="input-error">{error}</p>}
+
+      {req.siteMatches.length > 0 && req.status !== 'published' && (
+        <div className="panel tp-dup">
+          <h2 style={{ marginTop: 0 }}>Already on VizuCode?</h2>
+          <p className="serif">This request looks like a question the site already lists. Check before accepting.</p>
+          <div className="tp-list">
+            {req.siteMatches.map((m) => (
+              <div className="tp-item" key={m.slug}>
+                <div>
+                  <div className="t">{m.title}</div>
+                  <div className="sub">
+                    {MATCH_LABEL[m.kind]} · {m.category} ·{' '}
+                    {m.hasVisualizer ? 'already has a visualizer' : 'listed, but no visualizer yet'}
+                  </div>
+                </div>
+                {m.hasVisualizer ? (
+                  <a className="btn" href={`#/visualize/${m.slug}`} target="_blank" rel="noreferrer">
+                    Open visualizer
+                  </a>
+                ) : (
+                  <span className="tp-pill pending">no visualizer</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="panel">
         <p className="tp-hint">

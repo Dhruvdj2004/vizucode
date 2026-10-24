@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { adminApi, type AdminInfo, type RequestStatus, type RequestSummary } from '../../lib/teacher';
+import { adminApi, MATCH_LABEL, type AdminInfo, type RequestStatus, type RequestSummary } from '../../lib/teacher';
 
 const TABS: (RequestStatus | 'all')[] = ['pending', 'accepted', 'published', 'rejected', 'all'];
 
@@ -120,10 +120,18 @@ export default function AdminPage() {
                   <div className="sub">
                     {r.category} · {r.teacher ? `${r.teacher.name} (${r.teacher.email})` : 'deleted teacher'} ·{' '}
                     {new Date(r.createdAt).toLocaleString()}
-                    {r.alreadyOnSite ? ' · already on the site' : ''}
+
                   </div>
                 </div>
                 <div className="tp-row">
+                  {r.siteMatches[0] && r.status !== 'published' && (
+                    <span
+                      className={`tp-pill ${r.siteMatches[0].hasVisualizer ? 'rejected' : 'pending'}`}
+                      title={r.siteMatches.map((m) => `${MATCH_LABEL[m.kind]}: ${m.title}`).join('\n')}
+                    >
+                      {r.siteMatches[0].hasVisualizer ? 'on site' : 'in list'}: {r.siteMatches[0].title}
+                    </span>
+                  )}
                   <span className={`tp-pill ${r.difficulty}`}>{r.difficulty}</span>
                   <span className={`tp-pill ${r.status}`}>{r.status}</span>
                 </div>

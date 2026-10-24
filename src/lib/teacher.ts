@@ -41,8 +41,25 @@ export interface RequestSummary {
   updatedAt: string;
   teacher?: { name: string; email: string };
   alreadyOnSite: boolean;
+  /** Questions already on the site that this request probably duplicates. */
+  siteMatches: SiteMatch[];
   publishedCommit: string | null;
 }
+
+export interface SiteMatch {
+  slug: string;
+  title: string;
+  category: string;
+  hasVisualizer: boolean;
+  kind: 'exact' | 'title' | 'alias' | 'similar';
+}
+
+export const MATCH_LABEL: Record<SiteMatch['kind'], string> = {
+  exact: 'Same question',
+  title: 'Same title',
+  alias: 'Same problem, different name',
+  similar: 'Similar title',
+};
 
 export interface RequestFull extends RequestSummary {
   description: string;

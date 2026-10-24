@@ -1957,3 +1957,4 @@ a.tp-item:hover { border-color: var(--line-strong); background: var(--surface-2)
 .tp-preview { border: 2px dashed var(--line-strong); border-radius: var(--r-lg); padding: 1rem; }
 .tp-field label.tp-check { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
 .tp-field label.tp-check input { width: auto; margin: 0; }
+.tp-dup { border-color: var(--medium); }

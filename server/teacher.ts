@@ -139,6 +139,80 @@ function slugFor(title: string, sourceUrl?: string): string {
   return m ? m[1].toLowerCase() : slugify(title);
 }
 
+// ---------- "is this already on the site?" ----------
+
+export interface SiteMatch {
+  slug: string;
+  title: string;
+  category: string;
+  hasVisualizer: boolean;
+  /** exact: same slug · title: same title · alias: a well-known other name · similar: title words overlap */
+  kind: 'exact' | 'title' | 'alias' | 'similar';
+}
+
+// Common names other sites use for questions the catalog lists under the LeetCode title.
+const ALIASES: [RegExp, string][] = [
+  [/kadane|max(imum)? (sum )?sub ?array|largest sum contiguous/, 'maximum-subarray'],
+  [/dutch national flag|sort (an array of )?0s,? 1s,? (and )?2s/, 'sort-colors'],
+  [/detect (a )?(loop|cycle) in (a )?linked list|floyd/, 'linked-list-cycle'],
+  [/missing (number|in array)/, 'missing-number'],
+  [/reverse (a )?linked list$/, 'reverse-linked-list'],
+  [/nth node from (the )?end/, 'remove-nth-node-from-end-of-list'],
+  [/stock buy (and )?sell/, 'best-time-to-buy-and-sell-stock'],
+  [/(count )?(number of )?islands?/, 'number-of-islands'],
+  [/longest common subsequence|\blcs\b/, 'longest-common-subsequence'],
+  [/longest increasing subsequence|\blis\b/, 'longest-increasing-subsequence'],
+  [/0[ -/]?1 knapsack|subset sum/, 'partition-equal-subset-sum'],
+  [/majority element/, 'majority-element'],
+  [/valid(ate)? (bst|binary search tree)|check (for )?bst/, 'validate-binary-search-tree'],
+  [/(height|depth) of (a )?binary tree/, 'maximum-depth-of-binary-tree'],
+  [/mirror (of )?(a )?(binary )?tree|invert/, 'invert-binary-tree'],
+  [/lru cache/, 'lru-cache'],
+];
+
+const STOP = new Set(['a', 'an', 'the', 'of', 'in', 'on', 'to', 'for', 'and', 'is', 'with', 'from', 'by', 'given', 'problem', 'find']);
+
+function words(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((w) => w && !STOP.has(w));
+}
+
+/** Questions on the site that this request probably duplicates, best match first (at most 3). */
+export function findSiteMatches(slug: string, title: string): SiteMatch[] {
+  const out = new Map<string, SiteMatch>();
+  const add = (s: string, kind: SiteMatch['kind']) => {
+    const q = catalog.find((c) => c.slug === s);
+    if (q && !out.has(s))
+      out.set(s, { slug: s, title: q.title, category: q.category, hasVisualizer: !!problemRegistry[s], kind });
+  };
+  add(slug, 'exact');
+  const norm = words(title).join(' ');
+  for (const q of catalog) if (words(q.title).join(' ') === norm) add(q.slug, 'title');
+  const low = title.toLowerCase();
+  for (const [re, s] of ALIASES) if (re.test(low)) add(s, 'alias');
+  const mine = new Set(words(title));
+  if (mine.size && out.size === 0) {
+    const scored = catalog
+      .map((q) => {
+        const theirs = new Set(words(q.title));
+        const inter = [...mine].filter((w) => theirs.has(w)).length;
+        const jaccard = inter / (mine.size + theirs.size - inter);
+        // "Valid Palindrome" vs "Valid Palindrome II" differ only by a numeral: keep it a strong match.
+        const contained = inter >= 2 && inter === Math.min(mine.size, theirs.size) ? 0.75 : 0;
+        return { q, score: Math.max(jaccard, contained) };
+      })
+      .filter((x) => x.score >= 0.6)
+      .sort((a, b) => b.score - a.score);
+    for (const { q } of scored.slice(0, 3)) add(q.slug, 'similar');
+  }
+  return [...out.values()].slice(0, 3);
+}
+
 type RequestRow = {
   id: number;
   teacher_id: number | null;
@@ -177,6 +251,7 @@ function toApi(r: RequestRow, full: boolean) {
     updatedAt: r.updated_at,
     teacher: r.teacher_name ? { name: r.teacher_name, email: r.teacher_email } : undefined,
     alreadyOnSite: !!problemRegistry[r.slug],
+    siteMatches: findSiteMatches(r.slug, r.title),
     publishedCommit: r.published_commit,
   };
   if (!full) return base;
