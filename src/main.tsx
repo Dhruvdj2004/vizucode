@@ -37,6 +37,9 @@ const AptitudeResult = lazy(() => import('./pages/aptitude/AptitudeResult'));
 const AptitudeCoverage = lazy(() => import('./pages/aptitude/AptitudeCoverage'));
 const InterviewHome = lazy(() => import('./pages/interview/InterviewHome'));
 const InterviewSession = lazy(() => import('./pages/interview/InterviewSession'));
+const TeacherLoginPage = lazy(() => import('./pages/teacher/TeacherLoginPage'));
+const TeacherPage = lazy(() => import('./pages/teacher/TeacherPage'));
+const TeacherQuestionPage = lazy(() => import('./pages/teacher/TeacherQuestionPage'));
 
 function PageFallback() {
   return <div className="page-loading">Loading…</div>;
@@ -256,6 +259,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 </RequireAuth>
               }
             />
+            <Route path="teacher/login" element={<TeacherLoginPage />} />
+            <Route path="teacher" element={<TeacherPage />} />
+            <Route path="teacher/q/:id" element={<TeacherQuestionPage />} />
             <Route path="login" element={<LoginPage />} />
             <Route path="register" element={<RegisterPage />} />
             <Route path="forgot-password" element={<ForgotPasswordPage />} />

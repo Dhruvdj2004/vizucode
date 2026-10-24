@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { problemRegistry } from '../problems';
 import { fetchProblem } from '../lib/api';
-import type { StaticProblem } from '../lib/serialize';
-import { isRunError, type RunResult } from '../lib/types';
+import { toStatic, type StaticProblem } from '../lib/serialize';
+import { isRunError, type ProblemDef, type RunResult } from '../lib/types';
 import { getSession, onAuthChange } from '../lib/auth';
 import { isCategoryLocked } from '../lib/plan';
 import CodePanel from '../components/CodePanel';
@@ -26,12 +26,17 @@ const SPEEDS = [
   { label: '2×', ms: 240 },
 ];
 
-export default function VisualizerPage() {
-  const { slug } = useParams();
+/**
+ * `previewDef` renders an unpublished visualizer (the admin panel's live
+ * preview of generated code) instead of looking the slug up.
+ */
+export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef } = {}) {
+  const { slug: routeSlug } = useParams();
+  const slug = previewDef ? previewDef.slug : routeSlug;
   // Static content (metadata, code, inputs, note) comes from the API with a
   // local fallback; the trace generator always runs locally for instant steps.
   const [problem, setProblem] = useState<StaticProblem | null | undefined>(undefined);
-  const def = slug ? problemRegistry[slug] : undefined;
+  const def = previewDef ?? (slug ? problemRegistry[slug] : undefined);
   // Which solution is on screen. The brute force shares this problem's widget
   // and inputs, so switching only swaps the code, the trace generator and the
   // surrounding prose — the same run values stay in the boxes.
@@ -57,6 +62,10 @@ export default function VisualizerPage() {
   useEffect(() => {
     let alive = true;
     setProblem(undefined);
+    if (previewDef) {
+      setProblem(toStatic(previewDef));
+      return;
+    }
     if (!slug) {
       setProblem(null);
       return;
@@ -67,7 +76,7 @@ export default function VisualizerPage() {
     return () => {
       alive = false;
     };
-  }, [slug]);
+  }, [slug, previewDef]);
 
   const doRun = useCallback(
     (vals: Record<string, string>) => {
@@ -140,7 +149,7 @@ export default function VisualizerPage() {
     );
   }
 
-  if (isCategoryLocked(problem.category, session?.user)) {
+  if (!previewDef && isCategoryLocked(problem.category, session?.user)) {
     return (
       <div className="panel">
         <h2><Icon name="lock" /> This one's locked</h2>
