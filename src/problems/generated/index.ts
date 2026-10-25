@@ -4,9 +4,11 @@
 // so keep both marker comments.
 import type { ProblemDef } from '../../lib/types';
 import { problem as p_justified_text } from './justified-text';
+import { problem as p_132_pattern } from './132-pattern';
 // @generated-imports
 
 export const generatedProblems: ProblemDef[] = [
   p_justified_text,
+  p_132_pattern,
   // @generated-list
 ];
