@@ -115,17 +115,91 @@ app.get('/api/health', rateLimit('read'), wrap(async (_req, res) => {
   res.json({ ok: true, source: 'database', ...r.rows[0] });
 }));
 
-// Catalog/content reads only change via `npm run db:seed` (a separate
-// process), so a process-lifetime in-memory cache avoids a ~200ms Supabase
-// round trip on every request for data that's effectively static. On Vercel
-// this caches per warm instance — still a large win since instances are
-// reused across nearby invocations.
+// Catalog/content reads are cached in memory to skip a ~200ms Supabase round
+// trip per request. The cache expires after CACHE_TTL_MS: questions published
+// from the teacher panel (or a re-seed) must show up without a redeploy, and on
+// Vercel's Fluid compute one instance can stay warm for a long time.
+const CACHE_TTL_MS = 2 * 60_000;
+let cacheBornAt = 0;
 let categoriesCache: unknown[] | null = null;
 let questionsCache: unknown[] | null = null;
 const questionCache = new Map<string, unknown>();
 
+function freshCaches(): void {
+  if (Date.now() - cacheBornAt < CACHE_TTL_MS) return;
+  cacheBornAt = Date.now();
+  categoriesCache = null;
+  questionsCache = null;
+  questionCache.clear();
+}
+
+/**
+ * Adds every question that is in the deployed code (catalog.ts + the problem
+ * registry) but missing from Postgres, once per instance. Merging a new
+ * visualizer then makes it appear after the deploy on its own, with no
+ * `npm run db:seed` and no teacher-panel visit needed. Never deletes or
+ * overwrites anything.
+ */
+let catalogSynced: Promise<void> | null = null;
+function syncCatalogToDb(): Promise<void> {
+  if (!pool) return Promise.resolve();
+  catalogSynced ??= (async () => {
+    const haveQ = new Set((await pool!.query('select slug from questions')).rows.map((r: { slug: string }) => r.slug));
+    const haveC = new Set((await pool!.query('select slug from problem_content')).rows.map((r: { slug: string }) => r.slug));
+    let added = 0;
+    for (const q of catalog) {
+      if (haveQ.has(q.slug)) continue;
+      const r = await pool!.query(
+        `insert into questions (id, slug, category, title, difficulty, leetcode)
+         values ($1, $2, $3, $4, $5, $6) on conflict do nothing`,
+        [q.id, q.slug, q.category, q.title, q.difficulty, q.leetcode]
+      );
+      if (r.rowCount) haveQ.add(q.slug);
+      added += r.rowCount ?? 0;
+    }
+    for (const def of Object.values(problemRegistry)) {
+      if (haveC.has(def.slug) || !haveQ.has(def.slug)) continue;
+      const st = toStatic(def);
+      const r = await pool!.query(
+        `insert into problem_content
+           (slug, technique, widget, widget_title, inputs, code_cpp, code_java, note, time_complexity, space_complexity, brute)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) on conflict do nothing`,
+        [
+          st.slug,
+          st.technique,
+          st.widget,
+          st.widgetTitle,
+          JSON.stringify(st.inputs),
+          JSON.stringify(st.code.cpp),
+          JSON.stringify(st.code.java),
+          st.note,
+          st.complexity.time,
+          st.complexity.space,
+          st.brute ? JSON.stringify(st.brute) : null,
+        ]
+      );
+      added += r.rowCount ?? 0;
+    }
+    if (added) {
+      console.log(`[catalog] added ${added} missing row(s) to the database`);
+      cacheBornAt = 0;
+      freshCaches();
+    }
+  })().catch((e) => {
+    console.error('[catalog] sync failed:', e instanceof Error ? e.message : e);
+    catalogSynced = null; // try again on the next request
+  });
+  return catalogSynced;
+}
+
+/** Cache housekeeping + one-time catalog sync before any catalog read. */
+const catalogReady = (_req: express.Request, _res: express.Response, next: express.NextFunction) => {
+  freshCaches();
+  syncCatalogToDb().then(() => next(), () => next());
+};
+
 /** Categories with question + visualizer counts, in catalog order. */
-app.get('/api/categories', rateLimit('read'), wrap(async (_req, res) => {
+app.get('/api/categories', rateLimit('read'), catalogReady, wrap(async (_req, res) => {
   if (pool) {
     if (categoriesCache) {
       res.json(categoriesCache);
@@ -155,7 +229,7 @@ app.get('/api/categories', rateLimit('read'), wrap(async (_req, res) => {
 }));
 
 /** Full question list (catalog + availability flag). */
-app.get('/api/questions', rateLimit('read'), wrap(async (_req, res) => {
+app.get('/api/questions', rateLimit('read'), catalogReady, wrap(async (_req, res) => {
   if (pool) {
     if (questionsCache) {
       res.json(questionsCache);
@@ -175,7 +249,7 @@ app.get('/api/questions', rateLimit('read'), wrap(async (_req, res) => {
 }));
 
 /** One question's full static content: metadata, code, inputs, note, complexity. */
-app.get('/api/questions/:slug', rateLimit('read'), wrap(async (req, res) => {
+app.get('/api/questions/:slug', rateLimit('read'), catalogReady, wrap(async (req, res) => {
   if (pool) {
     const cached = questionCache.get(req.params.slug);
     if (cached) {
