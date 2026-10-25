@@ -664,16 +664,18 @@ async function fixTypeErrors(code: string, errors: string[]): Promise<string> {
 }
 
 /** Backup models tried, in order, when the main one is overloaded (fast ones only: each must fit the time limit). */
-const GEMINI_FALLBACKS = (process.env.GEMINI_FALLBACK_MODELS ?? 'gemini-3.5-flash')
+const GEMINI_FALLBACKS = (process.env.GEMINI_FALLBACK_MODELS ?? 'gemini-3.5-flash,gemini-3.7-flash')
   .split(',')
   .map((m) => m.trim())
   .filter((m) => m && m !== GEMINI_CODE_MODEL);
-/** Whole budget for one request's Gemini work, kept under Vercel's 60 s function limit. */
-const GEMINI_BUDGET_MS = Number(process.env.GEMINI_BUDGET_MS ?? 52_000);
+/** Whole budget for one request's Gemini work, kept under the function limit (vercel.json maxDuration: 300 s). */
+const GEMINI_BUDGET_MS = Number(process.env.GEMINI_BUDGET_MS ?? 240_000);
 const MIN_ATTEMPT_MS = 15_000;
+/** One model never gets more than this, so a stalled call still leaves time for the backup. */
+const MAX_ATTEMPT_MS = Number(process.env.GEMINI_ATTEMPT_MS ?? 120_000);
 
 /**
- * One visualizer module from Gemini. When a model is overloaded (503/500) it
+ * One visualizer module from Gemini. When a model is overloaded (503/500) or stalls it
  * moves on to the next model straight away, but never past the time budget:
  * a clear "busy" error beats the platform killing the request mid-way.
  */
@@ -685,10 +687,11 @@ export async function geminiModule(prompt: string): Promise<string> {
     const left = deadline - Date.now();
     if (left < MIN_ATTEMPT_MS) break;
     try {
-      return await geminiModuleOnce(prompt, models[i], left);
+      return await geminiModuleOnce(prompt, models[i], Math.min(left, MAX_ATTEMPT_MS));
     } catch (e) {
       last = e;
-      const busy = e instanceof HttpError && e.status === 503;
+      // Overloaded (503) or too slow (504): try the next model while there's time.
+      const busy = e instanceof HttpError && (e.status === 503 || e.status === 504);
       if (!busy) throw e;
       console.warn(`[teacher] ${models[i]} overloaded, trying ${models[i + 1] ?? 'nothing else'}`);
     }
