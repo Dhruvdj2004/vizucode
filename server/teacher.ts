@@ -664,7 +664,7 @@ async function fixTypeErrors(code: string, errors: string[]): Promise<string> {
 }
 
 /** Backup models tried, in order, when the main one is overloaded (fast ones only: each must fit the time limit). */
-const GEMINI_FALLBACKS = (process.env.GEMINI_FALLBACK_MODELS ?? 'gemini-3.5-flash,gemini-3.7-flash')
+const GEMINI_FALLBACKS = (process.env.GEMINI_FALLBACK_MODELS ?? 'gemini-3.5-flash')
   .split(',')
   .map((m) => m.trim())
   .filter((m) => m && m !== GEMINI_CODE_MODEL);
@@ -681,19 +681,22 @@ const MAX_ATTEMPT_MS = Number(process.env.GEMINI_ATTEMPT_MS ?? 120_000);
  */
 export async function geminiModule(prompt: string): Promise<string> {
   const deadline = Date.now() + GEMINI_BUDGET_MS;
-  const models = [GEMINI_CODE_MODEL, ...GEMINI_FALLBACKS];
+  const order = [GEMINI_CODE_MODEL, ...GEMINI_FALLBACKS];
+  // Two passes over the models; the second after a pause, since per-minute limits and demand spikes clear fast.
+  const models = [...order, ...order];
   let last: unknown = null;
   for (let i = 0; i < models.length; i++) {
+    if (i === order.length) await new Promise((r) => setTimeout(r, 20_000));
     const left = deadline - Date.now();
     if (left < MIN_ATTEMPT_MS) break;
     try {
       return await geminiModuleOnce(prompt, models[i], Math.min(left, MAX_ATTEMPT_MS));
     } catch (e) {
       last = e;
-      // Overloaded (503) or too slow (504): try the next model while there's time.
-      const busy = e instanceof HttpError && (e.status === 503 || e.status === 504);
+      // Overloaded (503), rate-limited (429) or too slow (504): try the next model while there's time.
+      const busy = e instanceof HttpError && [429, 503, 504].includes(e.status) && !/Today's Gemini limit/.test(e.message);
       if (!busy) throw e;
-      console.warn(`[teacher] ${models[i]} overloaded, trying ${models[i + 1] ?? 'nothing else'}`);
+      console.warn(`[teacher] ${models[i]} unavailable (${(e as HttpError).status}), trying ${models[i + 1] ?? 'again after a pause'}`);
     }
   }
   if (last instanceof HttpError) throw last;
@@ -722,10 +725,24 @@ async function geminiModuleOnce(prompt: string, model: string, timeoutMs: number
     throw new HttpError(502, "Couldn't reach Gemini. Try again in a minute.");
   }
   if (!r.ok) {
-    console.error(`[teacher] Gemini HTTP ${r.status}: ${(await r.text()).slice(0, 400)}`);
+    const body = await r.text();
+    console.error(`[teacher] ${model} HTTP ${r.status}: ${body.slice(0, 400)}`);
+    if (r.status === 429) {
+      // A daily quota (e.g. the free tier's 20 requests/day) won't clear by retrying: say so right away.
+      const m = /retry in ((\d+)h)?((\d+)m)?([\d.]+)s/i.exec(body);
+      const secs = m ? Number(m[2] ?? 0) * 3600 + Number(m[4] ?? 0) * 60 + Number(m[5]) : 0;
+      if (/per ?day|PerDay/i.test(body) || secs > 120) {
+        const wait = secs >= 3600 ? `about ${Math.round(secs / 3600)} hour(s)` : `about ${Math.ceil(secs / 60)} minute(s)`;
+        throw new HttpError(
+          429,
+          `Today's Gemini limit for this key is used up (${/free.?tier/i.test(body) ? 'free tier: 20 requests a day per model' : 'daily quota'}). ` +
+            `It resets in ${secs ? wait : 'a few hours'}. Turning on billing for the key in Google AI Studio removes this limit.`
+        );
+      }
+    }
     if (r.status === 402)
       throw new HttpError(502, 'Gemini credits are used up. Top up the project at https://ai.studio/projects and try again.');
-    if (r.status === 429) throw new HttpError(502, 'Gemini rate limit hit. Wait a minute and try again.');
+    if (r.status === 429) throw new HttpError(429, 'Gemini rate limit hit. Wait a minute and click Generate again.');
     if (r.status === 503 || r.status === 500)
       throw new HttpError(503, 'Gemini is busy right now (high demand). Wait a minute and click Generate again.');
     throw new HttpError(502, `Gemini returned HTTP ${r.status}. Try again in a minute.`);
