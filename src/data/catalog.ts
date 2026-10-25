@@ -2488,5 +2488,13 @@ export const catalog: CatalogEntry[] = [
     "difficulty": "Medium",
     "leetcode": "https://www.geeksforgeeks.org/dsa/justify-the-given-text-based-on-the-given-width-of-each-line/",
     "slug": "justified-text"
+  },
+  {
+    "id": 311,
+    "category": "Binary Search",
+    "title": "132 Pattern",
+    "difficulty": "Medium",
+    "leetcode": "https://leetcode.com/problems/132-pattern/",
+    "slug": "132-pattern"
   }
 ];
