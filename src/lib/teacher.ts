@@ -114,7 +114,10 @@ async function call<T>(path: string, token: string | undefined, method = 'GET', 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && path.startsWith('/api/teacher') && path !== '/api/teacher/login') teacherLogout();
-    throw new Error((data as { error?: string }).error ?? `Request failed (${res.status}).`);
+    const msg = (data as { error?: string }).error;
+    if (!msg && (res.status === 504 || res.status === 502))
+      throw new Error('The server took too long (Gemini may be busy). Wait a minute and try again.');
+    throw new Error(msg ?? `Request failed (${res.status}).`);
   }
   return data as T;
 }

@@ -663,25 +663,48 @@ async function fixTypeErrors(code: string, errors: string[]): Promise<string> {
   );
 }
 
-/** One Gemini call that must return a whole visualizer module; retries a busy/overloaded model briefly. */
-async function geminiModule(prompt: string): Promise<string> {
-  for (let attempt = 1; ; attempt++) {
+/** Backup models tried, in order, when the main one is overloaded (fast ones only: each must fit the time limit). */
+const GEMINI_FALLBACKS = (process.env.GEMINI_FALLBACK_MODELS ?? 'gemini-3.5-flash,gemini-3.7-flash')
+  .split(',')
+  .map((m) => m.trim())
+  .filter((m) => m && m !== GEMINI_CODE_MODEL);
+/** Whole budget for one request's Gemini work, kept under the function limit (vercel.json maxDuration: 300 s). */
+const GEMINI_BUDGET_MS = Number(process.env.GEMINI_BUDGET_MS ?? 240_000);
+const MIN_ATTEMPT_MS = 15_000;
+/** One model never gets more than this, so a stalled call still leaves time for the backup. */
+const MAX_ATTEMPT_MS = Number(process.env.GEMINI_ATTEMPT_MS ?? 120_000);
+
+/**
+ * One visualizer module from Gemini. When a model is overloaded (503/500) or stalls it
+ * moves on to the next model straight away, but never past the time budget:
+ * a clear "busy" error beats the platform killing the request mid-way.
+ */
+export async function geminiModule(prompt: string): Promise<string> {
+  const deadline = Date.now() + GEMINI_BUDGET_MS;
+  const models = [GEMINI_CODE_MODEL, ...GEMINI_FALLBACKS];
+  let last: unknown = null;
+  for (let i = 0; i < models.length; i++) {
+    const left = deadline - Date.now();
+    if (left < MIN_ATTEMPT_MS) break;
     try {
-      return await geminiModuleOnce(prompt);
+      return await geminiModuleOnce(prompt, models[i], Math.min(left, MAX_ATTEMPT_MS));
     } catch (e) {
-      const busy = e instanceof HttpError && /HTTP (500|503)\b/.test(e.message);
-      if (!busy || attempt >= 3) throw e;
-      console.warn(`[teacher] Gemini busy, retry ${attempt}`);
-      await new Promise((r) => setTimeout(r, 2000 * attempt));
+      last = e;
+      // Overloaded (503) or too slow (504): try the next model while there's time.
+      const busy = e instanceof HttpError && (e.status === 503 || e.status === 504);
+      if (!busy) throw e;
+      console.warn(`[teacher] ${models[i]} overloaded, trying ${models[i + 1] ?? 'nothing else'}`);
     }
   }
+  if (last instanceof HttpError) throw last;
+  throw new HttpError(503, 'Gemini is busy right now. Wait a minute and click Generate again.');
 }
 
-async function geminiModuleOnce(prompt: string): Promise<string> {
+async function geminiModuleOnce(prompt: string, model: string, timeoutMs: number): Promise<string> {
   let r: globalThis.Response;
   try {
     r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_CODE_MODEL}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY! },
@@ -690,7 +713,7 @@ async function geminiModuleOnce(prompt: string): Promise<string> {
         generationConfig: { temperature: 0.3, maxOutputTokens: 32768 },
       }),
       // Stay inside the serverless function limit (vercel.json maxDuration).
-      signal: AbortSignal.timeout(Number(process.env.GEMINI_TIMEOUT_MS ?? 55_000)),
+      signal: AbortSignal.timeout(timeoutMs),
     }
   );
   } catch (e) {
@@ -704,7 +727,7 @@ async function geminiModuleOnce(prompt: string): Promise<string> {
       throw new HttpError(502, 'Gemini credits are used up. Top up the project at https://ai.studio/projects and try again.');
     if (r.status === 429) throw new HttpError(502, 'Gemini rate limit hit. Wait a minute and try again.');
     if (r.status === 503 || r.status === 500)
-      throw new HttpError(503, `Gemini is overloaded right now (HTTP ${r.status}). Try again in a minute.`);
+      throw new HttpError(503, 'Gemini is busy right now (high demand). Wait a minute and click Generate again.');
     throw new HttpError(502, `Gemini returned HTTP ${r.status}. Try again in a minute.`);
   }
   const data = (await r.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
