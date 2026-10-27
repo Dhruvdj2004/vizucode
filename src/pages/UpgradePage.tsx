@@ -19,7 +19,7 @@ const FEATURES = [
   'All 309 questions across every pattern, unlocked',
   'Full step-by-step visualizers for every problem',
   'Progress tracking, streaks and solve counts across all categories',
-  '13 AI mock interviews instead of 1 — including 3 premium ones on Gemini',
+  '13 AI mock interviews instead of 1',
 ];
 
 export default function UpgradePage() {

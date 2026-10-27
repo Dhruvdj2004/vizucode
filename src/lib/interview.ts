@@ -73,7 +73,7 @@ export interface InterviewHome extends InterviewQuota {
   price: number;
   /** Free interviews every account gets (on Groq). */
   freeIncluded: number;
-  /** Extra interviews Pro adds (on Gemini). */
+  /** Extra interviews Pro adds. */
   proIncluded: number;
   /** Paid Pro (the college upgrade doesn't count for interviews). */
   proPlan: boolean;
