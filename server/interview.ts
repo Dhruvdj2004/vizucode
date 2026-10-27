@@ -27,7 +27,7 @@
 //
 // Included interviews: a regular free account gets FREE_INTERVIEWS (1); a
 // verified college account and paid Pro get FULL_INTERVIEWS (10), all on Groq;
-// paid Pro also gets PRO_INTERVIEWS (3) on Gemini. After that each interview
+// paid Pro also gets PRO_INTERVIEWS (3) more. After that each interview
 // costs ₹19 (on Groq), paid through Razorpay (POST /pay/order, then
 // /pay/verify adds one credit). Backed by the interviews and
 // interview_purchases tables when DATABASE_URL is set, otherwise in-memory
@@ -42,19 +42,23 @@ import { LEVELS, ROLES } from '../src/lib/interviewOptions';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash';
-// Gemini runs only the PRO_INTERVIEWS included with paid ₹49 Pro. Every other
-// interview (free, college, ₹19 extras) runs on Groq only — never on Gemini.
+// Every interview runs on Groq only (decided 2026-10-27): Gemini's free tier
+// (20 requests/day) couldn't carry a full interview. There is deliberately no
+// fallback to Gemini — if Groq is down the user is asked to try again.
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL ?? 'openai/gpt-oss-120b';
 const GROQ_WHISPER_MODEL = process.env.GROQ_WHISPER_MODEL ?? 'whisper-large-v3';
 
-/** Which AI runs an interview: Gemini for paid Pro's included ones, Groq for everything else. */
+/** Which AI runs an interview. Old interviews may still say 'gemini'; they are now run on Groq too. */
 type Engine = 'gemini' | 'groq';
+
+/** The engine every interview step uses, whatever an older interview record says. */
+const ENGINE: Engine = 'groq';
 
 /**
  * Included interviews. Regular free accounts: FREE_INTERVIEWS on Groq.
  * Verified college accounts (@ietdavv.edu.in, Pro for free) and paid Pro:
- * FULL_INTERVIEWS on Groq. Paid Pro also gets PRO_INTERVIEWS on Gemini.
+ * FULL_INTERVIEWS on Groq. Paid Pro also gets PRO_INTERVIEWS more (also on Groq).
  */
 export const FREE_INTERVIEWS = 1;
 export const FULL_INTERVIEWS = 10;
@@ -786,7 +790,7 @@ Return:
 Write feedback in simple English for an Indian college student.`;
 
   const fb = await llm(
-    iv.engine ?? 'gemini',
+    ENGINE,
     [{ text: prompt }],
     {
       type: 'OBJECT',
@@ -820,7 +824,7 @@ async function buildReport(iv: Interview): Promise<Report> {
     .join('\n\n');
   try {
     const r = await llm(
-      iv.engine ?? 'gemini',
+      ENGINE,
       [
         {
           text: `Summarise this mock interview for a ${iv.level} ${iv.role} candidate. ${answered.length} of ${iv.questions.length} questions were answered; the overall score is ${overall}/10.
@@ -964,16 +968,6 @@ async function forgetOldFingerprints(): Promise<void> {
 async function countStarted(userId: number): Promise<number> {
   if (!pool) return [...mem.values()].filter((iv) => iv.userId === userId).length;
   const r = await pool.query('select count(*)::int as n from interviews where user_id = $1', [userId]);
-  return r.rows[0].n as number;
-}
-
-/** Interviews this account has had on Gemini — paid Pro gets PRO_INTERVIEWS of them. */
-async function countGemini(userId: number): Promise<number> {
-  if (!pool) return [...mem.values()].filter((iv) => iv.userId === userId && iv.engine === 'gemini').length;
-  const r = await pool.query(
-    "select count(*)::int as n from interviews where user_id = $1 and data->>'engine' = 'gemini'",
-    [userId]
-  );
   return r.rows[0].n as number;
 }
 
@@ -1125,7 +1119,7 @@ interviewRouter.get('/', wrap(async (req, res) => {
     freeIncluded: groqIncludedFor(req.user!),
     proPlan: interviewPro(req.user!),
     college: req.user!.email.toLowerCase().endsWith(COLLEGE_EMAIL_SUFFIX),
-    aiReady: !!GEMINI_API_KEY || !!GROQ_API_KEY,
+    aiReady: !!GROQ_API_KEY,
     paymentsReady: !!razorpay,
   });
 }));
@@ -1162,11 +1156,9 @@ interviewRouter.post('/', wrap(async (req, res) => {
     report: null,
     createdAt: Date.now(),
   };
-  // Only paid ₹49 Pro's own interviews (the first PRO_INTERVIEWS) run on
-  // Gemini. Free, college and ₹19 extra interviews all run on Groq.
-  const geminiSlot = interviewPro(user) && (await countGemini(user.id)) < PRO_INTERVIEWS;
-  const engine: Engine = geminiSlot ? 'gemini' : 'groq';
-  if (engine === 'groq' && !GROQ_API_KEY) {
+  // Every interview runs on Groq (Pro still gets its extra included interviews, see includedFor).
+  const engine: Engine = ENGINE;
+  if (!GROQ_API_KEY) {
     res.status(503).json({ error: 'AI is not configured on this server.' });
     return;
   }
@@ -1340,7 +1332,7 @@ interviewRouter.post('/:id/answer', wrap(async (req, res) => {
   let answer: string;
   try {
     answer =
-      'audio' in parsed.data ? await transcribe(parsed.data.audio, parsed.data.mime, iv.lang, iv.engine ?? 'gemini') : parsed.data.text;
+      'audio' in parsed.data ? await transcribe(parsed.data.audio, parsed.data.mime, iv.lang, ENGINE) : parsed.data.text;
   } catch (e) {
     if (e instanceof NoSpeechError) {
       res.status(422).json({ error: e.message });

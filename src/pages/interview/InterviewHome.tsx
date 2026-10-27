@@ -110,7 +110,7 @@ export default function InterviewHome() {
       ) : (
         <div className="panel iv-setup">
           {home && !home.aiReady && (
-            <p className="iv-alert">The AI interviewer isn’t configured on this server yet (missing GEMINI_API_KEY).</p>
+            <p className="iv-alert">The AI interviewer isn’t configured on this server yet (missing GROQ_API_KEY).</p>
           )}
 
           <label className="iv-label">Your resume (PDF, max 3 MB)</label>
