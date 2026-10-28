@@ -1087,7 +1087,7 @@ const makingLargeIsland: ProblemDef = {
     }
     steps.push({
       tag: 'ret',
-      trace: ['Largest island achievable with one flip: ', C(best), bestCell ? [' (flip cell (', C(bestCell), '))'].join('') : ' (no flip needed)', '.'],
+      trace: ['Largest island achievable with one flip: ', C(best), bestCell ? [' (flip cell (', C(bestCell), '))'] : ' (no flip needed)', '.'],
       state: view(bestCell ?? undefined),
     });
     return { steps, result: String(best), resultDetail: bestCell ? `flip (${bestCell})` : 'no flip needed' };

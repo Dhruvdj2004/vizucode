@@ -774,7 +774,7 @@ const symmetricTree: ProblemDef = {
       if (!a || !b || a.val !== b.val) {
         steps.push({
           tag: 'mismatch',
-          trace: [!a || !b ? 'One side has a node where the other has a gap' : ['Values differ (', F(a.val), ' vs ', F(b.val), ')'].join(''), ' — the tree is ', F('not'), ' symmetric.'],
+          trace: [!a || !b ? 'One side has a node where the other has a gap' : ['Values differ (', F(a.val), ' vs ', F(b.val), ')'], ' — the tree is ', F('not'), ' symmetric.'],
           state: view(a, b, depth),
         });
         return false;

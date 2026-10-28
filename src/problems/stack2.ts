@@ -1256,7 +1256,7 @@ const maximalRectangle: ProblemDef = {
     }
     steps.push({
       tag: 'ret',
-      trace: ['Largest all-ones rectangle has area ', C(best), bestBox ? [' — rows ', C(`${bestBox.r0}…${bestBox.r1}`), ', columns ', C(`${bestBox.c0}…${bestBox.c1}`)].join('') : '', '.'],
+      trace: ['Largest all-ones rectangle has area ', C(best), bestBox ? [' — rows ', C(`${bestBox.r0}…${bestBox.r1}`), ', columns ', C(`${bestBox.c0}…${bestBox.c1}`)] : '', '.'],
       state: view(
         -1,
         bestBox
@@ -1824,7 +1824,7 @@ const longestValidParens: ProblemDef = {
     }
     steps.push({
       tag: 'ret',
-      trace: best ? ['Longest valid substring is ', C(best), ' character(s) long', bestRange ? [' (indices ', C(`${bestRange[0]}…${bestRange[1]}`), ')'].join('') : '', '.'] : ['Nothing balances — the answer is ', C(0), '.'],
+      trace: best ? ['Longest valid substring is ', C(best), ' character(s) long', bestRange ? [' (indices ', C(`${bestRange[0]}…${bestRange[1]}`), ')'] : '', '.'] : ['Nothing balances — the answer is ', C(0), '.'],
       state: st(ch.length, bestRange ? Object.fromEntries([...Array(best)].map((_, k) => [bestRange![0] + k, 'final' as const])) : {}),
     });
     return { steps, result: String(best), resultDetail: bestRange ? `indices ${bestRange[0]}…${bestRange[1]}` : undefined };

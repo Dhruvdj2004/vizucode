@@ -8,11 +8,13 @@ const REVISION_KEYS = ['revision'];
 const NON_SECTION_BASES = ['login', 'register', 'upgrade', 'feedback'];
 
 /** Which header nav entry should light up for a given pathname. */
-export function navSection(pathname: string): 'home' | 'dsa' | 'catalyst' | 'revision' | 'core' | 'aptitude' | 'interview' | 'resume' | 'news' | 'none' {
+export function navSection(pathname: string, state?: unknown): 'home' | 'dsa' | 'catalyst' | 'revision' | 'core' | 'aptitude' | 'interview' | 'resume' | 'news' | 'none' {
   const base = pathname.split('/')[1] ?? '';
   if (base === '') return 'home';
   if (base === 'news') return 'news';
   if (base === 'code-catalyst') return 'catalyst';
+  // A visualizer opened from the Code Catalyst list keeps that tab lit.
+  if (base === 'visualize' && (state as { from?: string } | null)?.from === 'code-catalyst') return 'catalyst';
   if (base === 'interview') return 'interview';
   if (base === 'resume') return 'resume';
   if (base === 'aptitude') return 'aptitude';

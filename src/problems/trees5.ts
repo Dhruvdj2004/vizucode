@@ -802,7 +802,7 @@ const distanceK: ProblemDef = {
         steps.push({
           tag: 'expand',
           trace: [
-            'From ', A(n.val), ', neighbours are ', B(nbrs.map((x) => x.val).join(', ') || 'none'), fresh.length ? [' — new: ', B(fresh.map((x) => x.val).join(', '))].join('') : ' — all already seen',
+            'From ', A(n.val), ', neighbours are ', B(nbrs.map((x) => x.val).join(', ') || 'none'), fresh.length ? [' — new: ', B(fresh.map((x) => x.val).join(', '))] : ' — all already seen',
             '.',
           ],
           state: view(),

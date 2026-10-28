@@ -1005,7 +1005,7 @@ const findTheCity: ProblemDef = {
       steps.push({
         tag: 'via',
         trace: [
-          'Now allow city ', A(k), ' as an intermediate stop. ', improved ? [B(improved), ' pair(s) got shorter.'].join('') : 'No pair improves through it.',
+          'Now allow city ', A(k), ' as an intermediate stop. ', improved ? [B(improved), ' pair(s) got shorter.'] : 'No pair improves through it.',
         ],
         state: view(k, [{ label: 'distance matrix', value: matrixText(), c: 'b' }]),
       });

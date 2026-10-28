@@ -960,7 +960,7 @@ const lastStoneWeightII: ProblemDef = {
       steps.push({
         tag: 'set',
         trace: [
-          'Add stone ', A(s), ': ', added.length ? ['newly reachable sums ', B(added.sort((x, y) => x - y).join(', ')), '.'].join('') : 'no new sums appear.',
+          'Add stone ', A(s), ': ', added.length ? ['newly reachable sums ', B(added.sort((x, y) => x - y).join(', ')), '.'] : 'no new sums appear.',
           ' The inner loop runs ', A('downwards'), ' so each stone is used at most once.',
         ],
         state: view(i + 1, added[0]),

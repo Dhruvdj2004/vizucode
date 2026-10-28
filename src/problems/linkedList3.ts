@@ -72,7 +72,7 @@ const middleOfList: ProblemDef = {
       fast += 2;
       steps.push({
         tag: 'step',
-        trace: ['slow → node ', A(vals[slow]), ' (index ', A(slow), '); fast → ', fast < vals.length ? ['node ', B(vals[fast]), ' (index ', B(fast), ')'].join('') : B('past the end'), '.'],
+        trace: ['slow → node ', A(vals[slow]), ' (index ', A(slow), '); fast → ', fast < vals.length ? ['node ', B(vals[fast]), ' (index ', B(fast), ')'] : B('past the end'), '.'],
         state: st(),
       });
       if (steps.length > MAX_STEPS) break;
@@ -223,7 +223,7 @@ const cycleII: ProblemDef = {
       tag: 'init',
       trace: [
         pos >= 0
-          ? ['The tail points back to index ', A(pos), ', so the list has a loop. Two pointers at different speeds must eventually collide inside it.'].join('')
+          ? ['The tail points back to index ', A(pos), ', so the list has a loop. Two pointers at different speeds must eventually collide inside it.']
           : 'No link-back, so this list ends normally — fast will simply run off the end.',
       ],
       state: st(),

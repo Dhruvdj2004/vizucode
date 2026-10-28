@@ -327,7 +327,7 @@ const maxConsecutiveOnesIII: ProblemDef = {
       if (a[r] === 0) zeros++;
       steps.push({
         tag: 'grow',
-        trace: ['Extend right to index ', A(r), a[r] === 0 ? [' — it is a ', A('0'), ', so the window now spends ', B(zeros), ' of its ', B(k), ' flips.'].join('') : ' — already a 1, free to include.'],
+        trace: ['Extend right to index ', A(r), a[r] === 0 ? [' — it is a ', A('0'), ', so the window now spends ', B(zeros), ' of its ', B(k), ' flips.'] : ' — already a 1, free to include.'],
         state: st(r, { [r]: 'active' }),
       });
       while (zeros > k) {
