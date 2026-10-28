@@ -435,10 +435,12 @@ const forceLoginSchema = z.object({
 
 const googleSchema = z.object({
   credential: z.string({ error: 'Missing Google credential.' }).min(1),
+  /** Set on the device-limit screen: sign this device out, then log in here. */
+  revokeSessionId: z.string().min(1).optional(),
 });
 
 /**
- * POST /api/auth/google — body: { credential } (the ID token from Google
+ * POST /api/auth/google — body: { credential, revokeSessionId? } (the ID token from Google
  * Identity Services). Verifies it against Google's servers, then finds or
  * creates the account by email. Subject to the same MAX_DEVICES cap as
  * password login (returns the same device-list 409 for the frontend to
@@ -478,6 +480,9 @@ authRouter.post('/google', wrap(async (req, res) => {
   if (!user.isPro && isCollegeEmail(email)) {
     user = (await store.markPro(user.id)) ?? user;
   }
+  // Google re-verified the account above, so signing out one of its own
+  // devices needs no password (Google-only accounts don't have one).
+  if (parsed.data.revokeSessionId) await sessionStore.revoke(user.id, parsed.data.revokeSessionId);
   const sessions = await sessionStore.list(user.id);
   if (sessions.length >= MAX_DEVICES) {
     res.status(409).json({
