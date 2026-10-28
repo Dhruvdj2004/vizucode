@@ -14,6 +14,7 @@ const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const NewsPage = lazy(() => import('./pages/NewsPage'));
+const CodeCatalystPage = lazy(() => import('./pages/CodeCatalystPage'));
 const ResumePage = lazy(() => import('./pages/ResumePage'));
 const DbmsPage = lazy(() => import('./pages/DbmsPage'));
 const DbmsTopicPage = lazy(() => import('./pages/DbmsTopicPage'));
@@ -64,6 +65,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               element={
                 <RequireAuth>
                   <HomePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="code-catalyst"
+              element={
+                <RequireAuth>
+                  <CodeCatalystPage />
                 </RequireAuth>
               }
             />

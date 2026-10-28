@@ -119,7 +119,8 @@ export default function HomePage() {
       diff[q.difficulty].total++;
       if (solved.has(q.slug)) diff[q.difficulty].solved++;
     }
-    return { total: rows.length, solved: solved.size, diff };
+    // Count only this list's questions — Code Catalyst ticks live in the same set.
+    return { total: rows.length, solved: rows.filter((q) => solved.has(q.slug)).length, diff };
   }, [rows, solved]);
 
   if (!rows || !stats) {

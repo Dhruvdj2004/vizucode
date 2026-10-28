@@ -98,7 +98,8 @@ export default function DashboardPage() {
     [rows, nextCell, solved]
   );
   const total = rows?.length ?? 0;
-  const done = solved.size;
+  // Count only main-list questions — Code Catalyst ticks live in the same set.
+  const done = cells.reduce((n, c) => n + c.solved, 0);
   const pct = total ? Math.round((done / total) * 100) : 0;
   const lastIv = iv?.interviews[0];
   const coreTopics = CORE_MODULES.reduce((n, m) => n + moduleStats(m.mod).topics, 0);
