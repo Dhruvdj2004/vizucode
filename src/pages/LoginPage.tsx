@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { login, forceLogin, DeviceLimitError, type DeviceSession } from '../lib/auth';
+import { login, forceLogin, googleLogin, DeviceLimitError, type DeviceSession } from '../lib/auth';
 import GoogleSignInButton from '../lib/GoogleSignInButton';
 import { PasswordField } from '../components/PasswordField';
 
@@ -13,6 +13,9 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [devices, setDevices] = useState<DeviceSession[] | null>(null);
+  // Set when the device limit was hit through Google sign-in: signing a device
+  // out then retries with this Google credential instead of email + password.
+  const [googleCredential, setGoogleCredential] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -23,6 +26,7 @@ export default function LoginPage() {
       navigate('/');
     } catch (err) {
       if (err instanceof DeviceLimitError) {
+        setGoogleCredential(null);
         setDevices(err.sessions);
       } else {
         setError(err instanceof Error ? err.message : 'Something went wrong — try again.');
@@ -36,7 +40,8 @@ export default function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await forceLogin(email, password, sessionId);
+      if (googleCredential) await googleLogin(googleCredential, sessionId);
+      else await forceLogin(email, password, sessionId);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong — try again.');
@@ -121,7 +126,10 @@ export default function LoginPage() {
         <div className="auth-divider">or</div>
         <GoogleSignInButton
           onSuccess={() => navigate('/')}
-          onDeviceLimit={setDevices}
+          onDeviceLimit={(sessions, credential) => {
+            setGoogleCredential(credential);
+            setDevices(sessions);
+          }}
           onError={setError}
         />
         <p className="auth-alt">

@@ -10,7 +10,8 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
 interface Props {
   onSuccess: () => void;
-  onDeviceLimit: (sessions: DeviceSession[]) => void;
+  /** `credential` lets the caller retry with googleLogin(credential, sessionToSignOut). */
+  onDeviceLimit: (sessions: DeviceSession[], credential: string) => void;
   onError: (message: string) => void;
 }
 
@@ -30,7 +31,7 @@ export default function GoogleSignInButton({ onSuccess, onDeviceLimit, onError }
             await googleLogin(response.credential);
             onSuccess();
           } catch (err) {
-            if (err instanceof DeviceLimitError) onDeviceLimit(err.sessions);
+            if (err instanceof DeviceLimitError) onDeviceLimit(err.sessions, response.credential);
             else onError(err instanceof Error ? err.message : 'Something went wrong — try again.');
           }
         },

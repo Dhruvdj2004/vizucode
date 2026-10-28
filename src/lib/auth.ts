@@ -145,13 +145,13 @@ export async function verifyCollegeCode(token: string, code: string): Promise<Se
 }
 
 /** Throws DeviceLimitError (carrying the signed-in device list) at the device cap, like login(). */
-export async function googleLogin(credential: string): Promise<Session> {
+export async function googleLogin(credential: string, revokeSessionId?: string): Promise<Session> {
   let res: globalThis.Response;
   try {
     res = await fetch('/api/auth/google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential }),
+      body: JSON.stringify({ credential, revokeSessionId }),
     });
   } catch {
     throw new Error('Cannot reach the server — is `npm run server` running?');
