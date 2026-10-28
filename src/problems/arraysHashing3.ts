@@ -716,7 +716,7 @@ const mergeSortedArray: ProblemDef = {
       } else {
         steps.push({
           tag: 'cmp',
-          trace: [A(bv[j]), ' from nums2 wins', i >= 0 ? [' over ', F(av[i])].join('') : ' (nums1 is exhausted)', ' — it takes slot ', C(k), '.'],
+          trace: [A(bv[j]), ' from nums2 wins', i >= 0 ? [' over ', F(av[i])] : ' (nums1 is exhausted)', ' — it takes slot ', C(k), '.'],
           state: st({ ...(i >= 0 ? { [i]: 'dim' as const } : {}), [k]: 'win' }),
         });
         a[k] = bv[j];
@@ -1238,7 +1238,7 @@ const reversePairs: ProblemDef = {
           tag: 'count',
           trace: [
             'Left value ', A(a[i]), ' beats twice the first ', B(found), ' right value(s)',
-            found ? [' (', B(a.slice(mid + 1, j).join(', ')), ')'].join('') : '',
+            found ? [' (', B(a.slice(mid + 1, j).join(', ')), ')'] : '',
             '. Both halves are sorted, so ', A('j never moves back'), '.',
           ],
           state: st(lo, hi, {
@@ -1760,7 +1760,7 @@ const largestNumber: ProblemDef = {
           tag: 'cmp',
           trace: [
             '"', A(a), '" then "', A(b), '" makes ', A(a + b), '; the other way makes ', B(b + a), '. ',
-            keep ? ['Keep ', B(a), ' first.'].join('') : ['So ', B(b), ' must come first — swap.'].join(''),
+            keep ? ['Keep ', B(a), ' first.'] : ['So ', B(b), ' must come first — swap.'],
           ],
           state: st(s, { [j - 1]: keep ? 'good' : 'active', [j]: keep ? 'good' : 'active' }),
         });

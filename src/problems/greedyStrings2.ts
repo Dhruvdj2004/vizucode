@@ -1401,7 +1401,7 @@ const repeatedSubstring: ProblemDef = {
       tag: 'ret',
       trace: ok
         ? ['Length ', A(n), ' divides evenly by ', A(period), ' — the string is "', C(s.slice(0, period)), '" repeated ', C(n / period), ' times.']
-        : [k === 0 ? 'No prefix is also a suffix' : ['Length ', F(n), ' is not a multiple of ', F(period)].join(''), ' — ', C('not'), ' built from a repeated block.'],
+        : [k === 0 ? 'No prefix is also a suffix' : ['Length ', F(n), ' is not a multiple of ', F(period)], ' — ', C('not'), ' built from a repeated block.'],
       state: { arr: s.split(''), mark: ok ? Object.fromEntries([...Array(period)].map((_, x) => [x, 'final' as const])) : {} },
     });
     return { steps, result: ok ? 'true' : 'false', resultDetail: ok ? `"${s.slice(0, period)}" × ${n / period}` : undefined };

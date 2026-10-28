@@ -4,7 +4,7 @@
 /** Inline colored token in the plain-English trace line.
  *  c: 'a' = accent (active/testing), 'b' = accent-2 (confirmed/success),
  *  'c' = accent-3 (final result), 'f' = faint (rejected/skip). */
-export type TraceToken = string | { t: string; c: 'a' | 'b' | 'c' | 'f' };
+export type TraceToken = string | { t: string; c: 'a' | 'b' | 'c' | 'f' } | TraceToken[];  // nested arrays are flattened when drawn
 
 export interface CodeLine {
   text: string;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { problemRegistry } from '../problems';
 import { fetchProblem } from '../lib/api';
@@ -10,7 +10,7 @@ import { canSeeCodeCatalyst } from '../lib/codeCatalyst';
 import { codeCatalystSlugs } from '../data/codeCatalyst';
 import { catalog } from '../data/catalog';
 import CodePanel from '../components/CodePanel';
-import TraceLine from '../components/TraceLine';
+import StepLog from '../components/StepLog';
 import LeetCodeIcon from '../components/LeetCodeIcon';
 import BinarySearchWidget from '../components/widgets/BinarySearchWidget';
 import ArrayWidget from '../components/widgets/ArrayWidget';
@@ -132,6 +132,26 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
     if (problem && runner && problem.slug === slug) doRun(valuesRef.current);
   }, [problem, runner, doRun]);
 
+  // Wide screens: size the controls + visualization + code workspace to the
+  // window, so all three are on screen together (each part scrolls inside
+  // itself if it has to). Narrow screens keep the stacked page.
+  const workRef = useRef<HTMLDivElement>(null);
+  const [workH, setWorkH] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = workRef.current;
+      if (!el || window.innerWidth < 1000) {
+        setWorkH(null);
+        return;
+      }
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setWorkH(Math.max(480, Math.round(window.innerHeight - top - 16)));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [problem, hasBrute]);
+
   const last = run ? run.steps.length - 1 : 0;
   const finished = run !== null && idx === last;
 
@@ -210,7 +230,7 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
     : null;
 
   return (
-    <>
+    <div className="viz-page">
       <div className="viz-header">
         <div className="eyebrow">{problem.category}</div>
         <h1 className="page-title">
@@ -252,7 +272,9 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
         </div>
       )}
 
-      <div className="panel" style={{ marginBottom: '1.25rem' }}>
+      <div className="viz-work" ref={workRef} style={workH ? { height: workH } : undefined}>
+      <div className="viz-left">
+      <div className="panel viz-controls">
         <div className="input-panel">
           {problem.inputs.map((f) => (
             <div className="field" key={f.key}>
@@ -313,16 +335,13 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
           </select>
         </div>
 
-        {step && <TraceLine tokens={step.trace} />}
+        {run && <StepLog steps={run.steps} idx={idx} onJump={(i) => { setIdx(i); setPlaying(false); }} />}
       </div>
-
-      <div className="viz-grid">
-        <div className="viz-left">
-          <div className="panel">
-            <div className="eyebrow faint widget-title">{problem.widgetTitle}</div>
-            {widget}
-          </div>
+        <div className="panel viz-stage">
+          <div className="eyebrow faint widget-title">{problem.widgetTitle}</div>
+          {widget}
         </div>
+      </div>
         <CodePanel code={view!.code} activeTag={step?.tag} activeTag2={step?.tag2} />
       </div>
 
@@ -362,6 +381,6 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
           <Link to={backTo}>← All questions</Link>
         </span>
       </div>
-    </>
+    </div>
   );
 }

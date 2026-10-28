@@ -142,7 +142,7 @@ async function main() {
   await call('Runtime.evaluate', {
     expression: `localStorage.setItem('vizucode-session', JSON.stringify({
       token: 'verify-script-fake-token',
-      user: { id: 0, email: 'verify@local', firstName: 'Verify', isPro: true }
+      user: { id: 0, email: 'verify@ietdavv.edu.in', firstName: 'Verify', isPro: true }
     }))`,
   });
 
@@ -152,7 +152,7 @@ async function main() {
     call,
     `document.body.innerText.includes('Visualizer not built yet') ||
      document.body.innerText.includes("This one's locked") ||
-     !!document.querySelector('.viz-grid')`,
+     !!document.querySelector('.viz-work')`,
     30000
   );
   if (!settled) fail('page never settled (still stuck on "Loading visualizer…" after 30s)');
@@ -160,8 +160,8 @@ async function main() {
   const bodyText = (await call('Runtime.evaluate', { expression: 'document.body.innerText' })).result?.value ?? '';
   if (bodyText.includes('Visualizer not built yet')) fail(`no ProblemDef registered for slug "${slug}"`);
   if (bodyText.includes("This one's locked")) fail('category paywall blocked the page (unexpected — check plan.ts)');
-  if (!(await call('Runtime.evaluate', { expression: '!!document.querySelector(".viz-grid")' })).result?.value) {
-    fail('".viz-grid" never rendered — widget or code panel likely crashed');
+  if (!(await call('Runtime.evaluate', { expression: '!!document.querySelector(".viz-work")' })).result?.value) {
+    fail('".viz-work" never rendered — widget or code panel likely crashed');
   }
 
   if (wantScreenshots) {

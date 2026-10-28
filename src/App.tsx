@@ -31,10 +31,10 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme);
   const [session, setSession] = useState(getSession);
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, state } = useLocation();
   // Which nav entry lights up — the module registry owns that mapping, so a new
   // core subject does not need this file changed.
-  const section = navSection(pathname);
+  const section = navSection(pathname, state);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
