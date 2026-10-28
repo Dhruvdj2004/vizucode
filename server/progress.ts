@@ -5,8 +5,9 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { requireAuth, type AuthedRequest } from './auth';
 import { pool } from './db';
 import { catalog } from '../src/data/catalog';
+import { codeCatalystSlugs } from '../src/data/codeCatalyst';
 
-const validSlugs = new Set(catalog.map((q) => q.slug));
+const validSlugs = new Set([...catalog.map((q) => q.slug), ...codeCatalystSlugs]);
 
 // Dev fallback store: userId -> slug -> solvedAt.
 const memProgress = new Map<number, Map<string, Date>>();

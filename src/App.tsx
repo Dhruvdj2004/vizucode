@@ -6,6 +6,7 @@ import { Logo } from './components/Logo';
 import InterviewerBot from './pages/interview/InterviewerBot';
 import { Icon } from './components/Icon';
 import { RESUME_READY } from './lib/resume';
+import { canSeeCodeCatalyst } from './lib/codeCatalyst';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/vizucode26/';
 
@@ -59,6 +60,11 @@ export default function App() {
           <Link to="/dsa" className={section === 'dsa' ? 'on' : ''}>
             DSA
           </Link>
+          {canSeeCodeCatalyst(session?.user) && (
+            <Link to="/code-catalyst" className={section === 'catalyst' ? 'on' : ''}>
+              Code Catalyst
+            </Link>
+          )}
           <Link to="/revision" className={section === 'revision' ? 'on' : ''}>
             Revision
           </Link>

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { problemRegistry } from '../problems';
 import { fetchProblem } from '../lib/api';
 import { toStatic, type StaticProblem } from '../lib/serialize';
 import { isRunError, type ProblemDef, type RunResult } from '../lib/types';
 import { getSession, onAuthChange } from '../lib/auth';
 import { isCategoryLocked } from '../lib/plan';
+import { canSeeCodeCatalyst } from '../lib/codeCatalyst';
+import { codeCatalystSlugs } from '../data/codeCatalyst';
+import { catalog } from '../data/catalog';
 import CodePanel from '../components/CodePanel';
 import TraceLine from '../components/TraceLine';
 import LeetCodeIcon from '../components/LeetCodeIcon';
@@ -19,6 +22,8 @@ import HeapWidget from '../components/widgets/HeapWidget';
 import BitsWidget from '../components/widgets/BitsWidget';
 import IntervalsWidget from '../components/widgets/IntervalsWidget';
 import { Icon } from '../components/Icon';
+
+const mainSlugs = new Set(catalog.map((q) => q.slug));
 
 const SPEEDS = [
   { label: '0.5×', ms: 950 },
@@ -48,6 +53,15 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
   const view = showBrute && problem?.brute ? problem.brute : problem;
   const [session, setSession] = useState(getSession);
   useEffect(() => onAuthChange(() => setSession(getSession())), []);
+  // Code Catalyst: its questions skip the Pro lock for people who can see that
+  // section, and the ones that are not in the main list stay hidden from
+  // everyone else.
+  const location = useLocation();
+  const catalystUser = canSeeCodeCatalyst(session?.user);
+  const inCatalyst = !!slug && codeCatalystSlugs.has(slug);
+  const catalystOnly = inCatalyst && !mainSlugs.has(slug!);
+  const cameFromCatalyst = (location.state as { from?: string } | null)?.from === 'code-catalyst';
+  const backTo = catalystUser && (catalystOnly || cameFromCatalyst) ? '/code-catalyst' : '/dsa';
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +76,10 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
   useEffect(() => {
     let alive = true;
     setProblem(undefined);
+    // Drop the previous question's steps so its widget state never reaches
+    // the next question's widget.
+    setRun(null);
+    setIdx(0);
     if (previewDef) {
       setProblem(toStatic(previewDef));
       return;
@@ -109,7 +127,9 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
   // clearing it. Values come through a ref on purpose: typing should not
   // re-run on every keystroke — that is what Run and Enter are for.
   useEffect(() => {
-    if (problem && runner) doRun(valuesRef.current);
+    // On a direct visualizer-to-visualizer navigation the new runner arrives a
+    // render before the new problem (and its default inputs), so wait for both.
+    if (problem && runner && problem.slug === slug) doRun(valuesRef.current);
   }, [problem, runner, doRun]);
 
   const last = run ? run.steps.length - 1 : 0;
@@ -137,19 +157,30 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
   if (problem === undefined) {
     return <div className="panel serif">Loading visualizer…</div>;
   }
-  if (!problem || !runner) {
+  if (!previewDef && catalystOnly && !catalystUser) {
     return (
       <div className="panel">
-        <h2>Visualizer not built yet</h2>
-        <p className="serif">This question doesn't have a step-trace yet. It's on the roadmap.</p>
+        <h2>Question not found</h2>
+        <p className="serif">This question isn't available on your account.</p>
         <Link to="/dsa">
           <button className="btn primary">← Back to questions</button>
         </Link>
       </div>
     );
   }
+  if (!problem || !runner) {
+    return (
+      <div className="panel">
+        <h2>Visualizer not built yet</h2>
+        <p className="serif">This question doesn't have a step-trace yet. It's on the roadmap.</p>
+        <Link to={backTo}>
+          <button className="btn primary">← Back to questions</button>
+        </Link>
+      </div>
+    );
+  }
 
-  if (!previewDef && isCategoryLocked(problem.category, session?.user)) {
+  if (!previewDef && isCategoryLocked(problem.category, session?.user) && !(inCatalyst && catalystUser)) {
     return (
       <div className="panel">
         <h2><Icon name="lock" /> This one's locked</h2>
@@ -328,7 +359,7 @@ export default function VisualizerPage({ previewDef }: { previewDef?: ProblemDef
           </span>
         )}
         <span style={{ marginLeft: 'auto' }}>
-          <Link to="/dsa">← All questions</Link>
+          <Link to={backTo}>← All questions</Link>
         </span>
       </div>
     </>
